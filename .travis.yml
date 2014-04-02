@@ -5,9 +5,9 @@ env:
   matrix:
   - NODE_NVM_VERSION="0.10"
   - NODE_NVM_VERSION="0.8"
-#  global:
-#  - node_pre_gyp_accessKeyId: AKIAJBPMCF2RIVXM3O7Q
-#  - secure: KYec4ATF0Lh43GCieRaVSxmNz0EVuRu1p00sJK1DWkF21aN7PKqsRpgb4B5Yk4cenDJtNCzBQKFO7RkY6ETJgSAkwcT/IGdl/xkVXdhevEXU3qmz1pOn4d4g/rVGn5bGDw1FUZQf5tMopn1dVsewzJydP6Xpj37gycuAvBNQaNA=
+  global:
+  - node_pre_gyp_accessKeyId: AKIAJX3FGRA7TJMHQD2Q
+  - secure: "AGr8ddjsQIeKk1zR/NxkRUqV2JMl9T+yrUqyJY3mS2Gj1i+kfuNrqn47jh8gz85ESfdrm+Pf3ulgrC3GzXKKKT5mHeR+uFr3Biikg1YYQVaps3IF7/f6qDpTMvfWkXEyoakHyT252+M9wDZFxHTVdWuy0e/1y63eDfYQRl3JocI="
 before_install:
 - export platform=$(uname -s | sed "y/ABCDEFGHIJKLMNOPQRSTUVWXYZ/abcdefghijklmnopqrstuvwxyz/")
 - if [[ "$platform" == "linux" ]]; then sudo add-apt-repository --yes ppa:ubuntu-toolchain-r/test; sudo apt-get update; sudo apt-get install gcc-4.8 g++-4.8; export CXX=g++-4.8; fi
