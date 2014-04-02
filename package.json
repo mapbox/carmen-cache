@@ -1,0 +1,39 @@
+{
+  "name": "carmen-cache",
+  "description": "C++ protobuf cache used by carmen",
+  "version": "0.0.0",
+  "url": "http://github.com/mapbox/carmen-cache",
+  "author": {
+    "name": "Mapbox",
+    "url": "http://mapbox.com/",
+    "email": "info@mapbox.com"
+  },
+  "licenses": [
+    {
+      "type": "BSD"
+    }
+  ],
+  "dependencies": {
+    "nan": "~0.4.1",
+    "node-pre-gyp": "0.5.x"
+  },
+  "bundledDependencies": ["node-pre-gyp"],
+  "devDependencies": {
+    "mocha": "~1.13.0"
+  },
+  "main": "./index.js",
+  "scripts": {
+    "install": "node-pre-gyp install --fallback-to-build",
+    "test": "mocha"
+  },
+  "binary": {
+    "module_name" : "carmen",
+    "module_path" : "./lib/",
+    "host"        : "https://mapbox-node-binary.s3.amazonaws.com",
+    "remote_path" : "./{name}/v{version}",
+    "package_name": "{node_abi}-{platform}-{arch}.tar.gz"
+  },
+  "engines": {
+    "node": "0.8.x || 0.10.x"
+  }
+}
