@@ -6,8 +6,8 @@ env:
   - NODE_NVM_VERSION="0.10"
   - NODE_NVM_VERSION="0.8"
   global:
-  - node_pre_gyp_accessKeyId: AKIAJX3FGRA7TJMHQD2Q
-  - secure: "AGr8ddjsQIeKk1zR/NxkRUqV2JMl9T+yrUqyJY3mS2Gj1i+kfuNrqn47jh8gz85ESfdrm+Pf3ulgrC3GzXKKKT5mHeR+uFr3Biikg1YYQVaps3IF7/f6qDpTMvfWkXEyoakHyT252+M9wDZFxHTVdWuy0e/1y63eDfYQRl3JocI="
+  - secure: bLTdbWwf3v8X7yJlLLqPc9BRhFquwma4oYL9T2C38FXzSuqhXJZF+kNXjHd85E4lJNnuLXDjrPJLLkigd70J9Tclu2XQvy3cGzXI+EMsO6rDvQN24Eoi6uJ/qHhTrAoud526ouxO8qk9YYLjD6UWX1EOtqcEdwPMose8L1wsMZI=
+  - secure: lmfuNtK0/ubV4ZZobgfeKY6DzG41ZciS4a00yCe29jHLxAg+EEmB/qpsW5d1//cC94OKsAySW08xp2uX5wBVvtryaaoiwU7fdKF9DOxHRHieGw/3+m8NNjELkd5hKMKiqDj7l4QPMchzBQR2PQkoG0UMCGUFe+RmzZ2/iCdGHXU=
 before_install:
 - export platform=$(uname -s | sed "y/ABCDEFGHIJKLMNOPQRSTUVWXYZ/abcdefghijklmnopqrstuvwxyz/")
 - if [[ "$platform" == "linux" ]]; then sudo add-apt-repository --yes ppa:ubuntu-toolchain-r/test; sudo apt-get update; sudo apt-get install gcc-4.8 g++-4.8; export CXX=g++-4.8; fi
