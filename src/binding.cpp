@@ -26,6 +26,7 @@ void Cache::Initialize(Handle<Object> target) {
     NODE_SET_PROTOTYPE_METHOD(t, "_set", _set);
     NODE_SET_PROTOTYPE_METHOD(t, "_get", _get);
     NODE_SET_PROTOTYPE_METHOD(t, "unload", unload);
+    NODE_SET_PROTOTYPE_METHOD(t, "phrasematchDegens", phrasematchDegens);
     target->Set(String::NewSymbol("Cache"),t->GetFunction());
     NanAssignPersistent(constructor, t);
 }
@@ -624,6 +625,103 @@ NAN_METHOD(Cache::New)
         return NanThrowTypeError(ex.what());
     }
     NanReturnValue(Undefined());
+}
+
+unsigned shard(unsigned level, unsigned id) {
+    if (level == 0) return 0;
+    unsigned bits = 32 - (level * 4);
+    return id / pow(2, bits);
+}
+
+bool sortDegens(uint32_t a, uint32_t b) {
+    uint32_t ad = a % 16;
+    uint32_t bd = b % 16;
+    if (ad < bd) { return true; }
+    if (ad > bd) { return false; }
+    return a < b;
+}
+
+std::vector<std::uint32_t> arrayToVector(Local<Array> array) {
+    std::vector<std::uint32_t> vector;
+    for (uint32_t i = 0; i < array->Length(); i++) {
+        uint32_t num = array->Get(i)->NumberValue();
+        vector.push_back(num);
+    }
+    return vector;
+}
+
+Local<Array> vectorToArray(std::vector<std::uint32_t> vector) {
+    Local<Array> array = NanNew<Array>();
+    for (uint32_t i = 0; i < vector.size(); i++) {
+        array->Set(i, NanNew<Number>(vector[i]));
+    }
+    return array;
+}
+
+Local<Object> mapToObject(std::map<std::uint32_t,std::uint32_t> map) {
+    Local<Object> object = NanNew<Object>();
+    typedef std::map<std::uint32_t,std::uint32_t>::iterator it_type;
+    for (it_type it = map.begin(); it != map.end(); it++) {
+        object->Set(NanNew<Number>(it->first), NanNew<Number>(it->second));
+    }
+    return object;
+}
+
+// cache.phrasematchDegens(termidx, degens)
+NAN_METHOD(Cache::phrasematchDegens)
+{
+    NanScope();
+    if (!args[0]->IsArray()) {
+        return NanThrowTypeError("first arg must be a results array");
+    }
+
+    // convert v8 results array into nested std::map
+    Local<Array> resultsArray = Local<Array>::Cast(args[0]);
+    std::vector<std::vector<std::uint32_t>> results;
+    for (uint32_t i = 0; i < resultsArray->Length(); i++) {
+        Local<Array> degensArray = Local<Array>::Cast(resultsArray->Get(i));
+        std::vector<std::uint32_t> degens = arrayToVector(degensArray);
+        results.push_back(degens);
+    }
+
+    std::vector<std::uint32_t> terms;
+    std::map<std::uint32_t,std::uint32_t> queryidx;
+    std::map<std::uint32_t,std::uint32_t> querymask;
+    std::map<std::uint32_t,std::uint32_t> querydist;
+    for (uint32_t idx = 0; idx < results.size(); idx++) {
+        std::vector<std::uint32_t> degens = results[idx];
+        std::sort(degens.begin(), degens.end(), sortDegens);
+        for (std::size_t i = 0; i < degens.size() && i < 10; i++) {
+            uint32_t term = degens[i] >> 4 << 4;
+            terms.push_back(term);
+
+            std::map<std::uint32_t,std::uint32_t>::iterator it;
+
+            it = queryidx.find(term);
+            if (it == queryidx.end()) {
+                queryidx.insert(std::make_pair(term, idx));
+            }
+
+            it = querymask.find(term);
+            if (it == querymask.end()) {
+                querymask.insert(std::make_pair(term, 0 + (1<<idx)));
+            } else {
+                it->second = it->second + (1<<idx);
+            }
+
+            it = querydist.find(term);
+            if (it == querydist.end()) {
+                querydist.insert(std::make_pair(term, term % 16));
+            }
+        }
+    }
+
+    Local<Object> ret = NanNew<Object>();
+    ret->Set(NanNew("terms"), vectorToArray(terms));
+    ret->Set(NanNew("queryidx"), mapToObject(queryidx));
+    ret->Set(NanNew("querymask"), mapToObject(querymask));
+    ret->Set(NanNew("querydist"), mapToObject(querydist));
+    return ret;
 }
 
 extern "C" {

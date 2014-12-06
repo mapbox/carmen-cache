@@ -49,6 +49,7 @@ public:
     static NAN_METHOD(_get);
     static NAN_METHOD(_set);
     static NAN_METHOD(unload);
+    static NAN_METHOD(phrasematchDegens);
     static void AsyncRun(uv_work_t* req);
     static void AfterRun(uv_work_t* req);
     Cache(std::string const& id, unsigned shardlevel);
