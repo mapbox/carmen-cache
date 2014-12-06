@@ -19,7 +19,7 @@ before_install:
 - npm --version
 - sudo ./test/travis-protobuf.sh
 install:
-- npm install
+- npm install --build-from-source
 script:
 - npm test
 after_success:
