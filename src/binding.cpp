@@ -668,28 +668,25 @@ Local<Object> mapToObject(std::map<std::uint32_t,std::uint32_t> map) {
 }
 
 // cache.phrasematchDegens(termidx, degens)
-NAN_METHOD(Cache::phrasematchDegens)
-{
-    NanScope();
-    if (!args[0]->IsArray()) {
-        return NanThrowTypeError("first arg must be a results array");
-    }
-
-    // convert v8 results array into nested std::map
-    Local<Array> resultsArray = Local<Array>::Cast(args[0]);
+struct phrasematchDegensBaton {
+    v8::Persistent<v8::Function> callback;
+    uv_work_t request;
     std::vector<std::vector<std::uint32_t>> results;
-    for (uint32_t i = 0; i < resultsArray->Length(); i++) {
-        Local<Array> degensArray = Local<Array>::Cast(resultsArray->Get(i));
-        std::vector<std::uint32_t> degens = arrayToVector(degensArray);
-        results.push_back(degens);
-    }
+    std::vector<std::uint32_t> terms;
+    std::map<std::uint32_t,std::uint32_t> queryidx;
+    std::map<std::uint32_t,std::uint32_t> querymask;
+    std::map<std::uint32_t,std::uint32_t> querydist;
+};
+// In the threadpool (no V8)
+void _phrasematchDegens(uv_work_t* req) {
+    phrasematchDegensBaton *baton = static_cast<phrasematchDegensBaton *>(req->data);
 
     std::vector<std::uint32_t> terms;
     std::map<std::uint32_t,std::uint32_t> queryidx;
     std::map<std::uint32_t,std::uint32_t> querymask;
     std::map<std::uint32_t,std::uint32_t> querydist;
-    for (uint32_t idx = 0; idx < results.size(); idx++) {
-        std::vector<std::uint32_t> degens = results[idx];
+    for (uint32_t idx = 0; idx < baton->results.size(); idx++) {
+        std::vector<std::uint32_t> degens = baton->results[idx];
         std::sort(degens.begin(), degens.end(), sortDegens);
         for (std::size_t i = 0; i < degens.size() && i < 10; i++) {
             uint32_t term = degens[i] >> 4 << 4;
@@ -716,14 +713,55 @@ NAN_METHOD(Cache::phrasematchDegens)
         }
     }
 
-    Local<Object> ret = NanNew<Object>();
-    ret->Set(NanNew("terms"), vectorToArray(terms));
-    ret->Set(NanNew("queryidx"), mapToObject(queryidx));
-    ret->Set(NanNew("querymask"), mapToObject(querymask));
-    ret->Set(NanNew("querydist"), mapToObject(querydist));
-    return ret;
+    baton->terms = terms;
+    baton->queryidx = queryidx;
+    baton->querymask = querymask;
+    baton->querydist = querydist;
 }
+void phrasematchDegensAfter(uv_work_t* req) {
+    NanScope();
+    phrasematchDegensBaton *baton = static_cast<phrasematchDegensBaton *>(req->data);
 
+    Local<Object> ret = NanNew<Object>();
+    ret->Set(NanNew("terms"), vectorToArray(baton->terms));
+    ret->Set(NanNew("queryidx"), mapToObject(baton->queryidx));
+    ret->Set(NanNew("querymask"), mapToObject(baton->querymask));
+    ret->Set(NanNew("querydist"), mapToObject(baton->querydist));
+
+    Local<Value> argv[2] = { NanNull(), ret };
+    NanMakeCallback(NanGetCurrentContext()->Global(), NanNew(baton->callback), 2, argv);
+    NanDisposePersistent(baton->callback);
+    delete baton;
+}
+// In main event loop (with V8)
+NAN_METHOD(Cache::phrasematchDegens)
+{
+    NanScope();
+    if (!args[0]->IsArray()) {
+        return NanThrowTypeError("first arg must be a results array");
+    }
+    if (!args[1]->IsFunction()) {
+        return NanThrowTypeError("second arg must be a callback");
+    }
+
+    // convert v8 results array into nested std::map
+    Local<Array> resultsArray = Local<Array>::Cast(args[0]);
+    std::vector<std::vector<std::uint32_t>> results;
+    for (uint32_t i = 0; i < resultsArray->Length(); i++) {
+        Local<Array> degensArray = Local<Array>::Cast(resultsArray->Get(i));
+        std::vector<std::uint32_t> degens = arrayToVector(degensArray);
+        results.push_back(degens);
+    }
+
+    // callback
+    Local<Value> callback = args[1];
+    phrasematchDegensBaton *baton = new phrasematchDegensBaton();
+    baton->results = results;
+    baton->request.data = baton;
+    NanAssignPersistent(baton->callback, callback.As<Function>());
+    uv_queue_work(uv_default_loop(), &baton->request, _phrasematchDegens, (uv_after_work_cb)phrasematchDegensAfter);
+    NanReturnUndefined();
+}
 extern "C" {
     static void start(Handle<Object> target) {
         Cache::Initialize(target);
