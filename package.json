@@ -6,7 +6,7 @@
   "author": "Mapbox (https://www.mapbox.com)",
   "license": "BSD",
   "dependencies": {
-    "nan": "1.2.0",
+    "nan": "1.4.1",
     "node-pre-gyp": "0.5.x"
   },
   "bundledDependencies": [
