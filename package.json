@@ -19,12 +19,12 @@
   },
   "bundledDependencies": ["node-pre-gyp"],
   "devDependencies": {
-    "mocha": "~1.13.0"
+    "tape": "3.0.x"
   },
   "main": "./index.js",
   "scripts": {
     "install": "node-pre-gyp install --fallback-to-build",
-    "test": "mocha"
+    "test": "tape test/*.test.js"
   },
   "binary": {
     "module_name" : "carmen",

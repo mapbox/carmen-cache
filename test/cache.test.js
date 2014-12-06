@@ -1,29 +1,30 @@
 var Cache = require('../index.js').Cache;
-var assert = require('assert');
+var tape = require('tape');
 var fs = require('fs');
 
-describe('Cache', function() {
-    describe('c++ functions', function() {
-        it('#list', function() {
+        tape('#list', function(assert) {
             var cache = new Cache('a', 1);
             cache._set('term', 0, 5, [0,1,2]);
             assert.deepEqual([0], cache.list('term'));
+            assert.end();
         });
 
-        it('#has', function() {
+        tape('#has', function(assert) {
             var cache = new Cache('a', 1);
             cache._set('term', 0, 5, [0,1,2]);
             assert.deepEqual(true, cache.has('term', 0));
+            assert.end();
         });
 
-        it('#get', function() {
+        tape('#get', function(assert) {
             var cache = new Cache('a', 1);
             cache._set('term', 0, 5, [0,1,2]);
             assert.deepEqual([0, 1, 2], cache._get('term', 0, 5));
             assert.equal(undefined, cache._get('term', 5, 9));
+            assert.end();
         });
 
-        it('#pack', function() {
+        tape('#pack', function(assert) {
             var cache = new Cache('a', 1);
             cache._set('term', 0, 5, [0,1,2]);
             assert.deepEqual(9, cache.pack('term', 0).length);
@@ -45,9 +46,10 @@ describe('Cache', function() {
             assert.deepEqual(10008, loader.pack('term', 0).length);
             // try to grab data that does not exist
             assert.throws(function() { loader.pack('term', 99999999999999) });
+            assert.end();
         });
 
-        it('#load', function() {
+        tape('#load', function(assert) {
             var cache = new Cache('a', 1);
             assert.equal('a', cache.id);
             assert.equal(1, cache.shardlevel);
@@ -62,7 +64,7 @@ describe('Cache', function() {
             cache._set('term', 0, 21, [5,6]);
             assert.deepEqual([5,6], cache._get('term', 0, 21));
             assert.deepEqual([0], cache.list('term'), 'single shard');
-            assert.deepEqual([5, 21], cache.list('term', 0), 'keys in shard');
+            assert.deepEqual(['5', '21'], cache.list('term', 0), 'keys in shard');
 
             // cache A serializes data, cache B loads serialized data.
             var pack = cache.pack('term', 0);
@@ -70,10 +72,11 @@ describe('Cache', function() {
             loader.load(pack, 'term', 0);
             assert.deepEqual([5,6], loader._get('term', 0, 21));
             assert.deepEqual([0], loader.list('term'), 'single shard');
-            assert.deepEqual([5, 21], loader.list('term', 0), 'keys in shard');
+            assert.deepEqual(['5', '21'], loader.list('term', 0), 'keys in shard');
+            assert.end();
         });
 
-        it('#load (async)', function(done) {
+        tape('#load (async)', function(assert) {
             var cache = new Cache('a', 1);
             var array = [];
             for (var i=0;i<10000;++i) {
@@ -110,25 +113,27 @@ describe('Cache', function() {
             loader.load(pack, 'term', 0,function(err) {
                 assert.deepEqual(array, loader._get('term', 0, 0));
                 assert.deepEqual([0], loader.list('term'), 'single shard');
-                done();
+                assert.end();
             });
         });
 
-        it('#unload on empty data', function() {
+        tape('#unload on empty data', function(assert) {
             var cache = new Cache('a', 1);
             assert.equal(false,cache.unload('term',5));
             assert.deepEqual(false, cache.has('term', 5));
+            assert.end();
         });
 
-        it('#unload after set', function() {
+        tape('#unload after set', function(assert) {
             var cache = new Cache('a', 1);
             cache._set('term', 0, 0, [0,1,2]);
             assert.deepEqual(true, cache.has('term', 0));
             assert.equal(true,cache.unload('term',0));
             assert.deepEqual(false, cache.has('term', 0));
+            assert.end();
         });
 
-        it('#unload after load', function() {
+        tape('#unload after load', function(assert) {
             var cache = new Cache('a', 1);
             var array = [];
             for (var i=0;i<10000;++i) {
@@ -143,6 +148,5 @@ describe('Cache', function() {
             assert.deepEqual(true, loader.has('term', 0));
             assert.equal(true,loader.unload('term',0));
             assert.deepEqual(false, loader.has('term', 0));
+            assert.end();
         });
-    });
-});
