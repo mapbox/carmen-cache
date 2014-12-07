@@ -779,49 +779,40 @@ struct phraseRelev {
     unsigned short count;
     unsigned short reason;
 };
+struct phrasematchPhraseRelevBaton {
+    v8::Persistent<v8::Function> callback;
+    uv_work_t request;
+    Cache* cache;
+    uint64_t shardlevel;
+    std::string error;
+    std::vector<phraseRelev> relevantPhrases;
+    std::vector<std::uint64_t> phrases;
+    std::map<std::uint64_t,std::uint64_t> queryidx;
+    std::map<std::uint64_t,std::uint64_t> querymask;
+    std::map<std::uint64_t,std::uint64_t> querydist;
+};
 bool sortPhraseRelev(phraseRelev a, phraseRelev b) {
     return a.id < b.id;
 }
 bool uniqPhraseRelev(phraseRelev a, phraseRelev b) {
     return a.id == b.id;
 }
-// In main event loop (with V8)
-NAN_METHOD(Cache::phrasematchPhraseRelev)
-{
-    NanScope();
-    if (!args[0]->IsArray()) {
-        return NanThrowTypeError("first arg must be a results array");
-    }
-    if (!args[1]->IsObject()) {
-        return NanThrowTypeError("second arg must be a queryidx object");
-    }
-    if (!args[2]->IsObject()) {
-        return NanThrowTypeError("second arg must be a querymask object");
-    }
-    if (!args[3]->IsObject()) {
-        return NanThrowTypeError("second arg must be a querydist object");
-    }
+void _phrasematchPhraseRelev(uv_work_t* req) {
+    phrasematchPhraseRelevBaton *baton = static_cast<phrasematchPhraseRelevBaton *>(req->data);
 
-    uint64_t shardlevel = args.This()->Get(NanNew("shardlevel"))->NumberValue();
     std::string type = "phrase";
-    Cache::intarray phrases = arrayToVector(Local<Array>::Cast(args[0]));
-    std::map<std::uint64_t,std::uint64_t> queryidx = objectToMap(Local<Object>::Cast(args[1]));
-    std::map<std::uint64_t,std::uint64_t> querymask = objectToMap(Local<Object>::Cast(args[2]));
-    std::map<std::uint64_t,std::uint64_t> querydist = objectToMap(Local<Object>::Cast(args[3]));
-
-    Cache* c = node::ObjectWrap::Unwrap<Cache>(args.This());
-
     double max_relev = 0;
     double min_relev = 1;
     std::vector<phraseRelev> allPhrases;
     std::vector<phraseRelev> relevantPhrases;
 
-    for (uint64_t a = 0; a < phrases.size(); a++) {
-        uint64_t id = phrases[a];
-        Cache::intarray phrase = __get(c, "phrase", shard(shardlevel, id), id);
+    for (uint64_t a = 0; a < baton->phrases.size(); a++) {
+        uint64_t id = baton->phrases[a];
+        Cache::intarray phrase = __get(baton->cache, "phrase", shard(baton->shardlevel, id), id);
         unsigned short size = phrase.size();
         if (size == 0) {
-            return NanThrowTypeError("Failed to get phrase");
+            baton->error = "Failed to get phrase";
+            return;
         }
 
         // Get total relev score of phrase.
@@ -846,10 +837,10 @@ NAN_METHOD(Cache::phrasematchPhraseRelev)
             uint64_t term = phrase[i] >> 4 << 4;
 
             std::map<std::uint64_t,std::uint64_t>::iterator it;
-            it = querymask.find(term);
+            it = baton->querymask.find(term);
 
             // Short circuit
-            if (it == querymask.end()) {
+            if (it == baton->querymask.end()) {
                 if (relev != 0) {
                     break;
                 } else {
@@ -857,11 +848,11 @@ NAN_METHOD(Cache::phrasematchPhraseRelev)
                 }
             }
 
-            it = queryidx.find(term);
+            it = baton->queryidx.find(term);
             unsigned short termidx = it->second;
-            it = querymask.find(term);
+            it = baton->querymask.find(term);
             unsigned short termmask = it->second;
-            it = querydist.find(term);
+            it = baton->querydist.find(term);
             unsigned short termdist = it->second;
             if (relev == 0 || termidx == lastidx + 1) {
                 relev += phrase[i] % 16;
@@ -908,25 +899,77 @@ NAN_METHOD(Cache::phrasematchPhraseRelev)
 
     std::sort(relevantPhrases.begin(), relevantPhrases.end(), sortPhraseRelev);
     std::unique(relevantPhrases.begin(), relevantPhrases.end(), uniqPhraseRelev);
+    baton->relevantPhrases = relevantPhrases;
+}
+void phrasematchPhraseRelevAfter(uv_work_t* req) {
+    NanScope();
+    phrasematchPhraseRelevBaton *baton = static_cast<phrasematchPhraseRelevBaton *>(req->data);
 
-    unsigned short relevsize = relevantPhrases.size();
-    Local<Array> result = NanNew<Array>(static_cast<int>(relevsize));
-    Local<Object> relevs = NanNew<Object>();
-    for (uint32_t i = 0; i < relevsize; i++) {
-        Local<Object> phraseRelevObject = NanNew<Object>();
-        phraseRelevObject->Set(NanNew("count"), NanNew<Number>(relevantPhrases[i].count));
-        phraseRelevObject->Set(NanNew("reason"), NanNew<Number>(relevantPhrases[i].reason));
-        phraseRelevObject->Set(NanNew("relev"), NanNew<Number>(relevantPhrases[i].relev));
-        phraseRelevObject->Set(NanNew("tmprelev"), NanNew<Number>(relevantPhrases[i].tmprelev));
-        result->Set(i, NanNew<Number>(relevantPhrases[i].id));
-        relevs->Set(NanNew<Number>(relevantPhrases[i].id), phraseRelevObject);
+    if (baton->error.size() > 0) {
+        Local<Value> argv[1] = { NanError(baton->error.c_str()) };
+        NanMakeCallback(NanGetCurrentContext()->Global(), NanNew(baton->callback), 1, argv);
+    } else {
+        unsigned short relevsize = baton->relevantPhrases.size();
+        Local<Array> result = NanNew<Array>(static_cast<int>(relevsize));
+        Local<Object> relevs = NanNew<Object>();
+        for (uint32_t i = 0; i < relevsize; i++) {
+            Local<Object> phraseRelevObject = NanNew<Object>();
+            phraseRelevObject->Set(NanNew("count"), NanNew<Number>(baton->relevantPhrases[i].count));
+            phraseRelevObject->Set(NanNew("reason"), NanNew<Number>(baton->relevantPhrases[i].reason));
+            phraseRelevObject->Set(NanNew("relev"), NanNew<Number>(baton->relevantPhrases[i].relev));
+            phraseRelevObject->Set(NanNew("tmprelev"), NanNew<Number>(baton->relevantPhrases[i].tmprelev));
+            result->Set(i, NanNew<Number>(baton->relevantPhrases[i].id));
+            relevs->Set(NanNew<Number>(baton->relevantPhrases[i].id), phraseRelevObject);
+        }
+        Local<Object> ret = NanNew<Object>();
+        ret->Set(NanNew("result"), result);
+        ret->Set(NanNew("relevs"), relevs);
+        Local<Value> argv[2] = { NanNull(), ret };
+        NanMakeCallback(NanGetCurrentContext()->Global(), NanNew(baton->callback), 2, argv);
+    }
+    NanDisposePersistent(baton->callback);
+    delete baton;
+}
+// In main event loop (with V8)
+NAN_METHOD(Cache::phrasematchPhraseRelev)
+{
+    NanScope();
+    if (!args[0]->IsArray()) {
+        return NanThrowTypeError("first arg must be a results array");
+    }
+    if (!args[1]->IsObject()) {
+        return NanThrowTypeError("second arg must be a queryidx object");
+    }
+    if (!args[2]->IsObject()) {
+        return NanThrowTypeError("third arg must be a querymask object");
+    }
+    if (!args[3]->IsObject()) {
+        return NanThrowTypeError("fourth arg must be a querydist object");
+    }
+    if (!args[4]->IsFunction()) {
+        return NanThrowTypeError("fifth arg must be a callback");
     }
 
-    Local<Object> ret = NanNew<Object>();
-    ret->Set(NanNew("result"), result);
-    ret->Set(NanNew("relevs"), relevs);
+    uint64_t shardlevel = args.This()->Get(NanNew("shardlevel"))->NumberValue();
+    Cache::intarray phrases = arrayToVector(Local<Array>::Cast(args[0]));
+    std::map<std::uint64_t,std::uint64_t> queryidx = objectToMap(Local<Object>::Cast(args[1]));
+    std::map<std::uint64_t,std::uint64_t> querymask = objectToMap(Local<Object>::Cast(args[2]));
+    std::map<std::uint64_t,std::uint64_t> querydist = objectToMap(Local<Object>::Cast(args[3]));
+    Cache* cache = node::ObjectWrap::Unwrap<Cache>(args.This());
 
-    NanReturnValue(ret);
+    // callback
+    Local<Value> callback = args[4];
+    phrasematchPhraseRelevBaton *baton = new phrasematchPhraseRelevBaton();
+    baton->shardlevel = shardlevel;
+    baton->cache = cache;
+    baton->phrases = phrases;
+    baton->queryidx = queryidx;
+    baton->querymask = querymask;
+    baton->querydist = querydist;
+    baton->request.data = baton;
+    NanAssignPersistent(baton->callback, callback.As<Function>());
+    uv_queue_work(uv_default_loop(), &baton->request, _phrasematchPhraseRelev, (uv_after_work_cb)phrasematchPhraseRelevAfter);
+    NanReturnUndefined();
 }
 
 extern "C" {
