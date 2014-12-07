@@ -13,6 +13,108 @@ using namespace v8;
 
 Persistent<FunctionTemplate> Cache::constructor;
 
+std::string shard(uint64_t level, uint64_t id) {
+    if (level == 0) return "0";
+    unsigned int bits = 32 - (level * 4);
+    unsigned int shard_id = std::floor(id / std::pow(2, bits));
+    return std::to_string(shard_id);
+}
+
+Cache::intarray arrayToVector(Local<Array> array) {
+    Cache::intarray vector;
+    for (uint64_t i = 0; i < array->Length(); i++) {
+        uint64_t num = array->Get(i)->NumberValue();
+        vector.push_back(num);
+    }
+    return vector;
+}
+
+Local<Array> vectorToArray(Cache::intarray vector) {
+    std::size_t size = vector.size();
+    Local<Array> array = NanNew<Array>(static_cast<int>(size));
+    for (uint64_t i = 0; i < size; i++) {
+        array->Set(i, NanNew<Number>(vector[i]));
+    }
+    return array;
+}
+
+Local<Object> mapToObject(std::map<std::uint64_t,std::uint64_t> map) {
+    Local<Object> object = NanNew<Object>();
+    typedef std::map<std::uint64_t,std::uint64_t>::iterator it_type;
+    for (it_type it = map.begin(); it != map.end(); it++) {
+        object->Set(NanNew<Number>(it->first), NanNew<Number>(it->second));
+    }
+    return object;
+}
+
+std::map<std::uint64_t,std::uint64_t> objectToMap(Local<Object> object) {
+    std::map<std::uint64_t,std::uint64_t> map;
+    const Local<Array> keys = object->GetPropertyNames();
+    const uint32_t length = keys->Length();
+    for (uint32_t i = 0; i < length; i++) {
+        uint64_t key = keys->Get(i)->NumberValue();
+        uint64_t value = object->Get(key)->NumberValue();
+        map.insert(std::make_pair(key, value));
+    }
+    return map;
+}
+
+Cache::intarray __get(Cache* c, std::string type, std::string shard, uint64_t id) {
+    std::string key = type + "-" + shard;
+    Cache::memcache const& mem = c->cache_;
+    Cache::memcache::const_iterator itr = mem.find(key);
+    Cache::intarray array;
+    if (itr == mem.end()) {
+        Cache::lazycache const& lazy = c->lazy_;
+        Cache::lazycache::const_iterator litr = lazy.find(key);
+        if (litr == lazy.end()) {
+            return array;
+        }
+        Cache::message_cache const& messages = c->msg_;
+        Cache::message_cache::const_iterator mitr = messages.find(key);
+        if (mitr == messages.end()) {
+            throw std::runtime_error("misuse");
+        }
+        Cache::larraycache::const_iterator laitr = litr->second.find(id);
+        if (laitr == litr->second.end()) {
+            return array;
+        } else {
+            // NOTE: we cannot call array.reserve here since
+            // the total length is not known
+            unsigned start = (laitr->second & 0xffffffff);
+            unsigned len = (laitr->second >> 32);
+            std::string ref = mitr->second.substr(start,len);
+            protobuf::message buffer(ref.data(), ref.size());
+            while (buffer.next()) {
+                if (buffer.tag == 1) {
+                    buffer.skip();
+                } else if (buffer.tag == 2) {
+                    uint64_t array_length = buffer.varint();
+                    protobuf::message pbfarray(buffer.getData(),static_cast<std::size_t>(array_length));
+                    while (pbfarray.next()) {
+                        array.emplace_back(pbfarray.value);
+                    }
+                    buffer.skipBytes(array_length);
+                } else {
+                    std::stringstream msg("");
+                    msg << "cxx get: hit unknown protobuf type: '" << buffer.tag << "'";
+                    throw std::runtime_error(msg.str());
+                }
+            }
+            return array;
+        }
+    } else {
+        Cache::arraycache::const_iterator aitr = itr->second.find(id);
+        if (aitr == itr->second.end()) {
+            return array;
+        } else {
+            Cache::intarray const& array = aitr->second;
+            return array;
+        }
+    }
+}
+
+
 void Cache::Initialize(Handle<Object> target) {
     NanScope();
     Local<FunctionTemplate> t = FunctionTemplate::New(Cache::New);
@@ -27,6 +129,7 @@ void Cache::Initialize(Handle<Object> target) {
     NODE_SET_PROTOTYPE_METHOD(t, "_get", _get);
     NODE_SET_PROTOTYPE_METHOD(t, "unload", unload);
     NODE_SET_PROTOTYPE_METHOD(t, "phrasematchDegens", phrasematchDegens);
+    NODE_SET_PROTOTYPE_METHOD(t, "phrasematchPhraseRelev", phrasematchPhraseRelev);
     target->Set(String::NewSymbol("Cache"),t->GetFunction());
     NanAssignPersistent(constructor, t);
 }
@@ -488,69 +591,9 @@ NAN_METHOD(Cache::_get)
         std::string type = *String::Utf8Value(args[0]->ToString());
         std::string shard = *String::Utf8Value(args[1]->ToString());
         uint64_t id = static_cast<uint64_t>(args[2]->IntegerValue());
-        std::string key = type + "-" + shard;
         Cache* c = node::ObjectWrap::Unwrap<Cache>(args.This());
-        Cache::memcache const& mem = c->cache_;
-        Cache::memcache::const_iterator itr = mem.find(key);
-        if (itr == mem.end()) {
-            Cache::lazycache const& lazy = c->lazy_;
-            Cache::lazycache::const_iterator litr = lazy.find(key);
-            if (litr == lazy.end()) {
-                NanReturnValue(Undefined());
-            }
-            Cache::message_cache const& messages = c->msg_;
-            Cache::message_cache::const_iterator mitr = messages.find(key);
-            if (mitr == messages.end()) {
-                throw std::runtime_error("misuse");
-            }
-            Cache::larraycache::const_iterator laitr = litr->second.find(id);
-            if (laitr == litr->second.end()) {
-                NanReturnValue(Undefined());
-            } else {
-                // NOTE: we cannot call array.reserve here since
-                // the total length is not known
-                Cache::intarray array;
-                unsigned start = (laitr->second & 0xffffffff);
-                unsigned len = (laitr->second >> 32);
-                std::string ref = mitr->second.substr(start,len);
-                protobuf::message buffer(ref.data(), ref.size());
-                while (buffer.next()) {
-                    if (buffer.tag == 1) {
-                        buffer.skip();
-                    } else if (buffer.tag == 2) {
-                        uint64_t array_length = buffer.varint();
-                        protobuf::message pbfarray(buffer.getData(),static_cast<std::size_t>(array_length));
-                        while (pbfarray.next()) {
-                            array.emplace_back(pbfarray.value);
-                        }
-                        buffer.skipBytes(array_length);
-                    } else {
-                        std::stringstream msg("");
-                        msg << "cxx get: hit unknown protobuf type: '" << buffer.tag << "'";
-                        throw std::runtime_error(msg.str());
-                    }
-                }
-                std::size_t vals_size = array.size();
-                Local<Array> arr_obj = Array::New(static_cast<int>(vals_size));
-                for (unsigned k=0;k<vals_size;++k) {
-                    arr_obj->Set(k,Number::New(array[k]));
-                }
-                NanReturnValue(arr_obj);
-            }
-        } else {
-            Cache::arraycache::const_iterator aitr = itr->second.find(id);
-            if (aitr == itr->second.end()) {
-                NanReturnValue(Undefined());
-            } else {
-                Cache::intarray const& array = aitr->second;
-                unsigned vals_size = array.size();
-                Local<Array> arr_obj = Array::New(static_cast<int>(vals_size));
-                for (unsigned k=0;k<vals_size;++k) {
-                    arr_obj->Set(k,Number::New(array[k]));
-                }
-                NanReturnValue(arr_obj);
-            }
-        }
+        Cache::intarray vector = __get(c, type, shard, id);
+        NanReturnValue(vectorToArray(vector));
     } catch (std::exception const& ex) {
         return NanThrowTypeError(ex.what());
     }
@@ -627,72 +670,39 @@ NAN_METHOD(Cache::New)
     NanReturnValue(Undefined());
 }
 
-unsigned shard(unsigned level, unsigned id) {
-    if (level == 0) return 0;
-    unsigned bits = 32 - (level * 4);
-    return id / pow(2, bits);
-}
-
-bool sortDegens(uint32_t a, uint32_t b) {
+// cache.phrasematchDegens(termidx, degens)
+struct phrasematchDegensBaton {
+    v8::Persistent<v8::Function> callback;
+    uv_work_t request;
+    std::vector<std::vector<std::uint64_t>> results;
+    std::vector<std::uint64_t> terms;
+    std::map<std::uint64_t,std::uint64_t> queryidx;
+    std::map<std::uint64_t,std::uint64_t> querymask;
+    std::map<std::uint64_t,std::uint64_t> querydist;
+};
+bool sortDegens(uint64_t a, uint64_t b) {
     uint32_t ad = a % 16;
     uint32_t bd = b % 16;
     if (ad < bd) { return true; }
     if (ad > bd) { return false; }
     return a < b;
 }
-
-std::vector<std::uint32_t> arrayToVector(Local<Array> array) {
-    std::vector<std::uint32_t> vector;
-    for (uint32_t i = 0; i < array->Length(); i++) {
-        uint32_t num = array->Get(i)->NumberValue();
-        vector.push_back(num);
-    }
-    return vector;
-}
-
-Local<Array> vectorToArray(std::vector<std::uint32_t> vector) {
-    Local<Array> array = NanNew<Array>();
-    for (uint32_t i = 0; i < vector.size(); i++) {
-        array->Set(i, NanNew<Number>(vector[i]));
-    }
-    return array;
-}
-
-Local<Object> mapToObject(std::map<std::uint32_t,std::uint32_t> map) {
-    Local<Object> object = NanNew<Object>();
-    typedef std::map<std::uint32_t,std::uint32_t>::iterator it_type;
-    for (it_type it = map.begin(); it != map.end(); it++) {
-        object->Set(NanNew<Number>(it->first), NanNew<Number>(it->second));
-    }
-    return object;
-}
-
-// cache.phrasematchDegens(termidx, degens)
-struct phrasematchDegensBaton {
-    v8::Persistent<v8::Function> callback;
-    uv_work_t request;
-    std::vector<std::vector<std::uint32_t>> results;
-    std::vector<std::uint32_t> terms;
-    std::map<std::uint32_t,std::uint32_t> queryidx;
-    std::map<std::uint32_t,std::uint32_t> querymask;
-    std::map<std::uint32_t,std::uint32_t> querydist;
-};
 // In the threadpool (no V8)
 void _phrasematchDegens(uv_work_t* req) {
     phrasematchDegensBaton *baton = static_cast<phrasematchDegensBaton *>(req->data);
 
-    std::vector<std::uint32_t> terms;
-    std::map<std::uint32_t,std::uint32_t> queryidx;
-    std::map<std::uint32_t,std::uint32_t> querymask;
-    std::map<std::uint32_t,std::uint32_t> querydist;
-    for (uint32_t idx = 0; idx < baton->results.size(); idx++) {
-        std::vector<std::uint32_t> degens = baton->results[idx];
+    std::vector<std::uint64_t> terms;
+    std::map<std::uint64_t,std::uint64_t> queryidx;
+    std::map<std::uint64_t,std::uint64_t> querymask;
+    std::map<std::uint64_t,std::uint64_t> querydist;
+    for (uint64_t idx = 0; idx < baton->results.size(); idx++) {
+        std::vector<std::uint64_t> degens = baton->results[idx];
         std::sort(degens.begin(), degens.end(), sortDegens);
         for (std::size_t i = 0; i < degens.size() && i < 10; i++) {
-            uint32_t term = degens[i] >> 4 << 4;
+            uint64_t term = degens[i] >> 4 << 4;
             terms.push_back(term);
 
-            std::map<std::uint32_t,std::uint32_t>::iterator it;
+            std::map<std::uint64_t,std::uint64_t>::iterator it;
 
             it = queryidx.find(term);
             if (it == queryidx.end()) {
@@ -746,10 +756,9 @@ NAN_METHOD(Cache::phrasematchDegens)
 
     // convert v8 results array into nested std::map
     Local<Array> resultsArray = Local<Array>::Cast(args[0]);
-    std::vector<std::vector<std::uint32_t>> results;
-    for (uint32_t i = 0; i < resultsArray->Length(); i++) {
-        Local<Array> degensArray = Local<Array>::Cast(resultsArray->Get(i));
-        std::vector<std::uint32_t> degens = arrayToVector(degensArray);
+    std::vector<std::vector<std::uint64_t>> results;
+    for (uint64_t i = 0; i < resultsArray->Length(); i++) {
+        std::vector<std::uint64_t> degens = arrayToVector(Local<Array>::Cast(resultsArray->Get(i)));
         results.push_back(degens);
     }
 
@@ -762,6 +771,164 @@ NAN_METHOD(Cache::phrasematchDegens)
     uv_queue_work(uv_default_loop(), &baton->request, _phrasematchDegens, (uv_after_work_cb)phrasematchDegensAfter);
     NanReturnUndefined();
 }
+
+struct phraseRelev {
+    uint64_t id;
+    double relev;
+    double tmprelev;
+    unsigned short count;
+    unsigned short reason;
+};
+bool sortPhraseRelev(phraseRelev a, phraseRelev b) {
+    return a.id < b.id;
+}
+bool uniqPhraseRelev(phraseRelev a, phraseRelev b) {
+    return a.id == b.id;
+}
+// In main event loop (with V8)
+NAN_METHOD(Cache::phrasematchPhraseRelev)
+{
+    NanScope();
+    if (!args[0]->IsArray()) {
+        return NanThrowTypeError("first arg must be a results array");
+    }
+    if (!args[1]->IsObject()) {
+        return NanThrowTypeError("second arg must be a queryidx object");
+    }
+    if (!args[2]->IsObject()) {
+        return NanThrowTypeError("second arg must be a querymask object");
+    }
+    if (!args[3]->IsObject()) {
+        return NanThrowTypeError("second arg must be a querydist object");
+    }
+
+    uint64_t shardlevel = args.This()->Get(NanNew("shardlevel"))->NumberValue();
+    std::string type = "phrase";
+    Cache::intarray phrases = arrayToVector(Local<Array>::Cast(args[0]));
+    std::map<std::uint64_t,std::uint64_t> queryidx = objectToMap(Local<Object>::Cast(args[1]));
+    std::map<std::uint64_t,std::uint64_t> querymask = objectToMap(Local<Object>::Cast(args[2]));
+    std::map<std::uint64_t,std::uint64_t> querydist = objectToMap(Local<Object>::Cast(args[3]));
+
+    Cache* c = node::ObjectWrap::Unwrap<Cache>(args.This());
+
+    double max_relev = 0;
+    double min_relev = 1;
+    std::vector<phraseRelev> allPhrases;
+    std::vector<phraseRelev> relevantPhrases;
+
+    for (uint64_t a = 0; a < phrases.size(); a++) {
+        uint64_t id = phrases[a];
+        Cache::intarray phrase = __get(c, "phrase", shard(shardlevel, id), id);
+        unsigned short size = phrase.size();
+        if (size == 0) {
+            return NanThrowTypeError("Failed to get phrase");
+        }
+
+        // Get total relev score of phrase.
+        unsigned short total = 0;
+        for (unsigned short i = 0; i < size; i++) {
+            total += phrase[i] % 16;
+        }
+
+        double relev = 0;
+        unsigned short count = 0;
+        unsigned short reason = 0;
+        unsigned short chardist = 0;
+        signed short lastidx = -1;
+
+        // relev each feature:
+        // - across all feature synonyms, find the max relev of the sum
+        //   of each synonym's terms based on each term's frequency of
+        //   occurrence in the dataset.
+        // - for the max relev also store the 'reason' -- the index of
+        //   each query token that contributed to its relev.
+        for (unsigned short i = 0; i < size; i++) {
+            uint64_t term = phrase[i] >> 4 << 4;
+
+            std::map<std::uint64_t,std::uint64_t>::iterator it;
+            it = querymask.find(term);
+
+            // Short circuit
+            if (it == querymask.end()) {
+                if (relev != 0) {
+                    break;
+                } else {
+                    continue;
+                }
+            }
+
+            it = queryidx.find(term);
+            unsigned short termidx = it->second;
+            it = querymask.find(term);
+            unsigned short termmask = it->second;
+            it = querydist.find(term);
+            unsigned short termdist = it->second;
+            if (relev == 0 || termidx == lastidx + 1) {
+                relev += phrase[i] % 16;
+                reason = reason | termmask;
+                chardist += termdist;
+                lastidx = termidx;
+                count++;
+            }
+        }
+
+        // get relev back to float-land.
+        relev = relev / total;
+
+        if (relev > max_relev) {
+            max_relev = relev;
+        }
+        if (relev < min_relev) {
+            min_relev = relev;
+        }
+
+        // relev represents a score based on comparative term weight
+        // significance alone. If it passes this threshold check it is
+        // adjusted based on degenerate term character distance (e.g.
+        // degens of higher distance reduce relev score).
+        // printf( "%f \n", relev);
+        if (relev >= 0.5) {
+            phraseRelev pr;
+            pr.id = id;
+            pr.count = count;
+            pr.relev = relev;
+            pr.reason = reason;
+            pr.tmprelev = (relev * 1e6) + count;
+            allPhrases.push_back(pr);
+            if (relev > 0.75) {
+                relevantPhrases.push_back(pr);
+            }
+        }
+    }
+
+    // Reduces the relevance bar to 0.50 since all results have identical relevance values
+    if (min_relev == max_relev) {
+        relevantPhrases = allPhrases;
+    }
+
+    std::sort(relevantPhrases.begin(), relevantPhrases.end(), sortPhraseRelev);
+    std::unique(relevantPhrases.begin(), relevantPhrases.end(), uniqPhraseRelev);
+
+    unsigned short relevsize = relevantPhrases.size();
+    Local<Array> result = NanNew<Array>(static_cast<int>(relevsize));
+    Local<Object> relevs = NanNew<Object>();
+    for (uint32_t i = 0; i < relevsize; i++) {
+        Local<Object> phraseRelevObject = NanNew<Object>();
+        phraseRelevObject->Set(NanNew("count"), NanNew<Number>(relevantPhrases[i].count));
+        phraseRelevObject->Set(NanNew("reason"), NanNew<Number>(relevantPhrases[i].reason));
+        phraseRelevObject->Set(NanNew("relev"), NanNew<Number>(relevantPhrases[i].relev));
+        phraseRelevObject->Set(NanNew("tmprelev"), NanNew<Number>(relevantPhrases[i].tmprelev));
+        result->Set(i, NanNew<Number>(relevantPhrases[i].id));
+        relevs->Set(NanNew<Number>(relevantPhrases[i].id), phraseRelevObject);
+    }
+
+    Local<Object> ret = NanNew<Object>();
+    ret->Set(NanNew("result"), result);
+    ret->Set(NanNew("relevs"), relevs);
+
+    NanReturnValue(ret);
+}
+
 extern "C" {
     static void start(Handle<Object> target) {
         Cache::Initialize(target);
