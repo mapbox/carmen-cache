@@ -593,7 +593,11 @@ NAN_METHOD(Cache::_get)
         uint64_t id = static_cast<uint64_t>(args[2]->IntegerValue());
         Cache* c = node::ObjectWrap::Unwrap<Cache>(args.This());
         Cache::intarray vector = __get(c, type, shard, id);
-        NanReturnValue(vectorToArray(vector));
+        if (vector.size() > 0) {
+            NanReturnValue(vectorToArray(vector));
+        } else {
+            NanReturnUndefined();
+        }
     } catch (std::exception const& ex) {
         return NanThrowTypeError(ex.what());
     }
