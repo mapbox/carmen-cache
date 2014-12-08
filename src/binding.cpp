@@ -130,6 +130,7 @@ void Cache::Initialize(Handle<Object> target) {
     NODE_SET_PROTOTYPE_METHOD(t, "unload", unload);
     NODE_SET_PROTOTYPE_METHOD(t, "phrasematchDegens", phrasematchDegens);
     NODE_SET_PROTOTYPE_METHOD(t, "phrasematchPhraseRelev", phrasematchPhraseRelev);
+    NODE_SET_METHOD(t, "coalesceZooms", coalesceZooms);
     target->Set(String::NewSymbol("Cache"),t->GetFunction());
     NanAssignPersistent(constructor, t);
 }
@@ -974,6 +975,122 @@ NAN_METHOD(Cache::phrasematchPhraseRelev)
     NanAssignPersistent(baton->callback, callback.As<Function>());
     uv_queue_work(uv_default_loop(), &baton->request, _phrasematchPhraseRelev, (uv_after_work_cb)phrasematchPhraseRelevAfter);
     NanReturnUndefined();
+}
+
+NAN_METHOD(Cache::coalesceZooms)
+{
+    NanScope();
+    if (!args[0]->IsArray()) {
+        return NanThrowTypeError("first arg must be an array of grid cover arrays");
+    }
+    if (!args[1]->IsArray()) {
+        return NanThrowTypeError("second arg must be an array of zoom integers");
+    }
+
+    std::vector<Cache::intarray> grids;
+    Local<Array> array = Local<Array>::Cast(args[0]);
+    for (uint64_t i = 0; i < array->Length(); i++) {
+        Cache::intarray grid = arrayToVector(Local<Array>::Cast(array->Get(i)));
+        grids.push_back(grid);
+    }
+
+    Cache::intarray zooms = arrayToVector(Local<Array>::Cast(args[1]));
+
+    // Filter zooms down to those with matches.
+    Cache::intarray matchedZooms;
+    for (unsigned short i = 0; i < zooms.size(); i++) {
+        if (grids[i].size()) {
+            matchedZooms.push_back(zooms[i]);
+        }
+    }
+    std::sort(matchedZooms.begin(), matchedZooms.end());
+    std::unique(matchedZooms.begin(), matchedZooms.end());
+
+    // Cache zoom levels to iterate over as coalesce occurs.
+    std::vector<Cache::intarray> zoomcache(22);
+    for (unsigned short i = 0; i < matchedZooms.size(); i++) {
+        Cache::intarray sliced;
+        sliced.reserve(i);
+        for (unsigned short j = 0; j < i; j++) {
+            sliced.push_back(matchedZooms[j]);
+        }
+        std::reverse(sliced.begin(), sliced.end());
+        zoomcache[matchedZooms[i]] = sliced;
+    }
+
+    uint64_t xd = std::pow(2, 39);
+    uint64_t yd = std::pow(2, 25);
+    uint64_t mp2_14 = std::pow(2, 14);
+    uint64_t mp2_28 = std::pow(2, 28);
+
+    std::map<uint64_t,Cache::intarray> coalesced;
+    std::map<uint64_t,std::string> keys;
+    std::map<uint64_t,bool> done;
+
+    std::map<uint64_t,Cache::intarray>::iterator cit;
+    std::map<uint64_t,std::string>::iterator kit;
+    std::map<uint64_t,bool>::iterator dit;
+    std::map<uint64_t,Cache::intarray>::iterator parent_cit;
+    std::map<uint64_t,std::string>::iterator parent_kit;
+
+    for (unsigned h = 0; h < grids.size(); h++) {
+        Cache::intarray const& grid = grids[h];
+        uint64_t z = zooms[h];
+        for (unsigned i = 0; i < grid.size(); i++) {
+            uint64_t tmpid = h * 1e8 + (grid[i] % yd);
+            uint64_t x = std::floor(grid[i]/xd);
+            uint64_t y = std::floor(grid[i]%xd/yd);
+            uint64_t zxy = (z * mp2_28) + (x * mp2_14) + y;
+
+            cit = coalesced.find(zxy);
+            if (cit == coalesced.end()) {
+                Cache::intarray zxylist;
+                zxylist.push_back(tmpid);
+                coalesced.insert(std::make_pair(zxy, zxylist));
+                keys.insert(std::make_pair(zxy, std::to_string(tmpid)));
+            } else {
+                cit->second.push_back(tmpid);
+                kit = keys.find(zxy);
+                kit->second.append("-");
+                kit->second.append(std::to_string(tmpid));
+            }
+
+            dit = done.find(zxy);
+            if (dit == done.end()) {
+                // for each parent zoom collect ids
+                for (unsigned a = 0; a < zoomcache[z].size(); a++) {
+                    unsigned p = zoomcache[z][a];
+                    unsigned s = 1 << (z-p);
+                    uint64_t pxy = (p * mp2_28) + (std::floor(x/s) * mp2_14) + std::floor(y/s);
+                    // Set a flag to ensure coalesce occurs only once per zxy.
+                    parent_cit = coalesced.find(pxy);
+                    if (parent_cit != coalesced.end()) {
+                        cit = coalesced.find(zxy);
+                        Cache::intarray parent_array = parent_cit->second;
+                        for (unsigned b = 0; b < parent_array.size(); b++) {
+                            cit->second.push_back(parent_array[b]);
+                        }
+                        parent_kit = keys.find(pxy);
+                        kit = keys.find(zxy);
+                        kit->second.append("-");
+                        kit->second.append(parent_kit->second);
+                        done.insert(std::make_pair(zxy, true));
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    Local<Object> object = NanNew<Object>();
+    typedef std::map<uint64_t,Cache::intarray>::iterator it_type;
+    for (it_type it = coalesced.begin(); it != coalesced.end(); it++) {
+        kit = keys.find(it->first);
+        Local<Array> array = vectorToArray(it->second);
+        array->Set(NanNew("key"), NanNew(kit->second));
+        object->Set(NanNew<Number>(it->first), array);
+    }
+    NanReturnValue(object);
 }
 
 extern "C" {
