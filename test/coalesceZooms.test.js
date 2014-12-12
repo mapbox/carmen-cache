@@ -1,16 +1,17 @@
 var coalesceZooms = require('../index.js').Cache.coalesceZooms;
 var test = require('tape');
 
-test('coalesce zooms', function(t) {
-    t.test('zero case', function(q) {
-        var coalesced = coalesceZooms([], []);
+test('zero case', function(q) {
+    coalesceZooms([], [], function(err, coalesced) {
+        q.ifError(err);
         q.deepEqual(coalesced, {});
         q.end();
     });
-    t.test('basic coalesce', function(q) {
-        // The data for this test is from the query "holyoke massachusetts"
-        // against the province and place indexes.
-        var coalesced = coalesceZooms(
+});
+test('basic coalesce', function(q) {
+    // The data for this test is from the query "holyoke massachusetts"
+    // against the province and place indexes.
+    coalesceZooms(
         // grids
         [
             [ 83019436130799,
@@ -43,8 +44,9 @@ test('coalesce zooms', function(t) {
               335926236559204 ]
         ],
         // zooms
-        [ 9, 11 ]);
-
+        [ 9, 11 ],
+    function(err, coalesced) {
+        q.ifError(err);
         // Reformat encoded zxy's and map full features to just their IDs for
         // easier debugging/assertion of correct results.
         var z, x, y;
@@ -118,5 +120,5 @@ test('coalesce zooms', function(t) {
         }, coalescedKeys);
         q.end();
     });
-    t.end();
 });
+

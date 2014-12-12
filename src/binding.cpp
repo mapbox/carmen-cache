@@ -977,24 +977,18 @@ NAN_METHOD(Cache::phrasematchPhraseRelev)
     NanReturnUndefined();
 }
 
-NAN_METHOD(Cache::coalesceZooms)
-{
-    NanScope();
-    if (!args[0]->IsArray()) {
-        return NanThrowTypeError("first arg must be an array of grid cover arrays");
-    }
-    if (!args[1]->IsArray()) {
-        return NanThrowTypeError("second arg must be an array of zoom integers");
-    }
-
+struct coalesceZoomsBaton {
+    v8::Persistent<v8::Function> callback;
+    uv_work_t request;
     std::vector<Cache::intarray> grids;
-    Local<Array> array = Local<Array>::Cast(args[0]);
-    for (uint64_t i = 0; i < array->Length(); i++) {
-        Cache::intarray grid = arrayToVector(Local<Array>::Cast(array->Get(i)));
-        grids.push_back(grid);
-    }
-
-    Cache::intarray zooms = arrayToVector(Local<Array>::Cast(args[1]));
+    Cache::intarray zooms;
+    std::map<uint64_t,Cache::intarray> coalesced;
+    std::map<uint64_t,std::string> keys;
+};
+void _coalesceZooms(uv_work_t* req) {
+    coalesceZoomsBaton *baton = static_cast<coalesceZoomsBaton *>(req->data);
+    std::vector<Cache::intarray> grids = baton->grids;
+    Cache::intarray zooms = baton->zooms;
 
     // Filter zooms down to those with matches.
     Cache::intarray matchedZooms;
@@ -1081,6 +1075,14 @@ NAN_METHOD(Cache::coalesceZooms)
             }
         }
     }
+    baton->coalesced = coalesced;
+    baton->keys = keys;
+}
+void coalesceZoomsAfter(uv_work_t* req) {
+    coalesceZoomsBaton *baton = static_cast<coalesceZoomsBaton *>(req->data);
+    std::map<uint64_t,Cache::intarray> coalesced = baton->coalesced;
+    std::map<uint64_t,std::string> keys = baton->keys;
+    std::map<uint64_t,std::string>::iterator kit;
 
     Local<Object> object = NanNew<Object>();
     typedef std::map<uint64_t,Cache::intarray>::iterator it_type;
@@ -1090,7 +1092,42 @@ NAN_METHOD(Cache::coalesceZooms)
         array->Set(NanNew("key"), NanNew(kit->second));
         object->Set(NanNew<Number>(it->first), array);
     }
-    NanReturnValue(object);
+
+    Local<Value> argv[2] = { NanNull(), object };
+    NanMakeCallback(NanGetCurrentContext()->Global(), NanNew(baton->callback), 2, argv);
+    NanDisposePersistent(baton->callback);
+    delete baton;
+}
+NAN_METHOD(Cache::coalesceZooms) {
+    NanScope();
+    if (!args[0]->IsArray()) {
+        return NanThrowTypeError("first arg must be an array of grid cover arrays");
+    }
+    if (!args[1]->IsArray()) {
+        return NanThrowTypeError("second arg must be an array of zoom integers");
+    }
+    if (!args[2]->IsFunction()) {
+        return NanThrowTypeError("third arg must be a callback function");
+    }
+
+    std::vector<Cache::intarray> grids;
+    Local<Array> array = Local<Array>::Cast(args[0]);
+    for (uint64_t i = 0; i < array->Length(); i++) {
+        Cache::intarray grid = arrayToVector(Local<Array>::Cast(array->Get(i)));
+        grids.push_back(grid);
+    }
+
+    Cache::intarray zooms = arrayToVector(Local<Array>::Cast(args[1]));
+
+    // callback
+    Local<Value> callback = args[2];
+    coalesceZoomsBaton *baton = new coalesceZoomsBaton();
+    baton->grids = grids;
+    baton->zooms = zooms;
+    baton->request.data = baton;
+    NanAssignPersistent(baton->callback, callback.As<Function>());
+    uv_queue_work(uv_default_loop(), &baton->request, _coalesceZooms, (uv_after_work_cb)coalesceZoomsAfter);
+    NanReturnUndefined();
 }
 
 extern "C" {
