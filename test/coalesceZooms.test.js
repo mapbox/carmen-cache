@@ -8,6 +8,52 @@ test('zero case', function(q) {
         q.end();
     });
 });
+
+var mp39 = Math.pow(2,39);
+var mp25 = Math.pow(2,25);
+
+test('coalesce dupe zooms', function(q) {
+    // The data for this test is from the query "holyoke massachusetts"
+    // against the province and place indexes.
+    coalesceZooms(
+        // grids
+        [
+            [ (0*mp39 + 0*mp25 + 10),  // id:10 @ 1/0/0
+            ],
+            [ (0*mp39 + 0*mp25 + 11),  // id:10 @ 1/0/0
+              (0*mp39 + 0*mp25 + 12),  // id:12 @ 1/0/0
+              (1*mp39 + 1*mp25 + 13),  // id:11 @ 1/1/1
+            ]
+        ],
+        // zooms
+        [ 1, 1],
+    function(err, coalesced) {
+        q.ifError(err);
+        // Reformat encoded zxy's and map full features to just their IDs for
+        // easier debugging/assertion of correct results.
+        var z, x, y;
+        var coalescedCount = {};
+        var coalescedKeys = {};
+        for (var zxy in coalesced) {
+            z = Math.floor(zxy/Math.pow(2,28));
+            x = Math.floor(zxy%Math.pow(2,28)/Math.pow(2,14));
+            y = zxy % Math.pow(2,14)
+            var key = [z,x,y].join('/');
+            coalescedCount[key] = coalesced[zxy].slice(0);
+            coalescedKeys[key] = coalesced[zxy].key;
+        }
+        q.deepEqual(coalescedCount, {
+            '1/0/0': [ 10, 100000011, 100000012 ],
+            '1/1/1': [ 100000013 ]
+        });
+        q.deepEqual(coalescedKeys, {
+            '1/0/0': '10-100000011-100000012',
+            '1/1/1': '100000013'
+        });
+        q.end();
+    });
+});
+
 test('basic coalesce', function(q) {
     // The data for this test is from the query "holyoke massachusetts"
     // against the province and place indexes.
