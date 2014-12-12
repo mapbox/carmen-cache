@@ -903,7 +903,7 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
     }
 
     std::sort(relevantPhrases.begin(), relevantPhrases.end(), sortPhraseRelev);
-    std::unique(relevantPhrases.begin(), relevantPhrases.end(), uniqPhraseRelev);
+    relevantPhrases.erase(std::unique(relevantPhrases.begin(), relevantPhrases.end(), uniqPhraseRelev), relevantPhrases.end());
     baton->relevantPhrases = relevantPhrases;
 }
 void phrasematchPhraseRelevAfter(uv_work_t* req) {
@@ -998,7 +998,7 @@ void _coalesceZooms(uv_work_t* req) {
         }
     }
     std::sort(matchedZooms.begin(), matchedZooms.end());
-    std::unique(matchedZooms.begin(), matchedZooms.end());
+    matchedZooms.erase(std::unique(matchedZooms.begin(), matchedZooms.end()), matchedZooms.end());
 
     // Cache zoom levels to iterate over as coalesce occurs.
     std::vector<Cache::intarray> zoomcache(22);
