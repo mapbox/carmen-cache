@@ -870,6 +870,7 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
 
         // get relev back to float-land.
         relev = relev / total;
+        relev = (relev > 0.99 ? 1 : relev) - (chardist * 0.01);
 
         if (relev > max_relev) {
             max_relev = relev;
