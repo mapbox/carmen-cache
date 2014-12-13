@@ -988,8 +988,8 @@ struct coalesceZoomsBaton {
 };
 void _coalesceZooms(uv_work_t* req) {
     coalesceZoomsBaton *baton = static_cast<coalesceZoomsBaton *>(req->data);
-    std::vector<Cache::intarray> grids = baton->grids;
-    Cache::intarray zooms = baton->zooms;
+    std::vector<Cache::intarray> const& grids = baton->grids;
+    Cache::intarray const& zooms = baton->zooms;
 
     // Filter zooms down to those with matches.
     Cache::intarray matchedZooms;
@@ -1081,8 +1081,8 @@ void _coalesceZooms(uv_work_t* req) {
 }
 void coalesceZoomsAfter(uv_work_t* req) {
     coalesceZoomsBaton *baton = static_cast<coalesceZoomsBaton *>(req->data);
-    std::map<uint64_t,Cache::intarray> coalesced = baton->coalesced;
-    std::map<uint64_t,std::string> keys = baton->keys;
+    std::map<uint64_t,Cache::intarray> & coalesced = baton->coalesced;
+    std::map<uint64_t,std::string> & keys = baton->keys;
     std::map<uint64_t,std::string>::iterator kit;
 
     Local<Object> object = NanNew<Object>();
