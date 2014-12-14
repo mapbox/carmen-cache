@@ -22,9 +22,10 @@ std::string shard(uint64_t level, uint64_t id) {
 
 Cache::intarray arrayToVector(Local<Array> array) {
     Cache::intarray vector;
+    vector.reserve(array->Length());
     for (uint64_t i = 0; i < array->Length(); i++) {
         uint64_t num = array->Get(i)->NumberValue();
-        vector.push_back(num);
+        vector.emplace_back(num);
     }
     return vector;
 }
@@ -54,7 +55,7 @@ std::map<std::uint64_t,std::uint64_t> objectToMap(Local<Object> object) {
     for (uint32_t i = 0; i < length; i++) {
         uint64_t key = keys->Get(i)->NumberValue();
         uint64_t value = object->Get(key)->NumberValue();
-        map.insert(std::make_pair(key, value));
+        map.emplace(key, value);
     }
     return map;
 }
@@ -711,19 +712,19 @@ void _phrasematchDegens(uv_work_t* req) {
 
             it = queryidx.find(term);
             if (it == queryidx.end()) {
-                queryidx.insert(std::make_pair(term, idx));
+                queryidx.emplace(term, idx);
             }
 
             it = querymask.find(term);
             if (it == querymask.end()) {
-                querymask.insert(std::make_pair(term, 0 + (1<<idx)));
+                querymask.emplace(term, 0 + (1<<idx));
             } else {
                 it->second = it->second + (1<<idx);
             }
 
             it = querydist.find(term);
             if (it == querydist.end()) {
-                querydist.insert(std::make_pair(term, term % 16));
+                querydist.emplace(term, term % 16);
             }
         }
     }
@@ -993,9 +994,10 @@ void _coalesceZooms(uv_work_t* req) {
 
     // Filter zooms down to those with matches.
     Cache::intarray matchedZooms;
+    matchedZooms.reserve(zooms.size());
     for (unsigned short i = 0; i < zooms.size(); i++) {
         if (grids[i].size()) {
-            matchedZooms.push_back(zooms[i]);
+            matchedZooms.emplace_back(zooms[i]);
         }
     }
     std::sort(matchedZooms.begin(), matchedZooms.end());
@@ -1007,7 +1009,7 @@ void _coalesceZooms(uv_work_t* req) {
         Cache::intarray sliced;
         sliced.reserve(i);
         for (unsigned short j = 0; j < i; j++) {
-            sliced.push_back(matchedZooms[j]);
+            sliced.emplace_back(matchedZooms[j]);
         }
         std::reverse(sliced.begin(), sliced.end());
         zoomcache[matchedZooms[i]] = sliced;
@@ -1041,8 +1043,8 @@ void _coalesceZooms(uv_work_t* req) {
             if (cit == coalesced.end()) {
                 Cache::intarray zxylist;
                 zxylist.push_back(tmpid);
-                coalesced.insert(std::make_pair(zxy, zxylist));
-                keys.insert(std::make_pair(zxy, std::to_string(tmpid)));
+                coalesced.emplace(zxy, zxylist);
+                keys.emplace(zxy, std::to_string(tmpid));
             } else {
                 cit->second.push_back(tmpid);
                 kit = keys.find(zxy);
@@ -1069,7 +1071,7 @@ void _coalesceZooms(uv_work_t* req) {
                         kit = keys.find(zxy);
                         kit->second.append("-");
                         kit->second.append(parent_kit->second);
-                        done.insert(std::make_pair(zxy, true));
+                        done.emplace(zxy, true);
                         break;
                     }
                 }
@@ -1111,11 +1113,12 @@ NAN_METHOD(Cache::coalesceZooms) {
         return NanThrowTypeError("third arg must be a callback function");
     }
 
-    std::vector<Cache::intarray> grids;
     Local<Array> array = Local<Array>::Cast(args[0]);
+    std::vector<Cache::intarray> grids;
+    grids.reserve(array->Length());
     for (uint64_t i = 0; i < array->Length(); i++) {
         Cache::intarray grid = arrayToVector(Local<Array>::Cast(array->Get(i)));
-        grids.push_back(grid);
+        grids.emplace_back(grid);
     }
 
     Cache::intarray zooms = arrayToVector(Local<Array>::Cast(args[1]));
