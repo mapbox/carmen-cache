@@ -132,6 +132,7 @@ void Cache::Initialize(Handle<Object> target) {
     NODE_SET_PROTOTYPE_METHOD(t, "phrasematchDegens", phrasematchDegens);
     NODE_SET_PROTOTYPE_METHOD(t, "phrasematchPhraseRelev", phrasematchPhraseRelev);
     NODE_SET_METHOD(t, "coalesceZooms", coalesceZooms);
+    NODE_SET_METHOD(t, "setRelevance", setRelevance);
     target->Set(String::NewSymbol("Cache"),t->GetFunction());
     NanAssignPersistent(constructor, t);
 }
@@ -1132,6 +1133,129 @@ NAN_METHOD(Cache::coalesceZooms) {
     NanAssignPersistent(baton->callback, callback.As<Function>());
     uv_queue_work(uv_default_loop(), &baton->request, _coalesceZooms, (uv_after_work_cb)coalesceZoomsAfter);
     NanReturnUndefined();
+}
+
+struct SetRelev {
+    uint64_t id;
+    uint64_t tmpid;
+    std::string dbid;
+    unsigned short count;
+    unsigned short reason;
+    unsigned short idx;
+    double relev;
+    bool check;
+};
+double _setRelevance(unsigned short queryLength, std::vector<SetRelev> &sets) {
+    double relevance = 0;
+    double total = queryLength;
+    double gappy = 0;
+    unsigned short querymask = 0;
+    unsigned short tally = 0;
+    signed short lastdb = -1;
+    Cache::intarray reason2db(32);
+
+    // For each set, score its correspondence with the query
+    for (unsigned short i = 0; i < sets.size(); i++) {
+        // Each db may contribute a distinct matching reason to the final
+        // relev. If this entry is for a db that has already contributed
+        // but without the same reason mark it as false.
+        if (lastdb == sets[i].idx && reason2db[sets[i].reason] != sets[i].idx) {
+            sets[i].check = false;
+            continue;
+        }
+
+        unsigned short usage = 0;
+        unsigned short count = sets[i].count;
+
+        for (unsigned j = 0; j < queryLength; j++) {
+            if (
+                // make sure this term has not already been counted for
+                // relevance. Uses a bitmask to mark positions counted.
+                !(querymask & (1<<j)) &&
+                // if this term matches the reason bitmask for relevance
+                (1 << j & sets[i].reason)
+            ) {
+                ++usage;
+                ++tally;
+                // 'check off' this term of the query so that it isn't
+                // double-counted against a different `sets` reason.
+                querymask += 1<<j;
+                // once a set's term count has been exhausted short circuit.
+                // this prevents a province match from grabbing both instances
+                // of 'new' and 'york' in a 'new york new york' query.
+                if (!--count) break;
+            }
+        }
+
+        // If this relevant criteria matched any terms in the query,
+        // increment the total relevance score.
+        if (usage > 0) {
+            relevance += (sets[i].relev * (usage / total));
+            reason2db[sets[i].reason] = sets[i].idx;
+            if (lastdb >= 0) gappy += (std::abs(sets[i].idx - lastdb) - 1);
+            lastdb = sets[i].idx;
+            if (tally == queryLength) break;
+        } else {
+            sets[i].check = false;
+        }
+    }
+
+    // Penalize relevance slightly based on whether query matches contained
+    // "gaps" in continuity between index levels.
+    relevance -= 0.01 * gappy;
+
+    return relevance;
+}
+NAN_METHOD(Cache::setRelevance) {
+    NanScope();
+    if (!args[0]->IsNumber()) {
+        return NanThrowTypeError("first arg must be a queryLength number");
+    }
+    if (!args[1]->IsArray()) {
+        return NanThrowTypeError("second arg must be a sets array");
+    }
+
+    uint64_t queryLength = args[0]->NumberValue();
+    std::vector<SetRelev> sets;
+
+    Local<Array> array = Local<Array>::Cast(args[1]);
+    sets.reserve(array->Length());
+    for (unsigned short i = 0; i < array->Length(); i++) {
+        Local<Object> obj = Local<Object>::Cast(array->Get(i));
+        SetRelev setRelev;
+        setRelev.dbid = std::string(*NanAsciiString(obj->Get(NanNew("dbid"))));
+        setRelev.id = obj->Get(NanNew("id"))->NumberValue();
+        setRelev.tmpid = obj->Get(NanNew("tmpid"))->NumberValue();
+        setRelev.relev = obj->Get(NanNew("relev"))->NumberValue();
+        setRelev.idx = obj->Get(NanNew("idx"))->NumberValue();
+        setRelev.count = obj->Get(NanNew("count"))->NumberValue();
+        setRelev.reason = obj->Get(NanNew("reason"))->NumberValue();
+        setRelev.check = true;
+        sets.emplace_back(setRelev);
+    }
+
+    double relevance = _setRelevance(queryLength, sets);
+
+    std::size_t size = sets.size();
+    Local<Array> setsArray = NanNew<Array>();
+    unsigned short j = 0;
+    for (unsigned short i = 0; i < size; i++) {
+        if (sets[i].check == true) {
+            Local<Object> obj = NanNew<Object>();
+            obj->Set(NanNew("id"), NanNew<Number>(sets[i].id));
+            obj->Set(NanNew("tmpid"), NanNew<Number>(sets[i].tmpid));
+            obj->Set(NanNew("relev"), NanNew<Number>(sets[i].relev));
+            obj->Set(NanNew("idx"), NanNew<Number>(sets[i].idx));
+            obj->Set(NanNew("count"), NanNew<Number>(sets[i].count));
+            obj->Set(NanNew("reason"), NanNew<Number>(sets[i].reason));
+            setsArray->Set(j, obj);
+            j++;
+        }
+    }
+    Local<Object> ret = NanNew<Object>();
+    ret->Set(NanNew("relevance"), NanNew<Number>(relevance));
+    ret->Set(NanNew("sets"), setsArray);
+    NanReturnValue(ret);
 }
 
 extern "C" {
