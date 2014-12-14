@@ -2,11 +2,9 @@ var coalesceZooms = require('../index.js').Cache.coalesceZooms;
 var test = require('tape');
 
 test('zero case', function(q) {
-    coalesceZooms([], [], function(err, coalesced) {
-        q.ifError(err);
-        q.deepEqual(coalesced, {});
-        q.end();
-    });
+    var coalesced = coalesceZooms([], []);
+    q.deepEqual(coalesced, {});
+    q.end();
 });
 
 var mp39 = Math.pow(2,39);
@@ -15,7 +13,7 @@ var mp25 = Math.pow(2,25);
 test('coalesce dupe zooms', function(q) {
     // The data for this test is from the query "holyoke massachusetts"
     // against the province and place indexes.
-    coalesceZooms(
+    var coalesced = coalesceZooms(
         // grids
         [
             [ (0*mp39 + 0*mp25 + 10),  // id:10 @ 1/0/0
@@ -26,38 +24,35 @@ test('coalesce dupe zooms', function(q) {
             ]
         ],
         // zooms
-        [ 1, 1],
-    function(err, coalesced) {
-        q.ifError(err);
-        // Reformat encoded zxy's and map full features to just their IDs for
-        // easier debugging/assertion of correct results.
-        var z, x, y;
-        var coalescedCount = {};
-        var coalescedKeys = {};
-        for (var zxy in coalesced) {
-            z = Math.floor(zxy/Math.pow(2,28));
-            x = Math.floor(zxy%Math.pow(2,28)/Math.pow(2,14));
-            y = zxy % Math.pow(2,14)
-            var key = [z,x,y].join('/');
-            coalescedCount[key] = coalesced[zxy].slice(0);
-            coalescedKeys[key] = coalesced[zxy].key;
-        }
-        q.deepEqual(coalescedCount, {
-            '1/0/0': [ 10, 100000011, 100000012 ],
-            '1/1/1': [ 100000013 ]
-        });
-        q.deepEqual(coalescedKeys, {
-            '1/0/0': '10-100000011-100000012',
-            '1/1/1': '100000013'
-        });
-        q.end();
+        [ 1, 1]);
+    // Reformat encoded zxy's and map full features to just their IDs for
+    // easier debugging/assertion of correct results.
+    var z, x, y;
+    var coalescedCount = {};
+    var coalescedKeys = {};
+    for (var zxy in coalesced) {
+        z = Math.floor(zxy/Math.pow(2,28));
+        x = Math.floor(zxy%Math.pow(2,28)/Math.pow(2,14));
+        y = zxy % Math.pow(2,14)
+        var key = [z,x,y].join('/');
+        coalescedCount[key] = coalesced[zxy].slice(0);
+        coalescedKeys[key] = coalesced[zxy].key;
+    }
+    q.deepEqual(coalescedCount, {
+        '1/0/0': [ 10, 100000011, 100000012 ],
+        '1/1/1': [ 100000013 ]
     });
+    q.deepEqual(coalescedKeys, {
+        '1/0/0': '10-100000011-100000012',
+        '1/1/1': '100000013'
+    });
+    q.end();
 });
 
 test('basic coalesce', function(q) {
     // The data for this test is from the query "holyoke massachusetts"
     // against the province and place indexes.
-    coalesceZooms(
+    var coalesced = coalesceZooms(
         // grids
         [
             [ 83019436130799,
@@ -90,81 +85,78 @@ test('basic coalesce', function(q) {
               335926236559204 ]
         ],
         // zooms
-        [ 9, 11 ],
-    function(err, coalesced) {
-        q.ifError(err);
-        // Reformat encoded zxy's and map full features to just their IDs for
-        // easier debugging/assertion of correct results.
-        var z, x, y;
-        var coalescedCount = {};
-        var coalescedKeys = {};
-        for (var zxy in coalesced) {
-            z = Math.floor(zxy/Math.pow(2,28));
-            x = Math.floor(zxy%Math.pow(2,28)/Math.pow(2,14));
-            y = zxy % Math.pow(2,14)
-            var key = [z,x,y].join('/');
-            coalescedCount[key] = coalesced[zxy].slice(0);
-            coalescedKeys[key] = coalesced[zxy].key;
-        }
-        q.deepEqual({
-            '9/151/188': [ 495, 496 ],
-            '9/151/189': [ 495 ],
-            '9/152/188': [ 495 ],
-            '9/152/189': [ 495 ],
-            '9/152/190': [ 495 ],
-            '9/153/188': [ 495 ],
-            '9/153/189': [ 495 ],
-            '9/153/190': [ 495 ],
-            '9/154/188': [ 495 ],
-            '9/154/189': [ 495 ],
-            '9/154/190': [ 495 ],
-            '9/154/191': [ 495 ],
-            '9/155/188': [ 495 ],
-            '9/155/189': [ 495 ],
-            '9/155/190': [ 495 ],
-            '9/155/191': [ 495 ],
-            '9/156/189': [ 495 ],
-            '9/156/190': [ 495 ],
-            '9/156/191': [ 495 ],
-            '11/441/770': [ 100007711 ],
-            '11/441/771': [ 100007711 ],
-            '11/442/770': [ 100007711 ],
-            '11/442/771': [ 100007711 ],
-            '11/498/724': [ 100131599 ],
-            '11/610/758': [ 100014180, 495 ],
-            '11/610/759': [ 100014180, 495 ],
-            '11/611/758': [ 100014180, 495 ]
-        }, coalescedCount);
-        q.deepEqual({
-            '11/441/770': '100007711',
-            '11/441/771': '100007711',
-            '11/442/770': '100007711',
-            '11/442/771': '100007711',
-            '11/498/724': '100131599',
-            '11/610/758': '100014180-495',
-            '11/610/759': '100014180-495',
-            '11/611/758': '100014180-495',
-            '9/151/188': '495-496',
-            '9/151/189': '495',
-            '9/152/188': '495',
-            '9/152/189': '495',
-            '9/152/190': '495',
-            '9/153/188': '495',
-            '9/153/189': '495',
-            '9/153/190': '495',
-            '9/154/188': '495',
-            '9/154/189': '495',
-            '9/154/190': '495',
-            '9/154/191': '495',
-            '9/155/188': '495',
-            '9/155/189': '495',
-            '9/155/190': '495',
-            '9/155/191': '495',
-            '9/156/189': '495',
-            '9/156/190': '495',
-            '9/156/191': '495'
-        }, coalescedKeys);
-        q.end();
-    });
+        [ 9, 11 ]);
+    // Reformat encoded zxy's and map full features to just their IDs for
+    // easier debugging/assertion of correct results.
+    var z, x, y;
+    var coalescedCount = {};
+    var coalescedKeys = {};
+    for (var zxy in coalesced) {
+        z = Math.floor(zxy/Math.pow(2,28));
+        x = Math.floor(zxy%Math.pow(2,28)/Math.pow(2,14));
+        y = zxy % Math.pow(2,14)
+        var key = [z,x,y].join('/');
+        coalescedCount[key] = coalesced[zxy].slice(0);
+        coalescedKeys[key] = coalesced[zxy].key;
+    }
+    q.deepEqual({
+        '9/151/188': [ 495, 496 ],
+        '9/151/189': [ 495 ],
+        '9/152/188': [ 495 ],
+        '9/152/189': [ 495 ],
+        '9/152/190': [ 495 ],
+        '9/153/188': [ 495 ],
+        '9/153/189': [ 495 ],
+        '9/153/190': [ 495 ],
+        '9/154/188': [ 495 ],
+        '9/154/189': [ 495 ],
+        '9/154/190': [ 495 ],
+        '9/154/191': [ 495 ],
+        '9/155/188': [ 495 ],
+        '9/155/189': [ 495 ],
+        '9/155/190': [ 495 ],
+        '9/155/191': [ 495 ],
+        '9/156/189': [ 495 ],
+        '9/156/190': [ 495 ],
+        '9/156/191': [ 495 ],
+        '11/441/770': [ 100007711 ],
+        '11/441/771': [ 100007711 ],
+        '11/442/770': [ 100007711 ],
+        '11/442/771': [ 100007711 ],
+        '11/498/724': [ 100131599 ],
+        '11/610/758': [ 100014180, 495 ],
+        '11/610/759': [ 100014180, 495 ],
+        '11/611/758': [ 100014180, 495 ]
+    }, coalescedCount);
+    q.deepEqual({
+        '11/441/770': '100007711',
+        '11/441/771': '100007711',
+        '11/442/770': '100007711',
+        '11/442/771': '100007711',
+        '11/498/724': '100131599',
+        '11/610/758': '100014180-495',
+        '11/610/759': '100014180-495',
+        '11/611/758': '100014180-495',
+        '9/151/188': '495-496',
+        '9/151/189': '495',
+        '9/152/188': '495',
+        '9/152/189': '495',
+        '9/152/190': '495',
+        '9/153/188': '495',
+        '9/153/189': '495',
+        '9/153/190': '495',
+        '9/154/188': '495',
+        '9/154/189': '495',
+        '9/154/190': '495',
+        '9/154/191': '495',
+        '9/155/188': '495',
+        '9/155/189': '495',
+        '9/155/190': '495',
+        '9/155/191': '495',
+        '9/156/189': '495',
+        '9/156/190': '495',
+        '9/156/191': '495'
+    }, coalescedKeys);
+    q.end();
 });
 
