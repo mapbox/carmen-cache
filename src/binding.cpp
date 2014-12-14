@@ -980,19 +980,11 @@ NAN_METHOD(Cache::phrasematchPhraseRelev)
     NanReturnUndefined();
 }
 
-struct coalesceZoomsBaton {
-    v8::Persistent<v8::Function> callback;
-    uv_work_t request;
-    std::vector<Cache::intarray> grids;
-    Cache::intarray zooms;
+struct CoalesceZooms {
     std::map<uint64_t,Cache::intarray> coalesced;
     std::map<uint64_t,std::string> keys;
 };
-void _coalesceZooms(uv_work_t* req) {
-    coalesceZoomsBaton *baton = static_cast<coalesceZoomsBaton *>(req->data);
-    std::vector<Cache::intarray> const& grids = baton->grids;
-    Cache::intarray const& zooms = baton->zooms;
-
+CoalesceZooms _coalesceZooms(std::vector<Cache::intarray> & grids, Cache::intarray & zooms) {
     // Filter zooms down to those with matches.
     Cache::intarray matchedZooms;
     matchedZooms.reserve(zooms.size());
@@ -1079,28 +1071,10 @@ void _coalesceZooms(uv_work_t* req) {
             }
         }
     }
-    baton->coalesced = coalesced;
-    baton->keys = keys;
-}
-void coalesceZoomsAfter(uv_work_t* req) {
-    coalesceZoomsBaton *baton = static_cast<coalesceZoomsBaton *>(req->data);
-    std::map<uint64_t,Cache::intarray> & coalesced = baton->coalesced;
-    std::map<uint64_t,std::string> & keys = baton->keys;
-    std::map<uint64_t,std::string>::iterator kit;
-
-    Local<Object> object = NanNew<Object>();
-    typedef std::map<uint64_t,Cache::intarray>::iterator it_type;
-    for (it_type it = coalesced.begin(); it != coalesced.end(); it++) {
-        kit = keys.find(it->first);
-        Local<Array> array = vectorToArray(it->second);
-        array->Set(NanNew("key"), NanNew(kit->second));
-        object->Set(NanNew<Number>(it->first), array);
-    }
-
-    Local<Value> argv[2] = { NanNull(), object };
-    NanMakeCallback(NanGetCurrentContext()->Global(), NanNew(baton->callback), 2, argv);
-    NanDisposePersistent(baton->callback);
-    delete baton;
+    CoalesceZooms ret;
+    ret.coalesced = coalesced;
+    ret.keys = keys;
+    return ret;
 }
 NAN_METHOD(Cache::coalesceZooms) {
     NanScope();
@@ -1109,9 +1083,6 @@ NAN_METHOD(Cache::coalesceZooms) {
     }
     if (!args[1]->IsArray()) {
         return NanThrowTypeError("second arg must be an array of zoom integers");
-    }
-    if (!args[2]->IsFunction()) {
-        return NanThrowTypeError("third arg must be a callback function");
     }
 
     Local<Array> array = Local<Array>::Cast(args[0]);
@@ -1124,15 +1095,20 @@ NAN_METHOD(Cache::coalesceZooms) {
 
     Cache::intarray zooms = arrayToVector(Local<Array>::Cast(args[1]));
 
-    // callback
-    Local<Value> callback = args[2];
-    coalesceZoomsBaton *baton = new coalesceZoomsBaton();
-    baton->grids = grids;
-    baton->zooms = zooms;
-    baton->request.data = baton;
-    NanAssignPersistent(baton->callback, callback.As<Function>());
-    uv_queue_work(uv_default_loop(), &baton->request, _coalesceZooms, (uv_after_work_cb)coalesceZoomsAfter);
-    NanReturnUndefined();
+    CoalesceZooms ret = _coalesceZooms(grids, zooms);
+
+    std::map<uint64_t,std::string>::iterator kit;
+
+    Local<Object> object = NanNew<Object>();
+    typedef std::map<uint64_t,Cache::intarray>::iterator it_type;
+    for (it_type it = ret.coalesced.begin(); it != ret.coalesced.end(); it++) {
+        kit = ret.keys.find(it->first);
+        Local<Array> array = vectorToArray(it->second);
+        array->Set(NanNew("key"), NanNew(kit->second));
+        object->Set(NanNew<Number>(it->first), array);
+    }
+
+    NanReturnValue(object);
 }
 
 struct SetRelev {
@@ -1256,6 +1232,77 @@ NAN_METHOD(Cache::setRelevance) {
     ret->Set(NanNew("relevance"), NanNew<Number>(relevance));
     ret->Set(NanNew("sets"), setsArray);
     NanReturnValue(ret);
+}
+
+struct SpatialMatchBaton {
+    v8::Persistent<v8::Function> callback;
+    uv_work_t request;
+    std::vector<Cache::intarray> grids;
+    Cache::intarray zooms;
+    std::map<uint64_t,Cache::intarray> coalesced;
+    std::map<uint64_t,std::string> keys;
+};
+void _spatialMatch(uv_work_t* req) {
+    SpatialMatchBaton *baton = static_cast<SpatialMatchBaton *>(req->data);
+    std::vector<Cache::intarray> const& grids = baton->grids;
+    Cache::intarray const& zooms = baton->zooms;
+    // baton->coalesced = coalesced;
+    // baton->keys = keys;
+}
+void spatialMatchAfter(uv_work_t* req) {
+    SpatialMatchBaton *baton = static_cast<SpatialMatchBaton *>(req->data);
+    std::map<uint64_t,Cache::intarray> & coalesced = baton->coalesced;
+    std::map<uint64_t,std::string> & keys = baton->keys;
+    std::map<uint64_t,std::string>::iterator kit;
+
+    Local<Object> object = NanNew<Object>();
+    typedef std::map<uint64_t,Cache::intarray>::iterator it_type;
+    for (it_type it = coalesced.begin(); it != coalesced.end(); it++) {
+        kit = keys.find(it->first);
+        Local<Array> array = vectorToArray(it->second);
+        array->Set(NanNew("key"), NanNew(kit->second));
+        object->Set(NanNew<Number>(it->first), array);
+    }
+
+    Local<Value> argv[2] = { NanNull(), object };
+    NanMakeCallback(NanGetCurrentContext()->Global(), NanNew(baton->callback), 2, argv);
+    NanDisposePersistent(baton->callback);
+    delete baton;
+}
+NAN_METHOD(Cache::spatialMatch) {
+    NanScope();
+    if (!args[0]->IsObject()) {
+        return NanThrowTypeError("first arg must be an object with feature relevs");
+    }
+    if (!args[1]->IsArray()) {
+        return NanThrowTypeError("second arg must be an array of grid cover arrays");
+    }
+    if (!args[2]->IsArray()) {
+        return NanThrowTypeError("third arg must be an array of zoom integers");
+    }
+    if (!args[3]->IsFunction()) {
+        return NanThrowTypeError("fourth arg must be a callback function");
+    }
+
+    Local<Array> array = Local<Array>::Cast(args[1]);
+    std::vector<Cache::intarray> grids;
+    grids.reserve(array->Length());
+    for (uint64_t i = 0; i < array->Length(); i++) {
+        Cache::intarray grid = arrayToVector(Local<Array>::Cast(array->Get(i)));
+        grids.emplace_back(grid);
+    }
+
+    Cache::intarray zooms = arrayToVector(Local<Array>::Cast(args[2]));
+
+    // callback
+    Local<Value> callback = args[3];
+    SpatialMatchBaton *baton = new SpatialMatchBaton();
+    baton->grids = grids;
+    baton->zooms = zooms;
+    baton->request.data = baton;
+    NanAssignPersistent(baton->callback, callback.As<Function>());
+    uv_queue_work(uv_default_loop(), &baton->request, _spatialMatch, (uv_after_work_cb)spatialMatchAfter);
+    NanReturnUndefined();
 }
 
 extern "C" {

@@ -53,6 +53,7 @@ public:
     static NAN_METHOD(phrasematchPhraseRelev);
     static NAN_METHOD(coalesceZooms);
     static NAN_METHOD(setRelevance);
+    static NAN_METHOD(spatialMatch);
     static void AsyncRun(uv_work_t* req);
     static void AfterRun(uv_work_t* req);
     Cache(std::string const& id, unsigned shardlevel);
