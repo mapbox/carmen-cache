@@ -1121,6 +1121,28 @@ struct SetRelev {
     double relev;
     bool check;
 };
+Local<Object> setRelevToObject(SetRelev & setRelev) {
+    Local<Object> obj = NanNew<Object>();
+    obj->Set(NanNew("id"), NanNew<Number>(setRelev.id));
+    obj->Set(NanNew("tmpid"), NanNew<Number>(setRelev.tmpid));
+    obj->Set(NanNew("relev"), NanNew<Number>(setRelev.relev));
+    obj->Set(NanNew("idx"), NanNew<Number>(setRelev.idx));
+    obj->Set(NanNew("count"), NanNew<Number>(setRelev.count));
+    obj->Set(NanNew("reason"), NanNew<Number>(setRelev.reason));
+    return obj;
+}
+SetRelev objectToSetRelev(Local<Object> & obj) {
+    SetRelev setRelev;
+    setRelev.dbid = std::string(*NanAsciiString(obj->Get(NanNew("dbid"))));
+    setRelev.id = obj->Get(NanNew("id"))->NumberValue();
+    setRelev.tmpid = obj->Get(NanNew("tmpid"))->NumberValue();
+    setRelev.relev = obj->Get(NanNew("relev"))->NumberValue();
+    setRelev.idx = obj->Get(NanNew("idx"))->NumberValue();
+    setRelev.count = obj->Get(NanNew("count"))->NumberValue();
+    setRelev.reason = obj->Get(NanNew("reason"))->NumberValue();
+    setRelev.check = true;
+    return setRelev;
+}
 double _setRelevance(unsigned short queryLength, std::vector<SetRelev> &sets) {
     double relevance = 0;
     double total = queryLength;
@@ -1198,15 +1220,7 @@ NAN_METHOD(Cache::setRelevance) {
     sets.reserve(array->Length());
     for (unsigned short i = 0; i < array->Length(); i++) {
         Local<Object> obj = Local<Object>::Cast(array->Get(i));
-        SetRelev setRelev;
-        setRelev.dbid = std::string(*NanAsciiString(obj->Get(NanNew("dbid"))));
-        setRelev.id = obj->Get(NanNew("id"))->NumberValue();
-        setRelev.tmpid = obj->Get(NanNew("tmpid"))->NumberValue();
-        setRelev.relev = obj->Get(NanNew("relev"))->NumberValue();
-        setRelev.idx = obj->Get(NanNew("idx"))->NumberValue();
-        setRelev.count = obj->Get(NanNew("count"))->NumberValue();
-        setRelev.reason = obj->Get(NanNew("reason"))->NumberValue();
-        setRelev.check = true;
+        SetRelev setRelev = objectToSetRelev(obj);
         sets.emplace_back(setRelev);
     }
 
@@ -1217,13 +1231,7 @@ NAN_METHOD(Cache::setRelevance) {
     unsigned short j = 0;
     for (unsigned short i = 0; i < size; i++) {
         if (sets[i].check == true) {
-            Local<Object> obj = NanNew<Object>();
-            obj->Set(NanNew("id"), NanNew<Number>(sets[i].id));
-            obj->Set(NanNew("tmpid"), NanNew<Number>(sets[i].tmpid));
-            obj->Set(NanNew("relev"), NanNew<Number>(sets[i].relev));
-            obj->Set(NanNew("idx"), NanNew<Number>(sets[i].idx));
-            obj->Set(NanNew("count"), NanNew<Number>(sets[i].count));
-            obj->Set(NanNew("reason"), NanNew<Number>(sets[i].reason));
+            Local<Object> obj = setRelevToObject(sets[i]);
             setsArray->Set(j, obj);
             j++;
         }
@@ -1235,56 +1243,199 @@ NAN_METHOD(Cache::setRelevance) {
 }
 
 struct SpatialMatchBaton {
-    v8::Persistent<v8::Function> callback;
     uv_work_t request;
+    // params
+    v8::Persistent<v8::Function> callback;
+    unsigned short queryLength;
+    std::map<uint64_t,SetRelev> features;
     std::vector<Cache::intarray> grids;
     Cache::intarray zooms;
+    // return
+    std::map<uint64_t,SetRelev> sets;
+    std::vector<SetRelev> results;
     std::map<uint64_t,Cache::intarray> coalesced;
-    std::map<uint64_t,std::string> keys;
 };
+bool sortRelevReason(SetRelev a, SetRelev b) {
+    if (a.idx > b.idx) return false;
+    else if (a.idx < b.idx) return true;
+    else if (a.relev > b.relev) return false;
+    else if (a.relev < b.relev) return true;
+    else if (a.reason > b.reason) return false;
+    else if (a.reason < b.reason) return true;
+    else if (a.id < b.id) return false;
+    else if (a.id > b.id) return true;
+    return true;
+}
+bool sortByRelev(SetRelev a, SetRelev b) {
+    return b.relev > a.relev;    return b.relev - a.relev;
+}
 void _spatialMatch(uv_work_t* req) {
     SpatialMatchBaton *baton = static_cast<SpatialMatchBaton *>(req->data);
-    std::vector<Cache::intarray> const& grids = baton->grids;
-    Cache::intarray const& zooms = baton->zooms;
-    // baton->coalesced = coalesced;
-    // baton->keys = keys;
+
+    std::vector<Cache::intarray> & grids = baton->grids;
+    Cache::intarray & zooms = baton->zooms;
+
+    CoalesceZooms ret = _coalesceZooms(grids, zooms);
+
+    std::map<uint64_t,SetRelev> & features = baton->features;
+    std::map<uint64_t,SetRelev>::iterator fit;
+    std::map<uint64_t,Cache::intarray> & coalesced = ret.coalesced;
+    std::map<uint64_t,Cache::intarray>::iterator cit;
+    std::map<uint64_t,std::string> & keys = ret.keys;
+    std::map<uint64_t,std::string>::iterator kit;
+    std::map<std::string,bool> done;
+    std::map<std::string,bool>::iterator dit;
+
+    std::map<uint64_t,SetRelev> sets;
+    std::map<uint64_t,SetRelev>::iterator sit;
+    std::map<uint64_t,SetRelev> rowMemo;
+    std::map<uint64_t,SetRelev>::iterator rit;
+
+    std::string pushed = "";
+
+    for (cit = coalesced.begin(); cit != coalesced.end(); cit++) {
+        kit = keys.find(cit->first);
+        std::string key = kit->second;
+        dit = done.find(key);
+        if (dit != done.end()) {
+            continue;
+        } else {
+            done.emplace(key, true);
+        }
+
+        std::vector<SetRelev> rows;
+        rows.reserve(cit->second.size());
+        for (unsigned short i = 0; i < cit->second.size(); i++) {
+            fit = features.find(cit->second[i]);
+            if (fit->second.check == false) {
+                continue;
+            } else {
+                rows.emplace_back(fit->second);
+            }
+        }
+        std::sort(rows.begin(), rows.end(), sortRelevReason);
+        double relev = _setRelevance(5, rows);
+
+        for (unsigned short i = 0; i < rows.size(); i++) {
+            // Add setRelev to sets.
+            sit = sets.find(rows[i].tmpid);
+            if (sit == sets.end()) {
+                sets.emplace(rows[i].tmpid, rows[i]);
+            }
+
+            // Don't use results after the topmost index in the stack.
+            if (pushed != "" && pushed != rows[i].dbid) {
+                continue;
+            }
+
+            pushed = rows[i].dbid;
+            rit = rowMemo.find(rows[i].tmpid);
+            if (rit != rowMemo.end()) {
+                if (rit->second.relev > relev) {
+                    continue;
+                }
+                // @TODO apply addrmod
+                // if (rit->second.relev > relev + addrmod[rows[i].dbid])
+                rit->second = rows[i];
+            } else {
+                rowMemo.emplace(rows[i].tmpid, rows[i]);
+                // @TODO apply addrmod
+            }
+        }
+    }
+
+    std::vector<SetRelev> sorted;
+    for (rit = rowMemo.begin(); rit != rowMemo.end(); rit++) {
+        sorted.push_back(rit->second);
+    }
+    std::sort(sorted.begin(), sorted.end(), sortByRelev);
+
+    double lastRelev = 0;
+    std::vector<SetRelev> results;
+    for (unsigned short i = 0; i < sorted.size(); i++) {
+        if (lastRelev == 0 || lastRelev - sorted[i].relev < 0.1) {
+            lastRelev = sorted[i].relev;
+            results.push_back(sorted[i]);
+        }
+    }
+
+    baton->sets = sets;
+    baton->results = results;
+    baton->coalesced = ret.coalesced;
 }
 void spatialMatchAfter(uv_work_t* req) {
     SpatialMatchBaton *baton = static_cast<SpatialMatchBaton *>(req->data);
+    std::map<uint64_t,SetRelev> & sets = baton->sets;
+    std::vector<SetRelev> & results = baton->results;
     std::map<uint64_t,Cache::intarray> & coalesced = baton->coalesced;
-    std::map<uint64_t,std::string> & keys = baton->keys;
-    std::map<uint64_t,std::string>::iterator kit;
 
-    Local<Object> object = NanNew<Object>();
-    typedef std::map<uint64_t,Cache::intarray>::iterator it_type;
-    for (it_type it = coalesced.begin(); it != coalesced.end(); it++) {
-        kit = keys.find(it->first);
-        Local<Array> array = vectorToArray(it->second);
-        array->Set(NanNew("key"), NanNew(kit->second));
-        object->Set(NanNew<Number>(it->first), array);
+    Local<Object> ret = NanNew<Object>();
+
+    // sets to object
+    Local<Object> setsObject = NanNew<Object>();
+    std::map<uint64_t,SetRelev>::iterator sit;
+    for (sit = sets.begin(); sit != sets.end(); sit++) {
+        setsObject->Set(NanNew<Number>(sit->first), setRelevToObject(sit->second));
     }
+    ret->Set(NanNew("sets"), setsObject);
 
-    Local<Value> argv[2] = { NanNull(), object };
+    // results to array
+    std::size_t size = results.size();
+    Local<Array> resultsArray = NanNew<Array>(static_cast<int>(size));
+    for (uint64_t i = 0; i < size; i++) {
+        resultsArray->Set(i, setRelevToObject(results[i]));
+    }
+    ret->Set(NanNew("results"), resultsArray);
+
+    // coalesced to object
+    Local<Object> coalescedObject = NanNew<Object>();
+    std::map<uint64_t,Cache::intarray>::iterator cit;
+    for (cit = coalesced.begin(); cit != coalesced.end(); cit++) {
+        Local<Array> array = vectorToArray(cit->second);
+        coalescedObject->Set(NanNew<Number>(cit->first), array);
+    }
+    ret->Set(NanNew("coalesced"), coalescedObject);
+
+    Local<Value> argv[2] = { NanNull(), ret };
     NanMakeCallback(NanGetCurrentContext()->Global(), NanNew(baton->callback), 2, argv);
     NanDisposePersistent(baton->callback);
     delete baton;
 }
 NAN_METHOD(Cache::spatialMatch) {
     NanScope();
-    if (!args[0]->IsObject()) {
-        return NanThrowTypeError("first arg must be an object with feature relevs");
+    if (!args[0]->IsNumber()) {
+        return NanThrowTypeError("first arg must be a queryLength number");
     }
-    if (!args[1]->IsArray()) {
-        return NanThrowTypeError("second arg must be an array of grid cover arrays");
+    if (!args[1]->IsObject()) {
+        return NanThrowTypeError("second arg must be an object with feature relevs");
     }
     if (!args[2]->IsArray()) {
-        return NanThrowTypeError("third arg must be an array of zoom integers");
+        return NanThrowTypeError("third arg must be an array of grid cover arrays");
     }
-    if (!args[3]->IsFunction()) {
-        return NanThrowTypeError("fourth arg must be a callback function");
+    if (!args[3]->IsArray()) {
+        return NanThrowTypeError("fourth arg must be an array of zoom integers");
+    }
+    if (!args[4]->IsFunction()) {
+        return NanThrowTypeError("fifth arg must be a callback function");
     }
 
-    Local<Array> array = Local<Array>::Cast(args[1]);
+    // queryLength
+    unsigned short queryLength = args[0]->NumberValue();
+
+    // features
+    std::map<uint64_t,SetRelev> features;
+    Local<Object> object = Local<Object>::Cast(args[1]);
+    const Local<Array> keys = object->GetPropertyNames();
+    const uint32_t length = keys->Length();
+    for (uint32_t i = 0; i < length; i++) {
+        uint64_t key = keys->Get(i)->NumberValue();
+        Local<Object> obj = Local<Object>::Cast(object->Get(i));
+        SetRelev setRelev = objectToSetRelev(obj);
+        features.emplace(key, setRelev);
+    }
+
+    // grids
+    Local<Array> array = Local<Array>::Cast(args[2]);
     std::vector<Cache::intarray> grids;
     grids.reserve(array->Length());
     for (uint64_t i = 0; i < array->Length(); i++) {
@@ -1292,11 +1443,13 @@ NAN_METHOD(Cache::spatialMatch) {
         grids.emplace_back(grid);
     }
 
-    Cache::intarray zooms = arrayToVector(Local<Array>::Cast(args[2]));
+    // zooms
+    Cache::intarray zooms = arrayToVector(Local<Array>::Cast(args[3]));
 
     // callback
-    Local<Value> callback = args[3];
+    Local<Value> callback = args[4];
     SpatialMatchBaton *baton = new SpatialMatchBaton();
+    baton->queryLength = queryLength;
     baton->grids = grids;
     baton->zooms = zooms;
     baton->request.data = baton;
