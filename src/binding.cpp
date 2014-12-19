@@ -133,6 +133,7 @@ void Cache::Initialize(Handle<Object> target) {
     NODE_SET_PROTOTYPE_METHOD(t, "phrasematchPhraseRelev", phrasematchPhraseRelev);
     NODE_SET_METHOD(t, "coalesceZooms", coalesceZooms);
     NODE_SET_METHOD(t, "setRelevance", setRelevance);
+    NODE_SET_METHOD(t, "spatialMatch", spatialMatch);
     target->Set(String::NewSymbol("Cache"),t->GetFunction());
     NanAssignPersistent(constructor, t);
 }
@@ -1123,6 +1124,7 @@ struct SetRelev {
 };
 Local<Object> setRelevToObject(SetRelev & setRelev) {
     Local<Object> obj = NanNew<Object>();
+    obj->Set(NanNew("dbid"), NanNew(setRelev.dbid));
     obj->Set(NanNew("id"), NanNew<Number>(setRelev.id));
     obj->Set(NanNew("tmpid"), NanNew<Number>(setRelev.tmpid));
     obj->Set(NanNew("relev"), NanNew<Number>(setRelev.relev));
@@ -1272,6 +1274,7 @@ bool sortByRelev(SetRelev a, SetRelev b) {
 void _spatialMatch(uv_work_t* req) {
     SpatialMatchBaton *baton = static_cast<SpatialMatchBaton *>(req->data);
 
+    unsigned short queryLength = baton->queryLength;
     std::vector<Cache::intarray> & grids = baton->grids;
     Cache::intarray & zooms = baton->zooms;
 
@@ -1314,7 +1317,7 @@ void _spatialMatch(uv_work_t* req) {
             }
         }
         std::sort(rows.begin(), rows.end(), sortRelevReason);
-        double relev = _setRelevance(5, rows);
+        double relev = _setRelevance(queryLength, rows);
 
         for (unsigned short i = 0; i < rows.size(); i++) {
             // Add setRelev to sets.
@@ -1429,7 +1432,7 @@ NAN_METHOD(Cache::spatialMatch) {
     const uint32_t length = keys->Length();
     for (uint32_t i = 0; i < length; i++) {
         uint64_t key = keys->Get(i)->NumberValue();
-        Local<Object> obj = Local<Object>::Cast(object->Get(i));
+        Local<Object> obj = Local<Object>::Cast(object->Get(key));
         SetRelev setRelev = objectToSetRelev(obj);
         features.emplace(key, setRelev);
     }
@@ -1450,6 +1453,7 @@ NAN_METHOD(Cache::spatialMatch) {
     Local<Value> callback = args[4];
     SpatialMatchBaton *baton = new SpatialMatchBaton();
     baton->queryLength = queryLength;
+    baton->features = features;
     baton->grids = grids;
     baton->zooms = zooms;
     baton->request.data = baton;
