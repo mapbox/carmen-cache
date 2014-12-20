@@ -110,8 +110,7 @@ Cache::intarray __get(Cache* c, std::string type, std::string shard, uint64_t id
         if (aitr == itr->second.end()) {
             return array;
         } else {
-            Cache::intarray const& array = aitr->second;
-            return array;
+            return aitr->second;
         }
     }
 }
