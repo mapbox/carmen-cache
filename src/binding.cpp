@@ -6,6 +6,7 @@
 #include "pbf.hpp"
 
 #include <sstream>
+#include <cmath>
 
 namespace carmen {
 
