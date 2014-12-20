@@ -21,7 +21,7 @@ std::string shard(uint64_t level, uint64_t id) {
     return std::to_string(shard_id);
 }
 
-Cache::intarray arrayToVector(Local<Array> array) {
+Cache::intarray arrayToVector(Local<Array> const& array) {
     Cache::intarray vector;
     vector.reserve(array->Length());
     for (uint64_t i = 0; i < array->Length(); i++) {
@@ -31,7 +31,7 @@ Cache::intarray arrayToVector(Local<Array> array) {
     return vector;
 }
 
-Local<Array> vectorToArray(Cache::intarray vector) {
+Local<Array> vectorToArray(Cache::intarray const& vector) {
     std::size_t size = vector.size();
     Local<Array> array = NanNew<Array>(static_cast<int>(size));
     for (uint64_t i = 0; i < size; i++) {
@@ -40,16 +40,15 @@ Local<Array> vectorToArray(Cache::intarray vector) {
     return array;
 }
 
-Local<Object> mapToObject(std::map<std::uint64_t,std::uint64_t> map) {
+Local<Object> mapToObject(std::map<std::uint64_t,std::uint64_t> const& map) {
     Local<Object> object = NanNew<Object>();
-    typedef std::map<std::uint64_t,std::uint64_t>::iterator it_type;
-    for (it_type it = map.begin(); it != map.end(); it++) {
-        object->Set(NanNew<Number>(it->first), NanNew<Number>(it->second));
+    for (auto const& item : map) {
+        object->Set(NanNew<Number>(item.first), NanNew<Number>(item.second));
     }
     return object;
 }
 
-std::map<std::uint64_t,std::uint64_t> objectToMap(Local<Object> object) {
+std::map<std::uint64_t,std::uint64_t> objectToMap(Local<Object> const& object) {
     std::map<std::uint64_t,std::uint64_t> map;
     const Local<Array> keys = object->GetPropertyNames();
     const uint32_t length = keys->Length();
@@ -61,7 +60,7 @@ std::map<std::uint64_t,std::uint64_t> objectToMap(Local<Object> object) {
     return map;
 }
 
-Cache::intarray __get(Cache* c, std::string type, std::string shard, uint64_t id) {
+Cache::intarray __get(Cache const* c, std::string const& type, std::string const& shard, uint64_t id) {
     std::string key = type + "-" + shard;
     Cache::memcache const& mem = c->cache_;
     Cache::memcache::const_iterator itr = mem.find(key);
@@ -168,7 +167,7 @@ NAN_METHOD(Cache::pack)
         Cache::memcache::const_iterator itr = mem.find(key);
         carmen::proto::object message;
         if (itr != mem.end()) {
-            for (auto item : itr->second) {
+            for (auto const& item : itr->second) {
                 ::carmen::proto::object_item * new_item = message.add_items(); 
                 new_item->set_key(item.first);
                 Cache::intarray const & varr = item.second;
@@ -186,7 +185,7 @@ NAN_METHOD(Cache::pack)
                 if (mitr == messages.end()) {
                     throw std::runtime_error("misuse");
                 }
-                for (auto item : litr->second) {
+                for (auto const& item : litr->second) {
                     ::carmen::proto::object_item * new_item = message.add_items();
                     new_item->set_key(static_cast<int64_t>(item.first));
                     unsigned start = (item.second & 0xffffffff);
@@ -257,13 +256,13 @@ NAN_METHOD(Cache::list)
         Local<Array> ids = Array::New();
         if (args.Length() == 1) {
             unsigned idx = 0;
-            for (auto item : mem) {
+            for (auto const& item : mem) {
                 if (item.first.size() > type.size() && item.first.substr(0,type.size()) == type) {
                     std::string shard = item.first.substr(type.size()+1,item.first.size());
                     ids->Set(idx++,Number::New(String::New(shard.c_str())->NumberValue()));
                 }
             }
-            for (auto item : lazy) {
+            for (auto const& item : lazy) {
                 if (item.first.size() > type.size() && item.first.substr(0,type.size()) == type) {
                     std::string shard = item.first.substr(type.size()+1,item.first.size());
                     ids->Set(idx++,Number::New(String::New(shard.c_str())->NumberValue()));
@@ -276,13 +275,13 @@ NAN_METHOD(Cache::list)
             Cache::memcache::const_iterator itr = mem.find(key);
             unsigned idx = 0;
             if (itr != mem.end()) {
-                for (auto item : itr->second) {
+                for (auto const& item : itr->second) {
                     ids->Set(idx++,Number::New(item.first)->ToString());
                 }
             }
             Cache::lazycache::const_iterator litr = lazy.find(key);
             if (litr != lazy.end()) {
-                for (auto item : litr->second) {
+                for (auto const& item : litr->second) {
                     ids->Set(idx++,Number::New(item.first)->ToString());
                 }
             }
@@ -324,13 +323,13 @@ NAN_METHOD(Cache::_set)
         Cache::memcache & mem = c->cache_;
         Cache::memcache::const_iterator itr = mem.find(key);
         if (itr == mem.end()) {
-            c->cache_.insert(std::make_pair(key,Cache::arraycache()));
+            c->cache_.emplace(key,Cache::arraycache());
         }
         Cache::arraycache & arrc = c->cache_[key];
         Cache::arraycache::key_type key_id = static_cast<Cache::arraycache::key_type>(args[2]->IntegerValue());
         Cache::arraycache::iterator itr2 = arrc.find(key_id);
         if (itr2 == arrc.end()) {
-            arrc.insert(std::make_pair(key_id,Cache::intarray()));
+            arrc.emplace(key_id,Cache::intarray());
         }
         Cache::intarray & vv = arrc[key_id];
         if (itr2 != arrc.end()) {
@@ -360,7 +359,8 @@ void load_into_cache(Cache::larraycache & larrc,
                     uint64_t key_id = buffer.varint();
                     size_t start = static_cast<size_t>(message.getData() - data);
                     // insert here because:
-                    //  - libstdc++ does not support std::map::emplace
+                    //  - libstdc++ does not support std::map::emplace <-- does now with gcc 4.8, but...
+                    //  - we are using google::sparshash now, which does not support emplace (yet?)
                     //  - larrc.emplace(buffer.varint(),Cache::string_ref_type(message.getData(),len)) was not faster on OS X
                     Cache::offset_type offsets = (((Cache::offset_type)len << 32)) | (((Cache::offset_type)start) & 0xffffffff);
                     larrc.insert(std::make_pair(key_id,offsets));
@@ -409,7 +409,7 @@ NAN_METHOD(Cache::loadSync)
         Cache::memcache & mem = c->cache_;
         Cache::memcache::iterator itr = mem.find(key);
         if (itr != mem.end()) {
-            c->cache_.insert(std::make_pair(key,arraycache()));
+            c->cache_.emplace(key,arraycache());
         }
         Cache::memcache::iterator itr2 = mem.find(key);
         if (itr2 != mem.end()) {
@@ -419,8 +419,8 @@ NAN_METHOD(Cache::loadSync)
         Cache::lazycache::iterator litr = lazy.find(key);
         Cache::message_cache & messages = c->msg_;
         if (litr == lazy.end()) {
-            c->lazy_.insert(std::make_pair(key,Cache::larraycache()));
-            messages.insert(std::make_pair(key,std::string(node::Buffer::Data(obj),node::Buffer::Length(obj))));
+            c->lazy_.emplace(key,Cache::larraycache());
+            messages.emplace(key,std::string(node::Buffer::Data(obj),node::Buffer::Length(obj)));
         }
         load_into_cache(c->lazy_[key],node::Buffer::Data(obj),node::Buffer::Length(obj));
     } catch (std::exception const& ex) {
@@ -533,7 +533,7 @@ NAN_METHOD(Cache::load)
         uv_queue_work(uv_default_loop(), &closure->request, AsyncLoad, (uv_after_work_cb)AfterLoad);
         Cache::message_cache & messages = c->msg_;
         if (messages.find(key) == messages.end()) {
-            messages.insert(std::make_pair(key,std::string(node::Buffer::Data(obj),node::Buffer::Length(obj))));
+            messages.emplace(key,std::string(node::Buffer::Data(obj),node::Buffer::Length(obj)));
         }
         NanReturnValue(Undefined());
     } catch (std::exception const& ex) {
@@ -706,7 +706,7 @@ void _phrasematchDegens(uv_work_t* req) {
         std::sort(degens.begin(), degens.end(), sortDegens);
         for (std::size_t i = 0; i < degens.size() && i < 10; i++) {
             uint64_t term = degens[i] >> 4 << 4;
-            terms.push_back(term);
+            terms.emplace_back(term);
 
             std::map<std::uint64_t,std::uint64_t>::iterator it;
 
@@ -1088,12 +1088,11 @@ void coalesceZoomsAfter(uv_work_t* req) {
     std::map<uint64_t,std::string>::iterator kit;
 
     Local<Object> object = NanNew<Object>();
-    typedef std::map<uint64_t,Cache::intarray>::iterator it_type;
-    for (it_type it = coalesced.begin(); it != coalesced.end(); it++) {
-        kit = keys.find(it->first);
-        Local<Array> array = vectorToArray(it->second);
+    for (auto const& item : coalesced) {
+        kit = keys.find(item.first);
+        Local<Array> array = vectorToArray(item.second);
         array->Set(NanNew("key"), NanNew(kit->second));
-        object->Set(NanNew<Number>(it->first), array);
+        object->Set(NanNew<Number>(item.first), array);
     }
 
     Local<Value> argv[2] = { NanNull(), object };
