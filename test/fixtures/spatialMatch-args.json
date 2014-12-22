@@ -1,0 +1,74 @@
+[
+  4,
+  {
+    "1": {
+      "id": 1,
+      "relev": 1,
+      "reason": 8,
+      "count": 1,
+      "idx": 0,
+      "dbid": "province",
+      "dbname": "province",
+      "tmpid": 1
+    },
+    "100000001": {
+      "id": 1,
+      "relev": 1,
+      "reason": 8,
+      "count": 1,
+      "idx": 1,
+      "dbid": "city",
+      "dbname": "city",
+      "tmpid": 100000001
+    },
+    "100000002": {
+      "id": 2,
+      "relev": 1,
+      "reason": 4,
+      "count": 1,
+      "idx": 1,
+      "dbid": "city",
+      "dbname": "city",
+      "tmpid": 100000002
+    },
+    "200000001": {
+      "id": 1,
+      "relev": 1,
+      "reason": 3,
+      "count": 2,
+      "idx": 2,
+      "dbid": "street",
+      "dbname": "street",
+      "tmpid": 200000001
+    },
+    "200000002": {
+      "id": 2,
+      "relev": 1,
+      "reason": 3,
+      "count": 2,
+      "idx": 2,
+      "dbid": "street",
+      "dbname": "street",
+      "tmpid": 200000002
+    }
+  },
+  [
+    [
+      17593259786241,
+      18143015600129
+    ],
+    [
+      18143015600130,
+      17593259786241
+    ],
+    [
+      17593259786241,
+      18143015600130
+    ]
+  ],
+  [
+    6,
+    6,
+    6
+  ]
+]

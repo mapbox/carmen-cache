@@ -1258,18 +1258,18 @@ struct SpatialMatchBaton {
     std::map<uint64_t,Cache::intarray> coalesced;
 };
 bool sortRelevReason(SetRelev a, SetRelev b) {
-    if (a.idx > b.idx) return false;
-    else if (a.idx < b.idx) return true;
-    else if (a.relev > b.relev) return false;
-    else if (a.relev < b.relev) return true;
-    else if (a.reason > b.reason) return false;
-    else if (a.reason < b.reason) return true;
-    else if (a.id < b.id) return false;
-    else if (a.id > b.id) return true;
+    if (a.idx > b.idx) return true;
+    else if (a.idx < b.idx) return false;
+    else if (a.relev > b.relev) return true;
+    else if (a.relev < b.relev) return false;
+    else if (a.reason > b.reason) return true;
+    else if (a.reason < b.reason) return false;
+    else if (a.id < b.id) return true;
+    else if (a.id > b.id) return false;
     return true;
 }
 bool sortByRelev(SetRelev a, SetRelev b) {
-    return b.relev > a.relev;    return b.relev - a.relev;
+    return a.relev > b.relev;
 }
 void _spatialMatch(uv_work_t* req) {
     SpatialMatchBaton *baton = static_cast<SpatialMatchBaton *>(req->data);
@@ -1294,9 +1294,9 @@ void _spatialMatch(uv_work_t* req) {
     std::map<uint64_t,SetRelev> rowMemo;
     std::map<uint64_t,SetRelev>::iterator rit;
 
-    std::string pushed = "";
-
     for (cit = coalesced.begin(); cit != coalesced.end(); cit++) {
+        std::string pushed = "";
+
         kit = keys.find(cit->first);
         std::string key = kit->second;
         dit = done.find(key);
@@ -1331,17 +1331,21 @@ void _spatialMatch(uv_work_t* req) {
                 continue;
             }
 
-            pushed = rows[i].dbid;
-            rit = rowMemo.find(rows[i].tmpid);
+            // Clone setRelev from rows[i].
+            SetRelev setRelev = rows[i];
+            setRelev.relev = relev;
+
+            pushed = setRelev.dbid;
+            rit = rowMemo.find(setRelev.tmpid);
             if (rit != rowMemo.end()) {
                 if (rit->second.relev > relev) {
                     continue;
                 }
                 // @TODO apply addrmod
                 // if (rit->second.relev > relev + addrmod[rows[i].dbid])
-                rit->second = rows[i];
+                rit->second = setRelev;
             } else {
-                rowMemo.emplace(rows[i].tmpid, rows[i]);
+                rowMemo.emplace(setRelev.tmpid, setRelev);
                 // @TODO apply addrmod
             }
         }
