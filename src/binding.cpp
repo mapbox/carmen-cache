@@ -1152,14 +1152,18 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> &sets) {
     unsigned short querymask = 0;
     unsigned short tally = 0;
     signed short lastdb = -1;
-    Cache::intarray reason2db(32);
+
+    std::map<unsigned short,unsigned short> reason2db;
+    std::map<unsigned short,unsigned short>::iterator rit;
 
     // For each set, score its correspondence with the query
     for (unsigned short i = 0; i < sets.size(); i++) {
+        rit = reason2db.find(sets[i].reason);
+
         // Each db may contribute a distinct matching reason to the final
         // relev. If this entry is for a db that has already contributed
         // but without the same reason mark it as false.
-        if (lastdb == sets[i].idx && reason2db[sets[i].reason] != sets[i].idx) {
+        if (lastdb == sets[i].idx && (rit == reason2db.end() || rit->second != sets[i].idx)) {
             sets[i].check = false;
             continue;
         }
@@ -1191,7 +1195,7 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> &sets) {
         // increment the total relevance score.
         if (usage > 0) {
             relevance += (sets[i].relev * (usage / total));
-            reason2db[sets[i].reason] = sets[i].idx;
+            reason2db.emplace(sets[i].reason, sets[i].idx);
             if (lastdb >= 0) gappy += (std::abs(sets[i].idx - lastdb) - 1);
             lastdb = sets[i].idx;
             if (tally == queryLength) break;
