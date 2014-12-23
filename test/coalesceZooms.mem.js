@@ -125,6 +125,7 @@ test('wait', function(assert) {
     console.log('endMem', process.memoryUsage());
     setTimeout(function() {
         console.log('end2Mem', process.memoryUsage());
-    }, 30000);
+        assert.end();
+    }, 10e3);
 });
 
