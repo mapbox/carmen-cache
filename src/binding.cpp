@@ -1088,11 +1088,11 @@ NAN_METHOD(Cache::coalesceZooms) {
         return NanThrowTypeError("second arg must be an array of zoom integers");
     }
 
-    Local<Array> array = Local<Array>::Cast(args[0]);
+    Local<Array> gridsArray = Local<Array>::Cast(args[0]);
     std::vector<Cache::intarray> grids;
-    grids.reserve(array->Length());
-    for (uint64_t i = 0; i < array->Length(); i++) {
-        Cache::intarray grid = arrayToVector(Local<Array>::Cast(array->Get(i)));
+    grids.reserve(gridsArray->Length());
+    for (uint64_t i = 0; i < gridsArray->Length(); i++) {
+        Cache::intarray grid = arrayToVector(Local<Array>::Cast(gridsArray->Get(i)));
         grids.emplace_back(grid);
     }
 
