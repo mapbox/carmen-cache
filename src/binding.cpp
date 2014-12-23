@@ -704,7 +704,7 @@ void _phrasematchDegens(uv_work_t* req) {
     std::map<std::uint64_t,std::uint64_t> querymask;
     std::map<std::uint64_t,std::uint64_t> querydist;
     for (uint64_t idx = 0; idx < baton->results.size(); idx++) {
-        std::vector<std::uint64_t> degens = baton->results[idx];
+        std::vector<std::uint64_t> & degens = baton->results[idx];
         std::sort(degens.begin(), degens.end(), sortDegens);
         for (std::size_t i = 0; i < degens.size() && i < 10; i++) {
             uint64_t term = degens[i] >> 4 << 4;
@@ -1101,12 +1101,11 @@ NAN_METHOD(Cache::coalesceZooms) {
     std::map<uint64_t,std::string>::iterator kit;
 
     Local<Object> object = NanNew<Object>();
-    typedef std::map<uint64_t,Cache::intarray>::iterator it_type;
-    for (it_type it = ret.coalesced.begin(); it != ret.coalesced.end(); it++) {
-        kit = ret.keys.find(it->first);
-        Local<Array> array = vectorToArray(it->second);
+    for (auto const& item : ret.coalesced) {
+        kit = ret.keys.find(item.first);
+        Local<Array> array = vectorToArray(item.second);
         array->Set(NanNew("key"), NanNew(kit->second));
-        object->Set(NanNew<Number>(it->first), array);
+        object->Set(NanNew<Number>(item.first), array);
     }
 
     NanReturnValue(object);
@@ -1298,10 +1297,9 @@ void _spatialMatch(uv_work_t* req) {
     std::map<uint64_t,SetRelev> rowMemo;
     std::map<uint64_t,SetRelev>::iterator rit;
 
-    for (cit = coalesced.begin(); cit != coalesced.end(); cit++) {
-        std::string pushed = "";
-
-        kit = keys.find(cit->first);
+    for (auto const& item : coalesced) {
+        std::string pushed;
+        kit = keys.find(item.first);
         std::string key = kit->second;
         dit = done.find(key);
         if (dit != done.end()) {
@@ -1311,9 +1309,9 @@ void _spatialMatch(uv_work_t* req) {
         }
 
         std::vector<SetRelev> rows;
-        rows.reserve(cit->second.size());
-        for (unsigned short i = 0; i < cit->second.size(); i++) {
-            fit = features.find(cit->second[i]);
+        rows.reserve(item.second.size());
+        for (unsigned short i = 0; i < item.second.size(); i++) {
+            fit = features.find(item.second[i]);
             if (fit->second.check == false) {
                 continue;
             } else {
@@ -1331,7 +1329,7 @@ void _spatialMatch(uv_work_t* req) {
             }
 
             // Don't use results after the topmost index in the stack.
-            if (pushed != "" && pushed != rows[i].dbid) {
+            if (!pushed.empty() && pushed != rows[i].dbid) {
                 continue;
             }
 
