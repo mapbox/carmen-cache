@@ -1376,6 +1376,7 @@ void _spatialMatch(uv_work_t* req) {
     baton->coalesced = std::move(ret.coalesced);
 }
 void spatialMatchAfter(uv_work_t* req) {
+    NanScope();
     SpatialMatchBaton *baton = static_cast<SpatialMatchBaton *>(req->data);
     std::map<uint64_t,SetRelev> const& sets = baton->sets;
     std::vector<SetRelev> const& results = baton->results;
