@@ -731,10 +731,10 @@ void _phrasematchDegens(uv_work_t* req) {
         }
     }
 
-    baton->terms = terms;
-    baton->queryidx = queryidx;
-    baton->querymask = querymask;
-    baton->querydist = querydist;
+    baton->terms = std::move(terms);
+    baton->queryidx = std::move(queryidx);
+    baton->querymask = std::move(querymask);
+    baton->querydist = std::move(querydist);
 }
 void phrasematchDegensAfter(uv_work_t* req) {
     NanScope();
@@ -908,7 +908,7 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
 
     std::sort(relevantPhrases.begin(), relevantPhrases.end(), sortPhraseRelev);
     relevantPhrases.erase(std::unique(relevantPhrases.begin(), relevantPhrases.end(), uniqPhraseRelev), relevantPhrases.end());
-    baton->relevantPhrases = relevantPhrases;
+    baton->relevantPhrases = std::move(relevantPhrases);
 }
 void phrasematchPhraseRelevAfter(uv_work_t* req) {
     NanScope();
@@ -1453,12 +1453,11 @@ NAN_METHOD(Cache::spatialMatch) {
     }
 
     // zooms
-    Cache::intarray zooms = arrayToVector(Local<Array>::Cast(args[3]));
+    baton->zooms = arrayToVector(Local<Array>::Cast(args[3]));
 
     // callback
     Local<Value> callback = args[4];
     baton->queryLength = queryLength;
-    baton->zooms = zooms;
     baton->request.data = baton;
     NanAssignPersistent(baton->callback, callback.As<Function>());
     uv_queue_work(uv_default_loop(), &baton->request, _spatialMatch, (uv_after_work_cb)spatialMatchAfter);
