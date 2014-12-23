@@ -18,8 +18,17 @@ test('unit', function(assert) {
     var args = require('./fixtures/spatialMatch-args.json');
     spatialMatch(args[0], args[1], args[2], args[3], function(err, ret) {
         assert.ifError(err);
-        require('fs').writeFileSync('/tmp/res.json', JSON.stringify(ret, null, 2));
         assert.deepEqual(ret, require('./fixtures/spatialMatch-ret.json'));
+        assert.end();
+    });
+});
+
+test('real', function(assert) {
+    var args = require('./fixtures/spatialMatch-real-args.json');
+    var testRet = require('./fixtures/spatialMatch-real-ret.json');
+    spatialMatch(args[0], args[1], args[2], args[3], function(err, ret) {
+        assert.ifError(err);
+        assert.deepEqual(ret, testRet[1]);
         assert.end();
     });
 });
