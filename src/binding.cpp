@@ -923,12 +923,13 @@ void phrasematchPhraseRelevAfter(uv_work_t* req) {
         Local<Object> relevs = NanNew<Object>();
         for (uint32_t i = 0; i < relevsize; i++) {
             Local<Object> phraseRelevObject = NanNew<Object>();
-            phraseRelevObject->Set(NanNew("count"), NanNew<Number>(baton->relevantPhrases[i].count));
-            phraseRelevObject->Set(NanNew("reason"), NanNew<Number>(baton->relevantPhrases[i].reason));
-            phraseRelevObject->Set(NanNew("relev"), NanNew<Number>(baton->relevantPhrases[i].relev));
-            phraseRelevObject->Set(NanNew("tmprelev"), NanNew<Number>(baton->relevantPhrases[i].tmprelev));
-            result->Set(i, NanNew<Number>(baton->relevantPhrases[i].id));
-            relevs->Set(NanNew<Number>(baton->relevantPhrases[i].id), phraseRelevObject);
+            auto const& phrase = baton->relevantPhrases[i];
+            phraseRelevObject->Set(NanNew("count"), NanNew<Number>(phrase.count));
+            phraseRelevObject->Set(NanNew("reason"), NanNew<Number>(phrase.reason));
+            phraseRelevObject->Set(NanNew("relev"), NanNew<Number>(phrase.relev));
+            phraseRelevObject->Set(NanNew("tmprelev"), NanNew<Number>(phrase.tmprelev));
+            result->Set(i, NanNew<Number>(phrase.id));
+            relevs->Set(NanNew<Number>(phrase.id), phraseRelevObject);
         }
         Local<Object> ret = NanNew<Object>();
         ret->Set(NanNew("result"), result);
@@ -971,10 +972,10 @@ NAN_METHOD(Cache::phrasematchPhraseRelev)
     phrasematchPhraseRelevBaton *baton = new phrasematchPhraseRelevBaton();
     baton->shardlevel = shardlevel;
     baton->cache = cache;
-    baton->phrases = phrases;
-    baton->queryidx = queryidx;
-    baton->querymask = querymask;
-    baton->querydist = querydist;
+    baton->phrases = std::move(phrases);
+    baton->queryidx = std::move(queryidx);
+    baton->querymask = std::move(querymask);
+    baton->querydist = std::move(querydist);
     baton->request.data = baton;
     NanAssignPersistent(baton->callback, callback.As<Function>());
     uv_queue_work(uv_default_loop(), &baton->request, _phrasematchPhraseRelev, (uv_after_work_cb)phrasematchPhraseRelevAfter);
@@ -1368,14 +1369,14 @@ void _spatialMatch(uv_work_t* req) {
         }
     }
 
-    baton->sets = sets;
-    baton->results = results;
-    baton->coalesced = ret.coalesced;
+    baton->sets = std::move(sets);
+    baton->results = std::move(results);
+    baton->coalesced = std::move(ret.coalesced);
 }
 void spatialMatchAfter(uv_work_t* req) {
     SpatialMatchBaton *baton = static_cast<SpatialMatchBaton *>(req->data);
     std::map<uint64_t,SetRelev> const& sets = baton->sets;
-    std::vector<SetRelev> & results = baton->results;
+    std::vector<SetRelev> const& results = baton->results;
     std::map<uint64_t,Cache::intarray> const& coalesced = baton->coalesced;
 
     Local<Object> ret = NanNew<Object>();
