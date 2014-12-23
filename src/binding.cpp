@@ -120,9 +120,9 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string const
 
 void Cache::Initialize(Handle<Object> target) {
     NanScope();
-    Local<FunctionTemplate> t = FunctionTemplate::New(Cache::New);
+    Local<FunctionTemplate> t = NanNew<FunctionTemplate>(Cache::New);
     t->InstanceTemplate()->SetInternalFieldCount(1);
-    t->SetClassName(String::NewSymbol("Cache"));
+    t->SetClassName(NanNew("Cache"));
     NODE_SET_PROTOTYPE_METHOD(t, "has", has);
     NODE_SET_PROTOTYPE_METHOD(t, "load", load);
     NODE_SET_PROTOTYPE_METHOD(t, "loadSync", loadSync);
@@ -136,7 +136,7 @@ void Cache::Initialize(Handle<Object> target) {
     NODE_SET_METHOD(t, "coalesceZooms", coalesceZooms);
     NODE_SET_METHOD(t, "setRelevance", setRelevance);
     NODE_SET_METHOD(t, "spatialMatch", spatialMatch);
-    target->Set(String::NewSymbol("Cache"),t->GetFunction());
+    target->Set(NanNew("Cache"),t->GetFunction());
     NanAssignPersistent(constructor, t);
 }
 
@@ -241,7 +241,7 @@ NAN_METHOD(Cache::pack)
     } catch (std::exception const& ex) {
         return NanThrowTypeError(ex.what());
     }
-    NanReturnValue(Undefined());
+    NanReturnUndefined();
 }
 
 NAN_METHOD(Cache::list)
@@ -258,19 +258,19 @@ NAN_METHOD(Cache::list)
         Cache* c = node::ObjectWrap::Unwrap<Cache>(args.This());
         Cache::memcache const& mem = c->cache_;
         Cache::lazycache const& lazy = c->lazy_;
-        Local<Array> ids = Array::New();
+        Local<Array> ids = NanNew<Array>();
         if (args.Length() == 1) {
             unsigned idx = 0;
             for (auto const& item : mem) {
                 if (item.first.size() > type.size() && item.first.substr(0,type.size()) == type) {
                     std::string shard = item.first.substr(type.size()+1,item.first.size());
-                    ids->Set(idx++,Number::New(String::New(shard.c_str())->NumberValue()));
+                    ids->Set(idx++,NanNew(NanNew(shard.c_str())->NumberValue()));
                 }
             }
             for (auto const& item : lazy) {
                 if (item.first.size() > type.size() && item.first.substr(0,type.size()) == type) {
                     std::string shard = item.first.substr(type.size()+1,item.first.size());
-                    ids->Set(idx++,Number::New(String::New(shard.c_str())->NumberValue()));
+                    ids->Set(idx++,NanNew(NanNew(shard.c_str())->NumberValue()));
                 }
             }
             NanReturnValue(ids);
@@ -281,13 +281,13 @@ NAN_METHOD(Cache::list)
             unsigned idx = 0;
             if (itr != mem.end()) {
                 for (auto const& item : itr->second) {
-                    ids->Set(idx++,Number::New(item.first)->ToString());
+                    ids->Set(idx++,NanNew(item.first)->ToString());
                 }
             }
             Cache::lazycache::const_iterator litr = lazy.find(key);
             if (litr != lazy.end()) {
                 for (auto const& item : litr->second) {
-                    ids->Set(idx++,Number::New(item.first)->ToString());
+                    ids->Set(idx++,NanNew<Number>(item.first)->ToString());
                 }
             }
             NanReturnValue(ids);
@@ -295,7 +295,7 @@ NAN_METHOD(Cache::list)
     } catch (std::exception const& ex) {
         return NanThrowTypeError(ex.what());
     }
-    NanReturnValue(Undefined());
+    NanReturnUndefined();
 }
 
 NAN_METHOD(Cache::_set)
@@ -348,7 +348,7 @@ NAN_METHOD(Cache::_set)
     } catch (std::exception const& ex) {
         return NanThrowTypeError(ex.what());
     }
-    NanReturnValue(Undefined());
+    NanReturnUndefined();
 }
 
 void load_into_cache(Cache::larraycache & larrc,
@@ -431,7 +431,7 @@ NAN_METHOD(Cache::loadSync)
     } catch (std::exception const& ex) {
         return NanThrowTypeError(ex.what());
     }
-    NanReturnValue(Undefined());
+    NanReturnUndefined();
 }
 
 struct load_baton {
@@ -478,7 +478,7 @@ void Cache::AfterLoad(uv_work_t* req) {
     load_baton *closure = static_cast<load_baton *>(req->data);
     TryCatch try_catch;
     if (!closure->error_name.empty()) {
-        Local<Value> argv[1] = { Exception::Error(String::New(closure->error_name.c_str())) };
+        Local<Value> argv[1] = { Exception::Error(NanNew(closure->error_name.c_str())) };
         closure->cb.Call(1, argv);
     } else {
         Cache::memcache::iterator itr2 = closure->c->cache_.find(closure->key);
@@ -486,7 +486,7 @@ void Cache::AfterLoad(uv_work_t* req) {
             closure->c->cache_.erase(itr2);
         }
         closure->c->lazy_[closure->key] = std::move(closure->arrc);
-        Local<Value> argv[1] = { Local<Value>::New(Null()) };
+        Local<Value> argv[1] = { NanNull() };
         closure->cb.Call(1, argv);
     }
     if (try_catch.HasCaught())
@@ -537,7 +537,7 @@ NAN_METHOD(Cache::load)
         if (messages.find(key) == messages.end()) {
             messages.emplace(key,std::string(node::Buffer::Data(obj),node::Buffer::Length(obj)));
         }
-        NanReturnValue(Undefined());
+        NanReturnUndefined();
     } catch (std::exception const& ex) {
         return NanThrowTypeError(ex.what());
     }
@@ -563,13 +563,13 @@ NAN_METHOD(Cache::has)
         Cache::memcache const& mem = c->cache_;
         Cache::memcache::const_iterator itr = mem.find(key);
         if (itr != mem.end()) {
-            NanReturnValue(True());
+            NanReturnValue(NanTrue());
         } else {
             Cache::message_cache const& messages = c->msg_;
             if (messages.find(key) != messages.end()) {
-                NanReturnValue(True());
+                NanReturnValue(NanTrue());
             }
-            NanReturnValue(False());
+            NanReturnValue(NanFalse());
         }
     } catch (std::exception const& ex) {
         return NanThrowTypeError(ex.what());
@@ -646,7 +646,7 @@ NAN_METHOD(Cache::unload)
     } catch (std::exception const& ex) {
         return NanThrowTypeError(ex.what());
     }
-    NanReturnValue(Boolean::New(hit));
+    NanReturnValue(NanNew<Boolean>(hit));
 }
 
 NAN_METHOD(Cache::New)
@@ -669,13 +669,13 @@ NAN_METHOD(Cache::New)
         unsigned shardlevel = static_cast<unsigned>(args[1]->IntegerValue());
         Cache* im = new Cache(id,shardlevel);
         im->Wrap(args.This());
-        args.This()->Set(String::NewSymbol("id"),args[0]);
-        args.This()->Set(String::NewSymbol("shardlevel"),args[1]);
+        args.This()->Set(NanNew("id"),args[0]);
+        args.This()->Set(NanNew("shardlevel"),args[1]);
         NanReturnValue(args.This());
     } catch (std::exception const& ex) {
         return NanThrowTypeError(ex.what());
     }
-    NanReturnValue(Undefined());
+    NanReturnUndefined();
 }
 
 // cache.phrasematchDegens(termidx, degens)
