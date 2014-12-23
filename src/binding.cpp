@@ -27,7 +27,7 @@ void Cache::Initialize(Handle<Object> target) {
     NODE_SET_PROTOTYPE_METHOD(t, "_get", _get);
     NODE_SET_PROTOTYPE_METHOD(t, "unload", unload);
     target->Set(String::NewSymbol("Cache"),t->GetFunction());
-    NanAssignPersistent(FunctionTemplate, constructor, t);
+    NanAssignPersistent(constructor, t);
 }
 
 Cache::Cache(std::string const& id, unsigned shardlevel)
