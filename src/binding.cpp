@@ -8,6 +8,9 @@
 #include <sstream>
 #include <cmath>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic warning "-Wpadded"
+
 namespace carmen {
 
 using namespace v8;
@@ -438,7 +441,6 @@ struct load_baton {
     Cache::larraycache arrc;
     std::string key;
     std::string data;
-    bool error;
     std::string error_name;
     load_baton(std::string const& _key,
                const char * _data,
@@ -450,7 +452,6 @@ struct load_baton {
       arrc(),
       key(_key),
       data(_data,size),
-      error(false),
       error_name() {
         request.data = this;
         c->_ref();
@@ -468,7 +469,6 @@ void Cache::AsyncLoad(uv_work_t* req) {
     }
     catch (std::exception const& ex)
     {
-        closure->error = true;
         closure->error_name = ex.what();
     }
 }
@@ -477,7 +477,7 @@ void Cache::AfterLoad(uv_work_t* req) {
     NanScope();
     load_baton *closure = static_cast<load_baton *>(req->data);
     TryCatch try_catch;
-    if (closure->error) {
+    if (!closure->error_name.empty()) {
         Local<Value> argv[1] = { Exception::Error(String::New(closure->error_name.c_str())) };
         closure->cb.Call(1, argv);
     } else {
@@ -781,12 +781,13 @@ NAN_METHOD(Cache::phrasematchDegens)
 }
 
 struct phraseRelev {
-    uint64_t id;
     double relev;
     double tmprelev;
+    uint64_t id;
     unsigned short count;
     unsigned short reason;
 };
+
 struct phrasematchPhraseRelevBaton {
     v8::Persistent<v8::Function> callback;
     uv_work_t request;
@@ -1113,13 +1114,13 @@ NAN_METHOD(Cache::coalesceZooms) {
 }
 
 struct SetRelev {
+    double relev;
     uint64_t id;
     uint64_t tmpid;
     std::string dbid;
     unsigned short count;
     unsigned short reason;
     unsigned short idx;
-    double relev;
     bool check;
 };
 Local<Object> setRelevToObject(SetRelev const& setRelev) {
@@ -1252,7 +1253,6 @@ struct SpatialMatchBaton {
     uv_work_t request;
     // params
     v8::Persistent<v8::Function> callback;
-    unsigned short queryLength;
     std::map<uint64_t,SetRelev> features;
     std::vector<Cache::intarray> grids;
     Cache::intarray zooms;
@@ -1260,7 +1260,9 @@ struct SpatialMatchBaton {
     std::map<uint64_t,SetRelev> sets;
     std::vector<SetRelev> results;
     std::map<uint64_t,Cache::intarray> coalesced;
+    unsigned short queryLength;
 };
+
 bool sortRelevReason(SetRelev const& a, SetRelev const& b) {
     if (a.idx > b.idx) return true;
     else if (a.idx < b.idx) return false;
@@ -1472,5 +1474,8 @@ extern "C" {
 }
 
 } // namespace carmen
+
+
+#pragma GCC diagnostic pop
 
 NODE_MODULE(carmen, carmen::start)
