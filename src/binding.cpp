@@ -800,10 +800,10 @@ struct phrasematchPhraseRelevBaton {
     std::map<std::uint64_t,std::uint64_t> querymask;
     std::map<std::uint64_t,std::uint64_t> querydist;
 };
-bool sortPhraseRelev(phraseRelev a, phraseRelev b) {
+bool sortPhraseRelev(phraseRelev const& a, phraseRelev const& b) {
     return a.id < b.id;
 }
-bool uniqPhraseRelev(phraseRelev a, phraseRelev b) {
+bool uniqPhraseRelev(phraseRelev const& a, phraseRelev const& b) {
     return a.id == b.id;
 }
 void _phrasematchPhraseRelev(uv_work_t* req) {
