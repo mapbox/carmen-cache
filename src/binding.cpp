@@ -782,11 +782,48 @@ NAN_METHOD(Cache::phrasematchDegens)
 
 struct phraseRelev {
     double relev;
-    double tmprelev;
-    uint64_t id;
     unsigned short count;
     unsigned short reason;
+    uint64_t id;
 };
+//relev = 5 bits
+//count = 3 bits
+//reason = 12 bits
+//* 1 bit gap
+//id = 32 bits
+const uint64_t POW2_48 = std::pow(2,48);
+const uint64_t POW2_45 = std::pow(2,45);
+const uint64_t POW2_33 = std::pow(2,33);
+const uint64_t POW2_32 = std::pow(2,32);
+const uint64_t POW2_25 = std::pow(2,25);
+const uint64_t POW2_12 = std::pow(2,12);
+const uint64_t POW2_8 = std::pow(2,8);
+const uint64_t POW2_5 = std::pow(2,5);
+const uint64_t POW2_3 = std::pow(2,3);
+Local<Value> phraseRelevToNumber(phraseRelev const& pr) {
+    uint64_t num;
+    unsigned short relev;
+    relev = std::floor(pr.relev * (POW2_5-1));
+
+    if (relev >= POW2_5) throw std::runtime_error("misuse: pr.relev > 5 bits");
+    if (pr.count >= POW2_3)  throw std::runtime_error("misuse: pr.count > 3 bits");
+    if (pr.reason >= POW2_12)  throw std::runtime_error("misuse: pr.reason > 12 bits");
+    if (pr.id >= POW2_32)  throw std::runtime_error("misuse: pr.id > 32 bits");
+    num =
+        (relev * POW2_48) +
+        (pr.count * POW2_45) +
+        (pr.reason * POW2_33) +
+        (pr.id);
+    return NanNew<Number>(num);
+}
+phraseRelev numberToPhraseRelev(uint64_t num) {
+    phraseRelev pr;
+    pr.id = num % POW2_32;
+    pr.reason = (num >> 33) % POW2_12;
+    pr.count = (num >> 45) % POW2_3;
+    pr.relev = ((num >> 48) % POW2_5) / (POW2_5-1);
+    return pr;
+}
 
 struct phrasematchPhraseRelevBaton {
     v8::Persistent<v8::Function> callback;
@@ -894,7 +931,6 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
             pr.count = count;
             pr.relev = relev;
             pr.reason = reason;
-            pr.tmprelev = (relev * 1e6) + count;
             allPhrases.push_back(pr);
             if (relev > 0.75) {
                 relevantPhrases.push_back(pr);
@@ -923,14 +959,9 @@ void phrasematchPhraseRelevAfter(uv_work_t* req) {
         Local<Array> result = NanNew<Array>(static_cast<int>(relevsize));
         Local<Object> relevs = NanNew<Object>();
         for (uint32_t i = 0; i < relevsize; i++) {
-            Local<Object> phraseRelevObject = NanNew<Object>();
             auto const& phrase = baton->relevantPhrases[i];
-            phraseRelevObject->Set(NanNew("count"), NanNew<Number>(phrase.count));
-            phraseRelevObject->Set(NanNew("reason"), NanNew<Number>(phrase.reason));
-            phraseRelevObject->Set(NanNew("relev"), NanNew<Number>(phrase.relev));
-            phraseRelevObject->Set(NanNew("tmprelev"), NanNew<Number>(phrase.tmprelev));
             result->Set(i, NanNew<Number>(phrase.id));
-            relevs->Set(NanNew<Number>(phrase.id), phraseRelevObject);
+            relevs->Set(NanNew<Number>(phrase.id), phraseRelevToNumber(phrase));
         }
         Local<Object> ret = NanNew<Object>();
         ret->Set(NanNew("result"), result);
@@ -1117,15 +1148,42 @@ struct SetRelev {
     double relev;
     uint64_t id;
     uint64_t tmpid;
-    std::string dbid;
     unsigned short count;
     unsigned short reason;
     unsigned short idx;
     bool check;
 };
+uint64_t setRelevToNumber(SetRelev const& setRelev) {
+    uint64_t num;
+    unsigned short relev;
+    relev = std::floor(setRelev.relev * (POW2_5-1));
+
+    if (relev >= POW2_5) throw std::runtime_error("misuse: setRelev.relev > 5 bits");
+    if (setRelev.count >= POW2_3)  throw std::runtime_error("misuse: setRelev.count > 3 bits");
+    if (setRelev.reason >= POW2_12)  throw std::runtime_error("misuse: setRelev.reason > 12 bits");
+    if (setRelev.idx >= POW2_8)  throw std::runtime_error("misuse: setRelev.idx > 8 bits");
+    if (setRelev.id >= POW2_25)  throw std::runtime_error("misuse: setRelev.id > 25 bits");
+    num =
+        (relev * POW2_48) +
+        (setRelev.count * POW2_45) +
+        (setRelev.reason * POW2_33) +
+        (setRelev.idx * POW2_25) +
+        (setRelev.id);
+    return num;
+}
+SetRelev numberToSetRelev(uint64_t num) {
+    SetRelev setRelev;
+    setRelev.id = num % POW2_25;
+    setRelev.idx = (num >> 25) % POW2_8;
+    setRelev.tmpid = (setRelev.idx * 1e8) + setRelev.id;
+    setRelev.reason = (num >> 33) % POW2_12;
+    setRelev.count = (num >> 45) % POW2_3;
+    setRelev.relev = ((num >> 48) % POW2_5) / (POW2_5-1);
+    setRelev.check = true;
+    return setRelev;
+}
 Local<Object> setRelevToObject(SetRelev const& setRelev) {
     Local<Object> obj = NanNew<Object>();
-    obj->Set(NanNew("dbid"), NanNew(setRelev.dbid));
     obj->Set(NanNew("id"), NanNew<Number>(setRelev.id));
     obj->Set(NanNew("tmpid"), NanNew<Number>(setRelev.tmpid));
     obj->Set(NanNew("relev"), NanNew<Number>(setRelev.relev));
@@ -1136,7 +1194,6 @@ Local<Object> setRelevToObject(SetRelev const& setRelev) {
 }
 SetRelev objectToSetRelev(Local<Object> const& obj) {
     SetRelev setRelev;
-    setRelev.dbid = std::string(*NanAsciiString(obj->Get(NanNew("dbid"))));
     setRelev.id = obj->Get(NanNew("id"))->NumberValue();
     setRelev.tmpid = obj->Get(NanNew("tmpid"))->NumberValue();
     setRelev.relev = obj->Get(NanNew("relev"))->NumberValue();
@@ -1253,12 +1310,12 @@ struct SpatialMatchBaton {
     uv_work_t request;
     // params
     v8::Persistent<v8::Function> callback;
-    std::map<uint64_t,SetRelev> features;
+    std::map<uint64_t,uint64_t> featnums;
     std::vector<Cache::intarray> grids;
     Cache::intarray zooms;
     // return
-    std::map<uint64_t,SetRelev> sets;
-    std::vector<SetRelev> results;
+    std::map<uint64_t,uint64_t> sets;
+    std::vector<uint64_t> results;
     std::map<uint64_t,Cache::intarray> coalesced;
     unsigned short queryLength;
 };
@@ -1280,14 +1337,21 @@ bool sortByRelev(SetRelev const& a, SetRelev const& b) {
 void _spatialMatch(uv_work_t* req) {
     SpatialMatchBaton *baton = static_cast<SpatialMatchBaton *>(req->data);
 
+    // convert featnums back to SetRelev
+    std::map<uint64_t,uint64_t> const& featnums = baton->featnums;
+    std::map<uint64_t,uint64_t>::const_iterator fnit;
+    std::map<uint64_t,SetRelev> features;
+    std::map<uint64_t,SetRelev>::const_iterator fit;
+    for (auto const& item : featnums) {
+        features.emplace(item.first, numberToSetRelev(item.second));
+    }
+
     unsigned short queryLength = baton->queryLength;
     std::vector<Cache::intarray> & grids = baton->grids;
     Cache::intarray const& zooms = baton->zooms;
 
     CoalesceZooms ret = _coalesceZooms(grids, zooms);
 
-    std::map<uint64_t,SetRelev> const& features = baton->features;
-    std::map<uint64_t,SetRelev>::const_iterator fit;
     std::map<uint64_t,Cache::intarray> const& coalesced = ret.coalesced;
     std::map<uint64_t,Cache::intarray>::const_iterator cit;
     std::map<uint64_t,std::string> const& keys = ret.keys;
@@ -1295,13 +1359,13 @@ void _spatialMatch(uv_work_t* req) {
     std::map<std::string,bool> done;
     std::map<std::string,bool>::iterator dit;
 
-    std::map<uint64_t,SetRelev> sets;
-    std::map<uint64_t,SetRelev>::iterator sit;
+    std::map<uint64_t,uint64_t> sets;
+    std::map<uint64_t,uint64_t>::iterator sit;
     std::map<uint64_t,SetRelev> rowMemo;
     std::map<uint64_t,SetRelev>::iterator rit;
 
     for (auto const& item : coalesced) {
-        std::string pushed;
+        signed int pushed = -1;
         kit = keys.find(item.first);
         std::string key = kit->second;
         dit = done.find(key);
@@ -1328,11 +1392,11 @@ void _spatialMatch(uv_work_t* req) {
             // Add setRelev to sets.
             sit = sets.find(rows[i].tmpid);
             if (sit == sets.end()) {
-                sets.emplace(rows[i].tmpid, rows[i]);
+                sets.emplace(rows[i].tmpid, setRelevToNumber(rows[i]));
             }
 
             // Don't use results after the topmost index in the stack.
-            if (!pushed.empty() && pushed != rows[i].dbid) {
+            if (pushed != -1 && pushed != rows[i].idx) {
                 continue;
             }
 
@@ -1340,7 +1404,7 @@ void _spatialMatch(uv_work_t* req) {
             SetRelev setRelev = rows[i];
             setRelev.relev = relev;
 
-            pushed = setRelev.dbid;
+            pushed = setRelev.idx;
             rit = rowMemo.find(setRelev.tmpid);
             if (rit != rowMemo.end()) {
                 if (rit->second.relev > relev) {
@@ -1363,11 +1427,11 @@ void _spatialMatch(uv_work_t* req) {
     std::sort(sorted.begin(), sorted.end(), sortByRelev);
 
     double lastRelev = 0;
-    std::vector<SetRelev> results;
+    std::vector<uint64_t> results;
     for (auto const& s : sorted) {
         if (lastRelev == 0 || lastRelev - s.relev < 0.1) {
             lastRelev = s.relev;
-            results.emplace_back(s);
+            results.emplace_back(setRelevToNumber(s));
         }
     }
 
@@ -1378,17 +1442,17 @@ void _spatialMatch(uv_work_t* req) {
 void spatialMatchAfter(uv_work_t* req) {
     NanScope();
     SpatialMatchBaton *baton = static_cast<SpatialMatchBaton *>(req->data);
-    std::map<uint64_t,SetRelev> const& sets = baton->sets;
-    std::vector<SetRelev> const& results = baton->results;
+    std::map<uint64_t,uint64_t> const& sets = baton->sets;
+    std::vector<uint64_t> const& results = baton->results;
     std::map<uint64_t,Cache::intarray> const& coalesced = baton->coalesced;
 
     Local<Object> ret = NanNew<Object>();
 
-    // sets to object
+    // sets to relevnum
     Local<Object> setsObject = NanNew<Object>();
-    std::map<uint64_t,SetRelev>::iterator sit;
+    std::map<uint64_t,uint64_t>::iterator sit;
     for (auto const& set : sets) {
-        setsObject->Set(NanNew<Number>(set.first), setRelevToObject(set.second));
+        setsObject->Set(NanNew<Number>(set.first), NanNew<Number>(set.second));
     }
     ret->Set(NanNew("sets"), setsObject);
 
@@ -1396,7 +1460,7 @@ void spatialMatchAfter(uv_work_t* req) {
     std::size_t size = results.size();
     Local<Array> resultsArray = NanNew<Array>(static_cast<int>(size));
     for (uint64_t i = 0; i < size; i++) {
-        resultsArray->Set(i, setRelevToObject(results[i]));
+        resultsArray->Set(i, NanNew<Number>(results[i]));
     }
     ret->Set(NanNew("results"), resultsArray);
 
@@ -1419,7 +1483,7 @@ NAN_METHOD(Cache::spatialMatch) {
         return NanThrowTypeError("first arg must be a queryLength number");
     }
     if (!args[1]->IsObject()) {
-        return NanThrowTypeError("second arg must be an object with feature relevs");
+        return NanThrowTypeError("second arg must be an object with feature numbers");
     }
     if (!args[2]->IsArray()) {
         return NanThrowTypeError("third arg must be an array of grid cover arrays");
@@ -1436,17 +1500,15 @@ NAN_METHOD(Cache::spatialMatch) {
     // queryLength
     unsigned short queryLength = args[0]->NumberValue();
 
-    // features
+    // featnums
     Local<Object> object = Local<Object>::Cast(args[1]);
     const Local<Array> keys = object->GetPropertyNames();
     const uint32_t length = keys->Length();
     for (uint32_t i = 0; i < length; i++) {
         uint64_t key = keys->Get(i)->NumberValue();
-        Local<Object> obj = Local<Object>::Cast(object->Get(key));
-        SetRelev setRelev = objectToSetRelev(obj);
-        baton->features.emplace(key, setRelev);
+        uint64_t featnum = object->Get(key)->NumberValue();
+        baton->featnums.emplace(key, featnum);
     }
-
 
     // grids
     Local<Array> array = Local<Array>::Cast(args[2]);
