@@ -23,21 +23,16 @@ tape('#phrasematchPhraseRelev', function(assert) {
         assert.ifError(err);
         assert.deepEqual(result, {
             result: [ 1, 2 ],
-            relevs: {
-                '1': {
-                    count: 2,
-                    reason: 3,
-                    relev: 1,
-                    tmprelev: 1000002
-                },
-                '2': {
-                    count: 1,
-                    reason: 2,
-                    relev: 0.8666666666666667,
-                    tmprelev: 866667.6666666667
-                }
-            }
+            relevs: { '1': 8796118792011777, '2': 7353550946435074 }
         });
+        assert.equal((result.relevs[1]/Math.pow(2,48)|0) % Math.pow(2,5), 31, '1.relev');
+        assert.equal((result.relevs[1]/Math.pow(2,45)|0) % Math.pow(2,3), 2, '1.count');
+        assert.equal((result.relevs[1]/Math.pow(2,33)|0) % Math.pow(2,12), 3, '1.reason');
+        assert.equal((result.relevs[1]/Math.pow(2,0)|0) % Math.pow(2,32), 1, '1.id');
+        assert.equal((result.relevs[2]/Math.pow(2,48)|0) % Math.pow(2,5), 26, '2.relev');
+        assert.equal((result.relevs[2]/Math.pow(2,45)|0) % Math.pow(2,3), 1, '2.count');
+        assert.equal((result.relevs[2]/Math.pow(2,33)|0) % Math.pow(2,12), 2, '2.reason');
+        assert.equal((result.relevs[2]/Math.pow(2,0)|0) % Math.pow(2,32), 2, '2.id');
         assert.end();
     });
 });
