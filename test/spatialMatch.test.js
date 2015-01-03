@@ -23,7 +23,7 @@ test('unit', function(assert) {
     });
 });
 
-test.skip('real', function(assert) {
+test('real', function(assert) {
     var args = require('./fixtures/spatialMatch-real-args.json');
     var testRet = require('./fixtures/spatialMatch-real-ret.json');
     spatialMatch(args[0], args[1], args[2], args[3], function(err, ret) {
