@@ -1306,18 +1306,14 @@ bool sortRelevReason(SetRelev const& a, SetRelev const& b) {
     else if (a.relev < b.relev) return false;
     else if (a.reason > b.reason) return true;
     else if (a.reason < b.reason) return false;
-    else if (a.id < b.id) return true;
-    else if (a.id > b.id) return false;
-    return true;
+    return a.id < b.id;
 }
 bool sortByRelev(SetRelev const& a, SetRelev const& b) {
     if (a.relev > b.relev) return true;
     if (a.relev < b.relev) return false;
     if (a.idx > b.idx) return true;
     if (a.idx < b.idx) return false;
-    if (a.id < b.id) return true;
-    if (a.id > b.id) return false;
-    return true;
+    return a.id < b.id;
 }
 void _spatialMatch(uv_work_t* req) {
     SpatialMatchBaton *baton = static_cast<SpatialMatchBaton *>(req->data);
