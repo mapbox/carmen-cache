@@ -780,7 +780,7 @@ NAN_METHOD(Cache::phrasematchDegens)
     NanReturnUndefined();
 }
 
-struct phraseRelev {
+struct PhraseRelev {
     double relev;
     unsigned short count;
     unsigned short reason;
@@ -800,7 +800,7 @@ const uint64_t POW2_12 = std::pow(2,12);
 const uint64_t POW2_8 = std::pow(2,8);
 const uint64_t POW2_5 = std::pow(2,5);
 const uint64_t POW2_3 = std::pow(2,3);
-Local<Value> phraseRelevToNumber(phraseRelev const& pr) {
+uint64_t phraseRelevToNumber(PhraseRelev const& pr) {
     uint64_t num;
     unsigned short relev;
     relev = std::floor(pr.relev * (POW2_5-1));
@@ -814,10 +814,10 @@ Local<Value> phraseRelevToNumber(phraseRelev const& pr) {
         (pr.count * POW2_45) +
         (pr.reason * POW2_33) +
         (pr.id);
-    return NanNew<Number>(num);
+    return num;
 }
-phraseRelev numberToPhraseRelev(uint64_t num) {
-    phraseRelev pr;
+PhraseRelev numberToPhraseRelev(uint64_t num) {
+    PhraseRelev pr;
     pr.id = num % POW2_32;
     pr.reason = (num >> 33) % POW2_12;
     pr.count = (num >> 45) % POW2_3;
@@ -831,16 +831,16 @@ struct phrasematchPhraseRelevBaton {
     Cache* cache;
     uint64_t shardlevel;
     std::string error;
-    std::vector<phraseRelev> relevantPhrases;
+    std::vector<PhraseRelev> relevantPhrases;
     std::vector<std::uint64_t> phrases;
     std::map<std::uint64_t,std::uint64_t> queryidx;
     std::map<std::uint64_t,std::uint64_t> querymask;
     std::map<std::uint64_t,std::uint64_t> querydist;
 };
-bool sortPhraseRelev(phraseRelev const& a, phraseRelev const& b) {
+bool sortPhraseRelev(PhraseRelev const& a, PhraseRelev const& b) {
     return a.id < b.id;
 }
-bool uniqPhraseRelev(phraseRelev const& a, phraseRelev const& b) {
+bool uniqPhraseRelev(PhraseRelev const& a, PhraseRelev const& b) {
     return a.id == b.id;
 }
 void _phrasematchPhraseRelev(uv_work_t* req) {
@@ -849,8 +849,8 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
     std::string type = "phrase";
     double max_relev = 0;
     double min_relev = 1;
-    std::vector<phraseRelev> allPhrases;
-    std::vector<phraseRelev> relevantPhrases;
+    std::vector<PhraseRelev> allPhrases;
+    std::vector<PhraseRelev> relevantPhrases;
 
     for (uint64_t a = 0; a < baton->phrases.size(); a++) {
         uint64_t id = baton->phrases[a];
@@ -926,7 +926,7 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
         // degens of higher distance reduce relev score).
         // printf( "%f \n", relev);
         if (relev >= 0.5) {
-            phraseRelev pr;
+            PhraseRelev pr;
             pr.id = id;
             pr.count = count;
             pr.relev = relev;
@@ -961,7 +961,7 @@ void phrasematchPhraseRelevAfter(uv_work_t* req) {
         for (uint32_t i = 0; i < relevsize; i++) {
             auto const& phrase = baton->relevantPhrases[i];
             result->Set(i, NanNew<Number>(phrase.id));
-            relevs->Set(NanNew<Number>(phrase.id), phraseRelevToNumber(phrase));
+            relevs->Set(NanNew<Number>(phrase.id), NanNew<Number>(phraseRelevToNumber(phrase)));
         }
         Local<Object> ret = NanNew<Object>();
         ret->Set(NanNew("result"), result);
