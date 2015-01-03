@@ -821,7 +821,7 @@ phraseRelev numberToPhraseRelev(uint64_t num) {
     pr.id = num % POW2_32;
     pr.reason = (num >> 33) % POW2_12;
     pr.count = (num >> 45) % POW2_3;
-    pr.relev = ((num >> 48) % POW2_5) / (POW2_5-1);
+    pr.relev = ((num >> 48) % POW2_5) / ((double)POW2_5-1);
     return pr;
 }
 
@@ -1178,28 +1178,7 @@ SetRelev numberToSetRelev(uint64_t num) {
     setRelev.tmpid = (setRelev.idx * 1e8) + setRelev.id;
     setRelev.reason = (num >> 33) % POW2_12;
     setRelev.count = (num >> 45) % POW2_3;
-    setRelev.relev = ((num >> 48) % POW2_5) / (POW2_5-1);
-    setRelev.check = true;
-    return setRelev;
-}
-Local<Object> setRelevToObject(SetRelev const& setRelev) {
-    Local<Object> obj = NanNew<Object>();
-    obj->Set(NanNew("id"), NanNew<Number>(setRelev.id));
-    obj->Set(NanNew("tmpid"), NanNew<Number>(setRelev.tmpid));
-    obj->Set(NanNew("relev"), NanNew<Number>(setRelev.relev));
-    obj->Set(NanNew("idx"), NanNew<Number>(setRelev.idx));
-    obj->Set(NanNew("count"), NanNew<Number>(setRelev.count));
-    obj->Set(NanNew("reason"), NanNew<Number>(setRelev.reason));
-    return obj;
-}
-SetRelev objectToSetRelev(Local<Object> const& obj) {
-    SetRelev setRelev;
-    setRelev.id = obj->Get(NanNew("id"))->NumberValue();
-    setRelev.tmpid = obj->Get(NanNew("tmpid"))->NumberValue();
-    setRelev.relev = obj->Get(NanNew("relev"))->NumberValue();
-    setRelev.idx = obj->Get(NanNew("idx"))->NumberValue();
-    setRelev.count = obj->Get(NanNew("count"))->NumberValue();
-    setRelev.reason = obj->Get(NanNew("reason"))->NumberValue();
+    setRelev.relev = ((num >> 48) % POW2_5) / ((double)POW2_5-1);
     setRelev.check = true;
     return setRelev;
 }
@@ -1283,8 +1262,8 @@ NAN_METHOD(Cache::setRelevance) {
     Local<Array> array = Local<Array>::Cast(args[1]);
     sets.reserve(array->Length());
     for (unsigned short i = 0; i < array->Length(); i++) {
-        Local<Object> obj = Local<Object>::Cast(array->Get(i));
-        SetRelev setRelev = objectToSetRelev(obj);
+        uint64_t num = array->Get(i)->NumberValue();
+        SetRelev setRelev = numberToSetRelev(num);
         sets.emplace_back(setRelev);
     }
 
@@ -1295,8 +1274,8 @@ NAN_METHOD(Cache::setRelevance) {
     unsigned short j = 0;
     for (unsigned short i = 0; i < size; i++) {
         if (sets[i].check == true) {
-            Local<Object> obj = setRelevToObject(sets[i]);
-            setsArray->Set(j, obj);
+            uint64_t num = setRelevToNumber(sets[i]);
+            setsArray->Set(j, NanNew<Number>(num));
             j++;
         }
     }
