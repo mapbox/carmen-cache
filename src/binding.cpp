@@ -1311,7 +1311,13 @@ bool sortRelevReason(SetRelev const& a, SetRelev const& b) {
     return true;
 }
 bool sortByRelev(SetRelev const& a, SetRelev const& b) {
-    return a.relev > b.relev;
+    if (a.relev > b.relev) return true;
+    if (a.relev < b.relev) return false;
+    if (a.idx > b.idx) return true;
+    if (a.idx < b.idx) return false;
+    if (a.id < b.id) return true;
+    if (a.id > b.id) return false;
+    return true;
 }
 void _spatialMatch(uv_work_t* req) {
     SpatialMatchBaton *baton = static_cast<SpatialMatchBaton *>(req->data);
