@@ -176,9 +176,8 @@ NAN_METHOD(Cache::pack)
                 ::carmen::proto::object_item * new_item = message.add_items(); 
                 new_item->set_key(item.first);
                 Cache::intarray const & varr = item.second;
-                std::size_t varr_size = varr.size();
-                for (std::size_t i=0;i<varr_size;++i) {
-                    new_item->add_val(static_cast<int64_t>(varr[i]));
+                for (auto const& vitem : varr) {
+                    new_item->add_val(static_cast<int64_t>(vitem));
                 }
             }
         } else {
@@ -261,15 +260,18 @@ NAN_METHOD(Cache::list)
         Local<Array> ids = NanNew<Array>();
         if (args.Length() == 1) {
             unsigned idx = 0;
+            std::size_t type_size = type.size();
             for (auto const& item : mem) {
-                if (item.first.size() > type.size() && item.first.substr(0,type.size()) == type) {
-                    std::string shard = item.first.substr(type.size()+1,item.first.size());
+                std::size_t item_size = item.first.size();
+                if (item_size > type_size && item.first.substr(0,type_size) == type) {
+                    std::string shard = item.first.substr(type_size+1,item_size);
                     ids->Set(idx++,NanNew(NanNew(shard.c_str())->NumberValue()));
                 }
             }
             for (auto const& item : lazy) {
-                if (item.first.size() > type.size() && item.first.substr(0,type.size()) == type) {
-                    std::string shard = item.first.substr(type.size()+1,item.first.size());
+                std::size_t item_size = item.first.size();
+                if (item_size > type_size && item.first.substr(0,type_size) == type) {
+                    std::string shard = item.first.substr(type_size+1,item_size);
                     ids->Set(idx++,NanNew(NanNew(shard.c_str())->NumberValue()));
                 }
             }
@@ -458,7 +460,6 @@ struct load_baton {
       }
     ~load_baton() {
          c->_unref();
-         //closure->cb.Dispose();
     }
 };
 
@@ -597,7 +598,7 @@ NAN_METHOD(Cache::_get)
         uint64_t id = static_cast<uint64_t>(args[2]->IntegerValue());
         Cache* c = node::ObjectWrap::Unwrap<Cache>(args.This());
         Cache::intarray vector = __get(c, type, shard, id);
-        if (vector.size() > 0) {
+        if (!vector.empty()) {
             NanReturnValue(vectorToArray(vector));
         } else {
             NanReturnUndefined();
@@ -703,10 +704,12 @@ void _phrasematchDegens(uv_work_t* req) {
     std::map<std::uint64_t,std::uint64_t> queryidx;
     std::map<std::uint64_t,std::uint64_t> querymask;
     std::map<std::uint64_t,std::uint64_t> querydist;
-    for (uint64_t idx = 0; idx < baton->results.size(); idx++) {
+    std::size_t results_size = baton->results.size();
+    for (uint64_t idx = 0; idx < results_size; idx++) {
         std::vector<std::uint64_t> & degens = baton->results[idx];
         std::sort(degens.begin(), degens.end(), sortDegens);
-        for (std::size_t i = 0; i < degens.size() && i < 10; i++) {
+        std::size_t degens_size = degens.size();
+        for (std::size_t i = 0; i < degens_size && i < 10; i++) {
             uint64_t term = degens[i] >> 4 << 4;
             terms.emplace_back(term);
 
@@ -851,15 +854,16 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
     double min_relev = 1;
     std::vector<PhraseRelev> allPhrases;
     std::vector<PhraseRelev> relevantPhrases;
-
-    for (uint64_t a = 0; a < baton->phrases.size(); a++) {
+    std::size_t phrases_size = baton->phrases.size();
+    for (uint64_t a = 0; a < phrases_size; a++) {
         uint64_t id = baton->phrases[a];
         Cache::intarray phrase = __get(baton->cache, "phrase", shard(baton->shardlevel, id), id);
-        unsigned short size = phrase.size();
-        if (size == 0) {
+        if (phrase.empty()) {
             baton->error = "Failed to get phrase";
             return;
         }
+
+        unsigned short size = phrase.size();
 
         // Get total relev score of phrase.
         unsigned short total = 0;
@@ -951,7 +955,7 @@ void phrasematchPhraseRelevAfter(uv_work_t* req) {
     NanScope();
     phrasematchPhraseRelevBaton *baton = static_cast<phrasematchPhraseRelevBaton *>(req->data);
 
-    if (baton->error.size() > 0) {
+    if (!baton->error.empty()) {
         Local<Value> argv[1] = { NanError(baton->error.c_str()) };
         NanMakeCallback(NanGetCurrentContext()->Global(), NanNew(baton->callback), 1, argv);
     } else {
@@ -1021,9 +1025,10 @@ struct CoalesceZooms {
 CoalesceZooms _coalesceZooms(std::vector<Cache::intarray> & grids, Cache::intarray const& zooms) {
     // Filter zooms down to those with matches.
     Cache::intarray matchedZooms;
-    matchedZooms.reserve(zooms.size());
-    for (unsigned short i = 0; i < zooms.size(); i++) {
-        if (grids[i].size()) {
+    std::size_t zooms_size = zooms.size();
+    matchedZooms.reserve(zooms_size);
+    for (unsigned short i = 0; i < zooms_size; i++) {
+        if (!grids[i].empty()) {
             matchedZooms.emplace_back(zooms[i]);
         }
     }
@@ -1032,7 +1037,8 @@ CoalesceZooms _coalesceZooms(std::vector<Cache::intarray> & grids, Cache::intarr
 
     // Cache zoom levels to iterate over as coalesce occurs.
     std::vector<Cache::intarray> zoomcache(22);
-    for (unsigned short i = 0; i < matchedZooms.size(); i++) {
+    std::size_t matched_zoom_size = matchedZooms.size();
+    for (unsigned short i = 0; i < matched_zoom_size; i++) {
         Cache::intarray sliced;
         sliced.reserve(i);
         for (unsigned short j = 0; j < i; j++) {
@@ -1057,10 +1063,14 @@ CoalesceZooms _coalesceZooms(std::vector<Cache::intarray> & grids, Cache::intarr
     std::map<uint64_t,Cache::intarray>::iterator parent_cit;
     std::map<uint64_t,std::string>::iterator parent_kit;
 
-    for (unsigned h = 0; h < grids.size(); h++) {
+    std::size_t grids_size = grids.size();
+    for (unsigned h = 0; h < grids_size; h++) {
         Cache::intarray const& grid = grids[h];
         uint64_t z = zooms[h];
-        for (unsigned i = 0; i < grid.size(); i++) {
+        auto const& zoom_cache = zoomcache[z];
+        std::size_t zoom_cache_size = zoom_cache.size();
+        std::size_t grid_size = grid.size();
+        for (unsigned i = 0; i < grid_size; i++) {
             uint64_t tmpid = h * 1e8 + (grid[i] % yd);
             uint64_t x = std::floor(grid[i]/xd);
             uint64_t y = std::floor(grid[i]%xd/yd);
@@ -1082,17 +1092,17 @@ CoalesceZooms _coalesceZooms(std::vector<Cache::intarray> & grids, Cache::intarr
             dit = done.find(zxy);
             if (dit == done.end()) {
                 // for each parent zoom collect ids
-                for (unsigned a = 0; a < zoomcache[z].size(); a++) {
-                    unsigned p = zoomcache[z][a];
+                for (unsigned a = 0; a < zoom_cache_size; a++) {
+                    unsigned p = zoom_cache[a];
                     unsigned s = 1 << (z-p);
                     uint64_t pxy = (p * mp2_28) + (std::floor(x/s) * mp2_14) + std::floor(y/s);
                     // Set a flag to ensure coalesce occurs only once per zxy.
                     parent_cit = coalesced.find(pxy);
                     if (parent_cit != coalesced.end()) {
                         cit = coalesced.find(zxy);
-                        Cache::intarray parent_array = parent_cit->second;
-                        for (unsigned b = 0; b < parent_array.size(); b++) {
-                            cit->second.push_back(parent_array[b]);
+                        for (auto const& parent_array : parent_cit->second)
+                        {
+                            cit->second.emplace_back(parent_array);
                         }
                         parent_kit = keys.find(pxy);
                         kit = keys.find(zxy);
@@ -1194,19 +1204,21 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets) {
     std::map<unsigned short,unsigned short>::iterator rit;
 
     // For each set, score its correspondence with the query
-    for (unsigned short i = 0; i < sets.size(); i++) {
-        rit = reason2db.find(sets[i].reason);
+    std::size_t sets_size = sets.size();
+    for (unsigned short i = 0; i < sets_size; i++) {
+        auto & set = sets[i];
+        rit = reason2db.find(set.reason);
 
         // Each db may contribute a distinct matching reason to the final
         // relev. If this entry is for a db that has already contributed
         // but without the same reason mark it as false.
-        if (lastdb == sets[i].idx && (rit == reason2db.end() || rit->second != sets[i].idx)) {
-            sets[i].check = false;
+        if (lastdb == set.idx && (rit == reason2db.end() || rit->second != set.idx)) {
+            set.check = false;
             continue;
         }
 
         unsigned short usage = 0;
-        unsigned short count = sets[i].count;
+        unsigned short count = set.count;
 
         for (unsigned j = 0; j < queryLength; j++) {
             if (
@@ -1214,7 +1226,7 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets) {
                 // relevance. Uses a bitmask to mark positions counted.
                 !(querymask & (1<<j)) &&
                 // if this term matches the reason bitmask for relevance
-                (1 << j & sets[i].reason)
+                (1 << j & set.reason)
             ) {
                 ++usage;
                 ++tally;
@@ -1231,13 +1243,13 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets) {
         // If this relevant criteria matched any terms in the query,
         // increment the total relevance score.
         if (usage > 0) {
-            relevance += (sets[i].relev * (usage / total));
-            reason2db.emplace(sets[i].reason, sets[i].idx);
-            if (lastdb >= 0) gappy += (std::abs(sets[i].idx - lastdb) - 1);
-            lastdb = sets[i].idx;
+            relevance += (set.relev * (usage / total));
+            reason2db.emplace(set.reason, set.idx);
+            if (lastdb >= 0) gappy += (std::abs(set.idx - lastdb) - 1);
+            lastdb = set.idx;
             if (tally == queryLength) break;
         } else {
-            sets[i].check = false;
+            set.check = false;
         }
     }
 
@@ -1273,8 +1285,9 @@ NAN_METHOD(Cache::setRelevance) {
     Local<Array> setsArray = NanNew<Array>();
     unsigned short j = 0;
     for (unsigned short i = 0; i < size; i++) {
-        if (sets[i].check == true) {
-            uint64_t num = setRelevToNumber(sets[i]);
+        auto const& set = sets[i];
+        if (set.check == true) {
+            uint64_t num = setRelevToNumber(set);
             setsArray->Set(j, NanNew<Number>(num));
             j++;
         }
@@ -1357,8 +1370,9 @@ void _spatialMatch(uv_work_t* req) {
         }
 
         std::vector<SetRelev> rows;
-        rows.reserve(item.second.size());
-        for (unsigned short i = 0; i < item.second.size(); i++) {
+        std::size_t coalesced_size = item.second.size();
+        rows.reserve(coalesced_size);
+        for (unsigned short i = 0; i < coalesced_size; i++) {
             fit = features.find(item.second[i]);
             if (fit->second.check == false) {
                 continue;
@@ -1368,21 +1382,22 @@ void _spatialMatch(uv_work_t* req) {
         }
         std::sort(rows.begin(), rows.end(), sortRelevReason);
         double relev = _setRelevance(queryLength, rows);
-
-        for (unsigned short i = 0; i < rows.size(); i++) {
+        std::size_t rows_size = rows.size();
+        for (unsigned short i = 0; i < rows_size; i++) {
+            auto const& row = rows[i];
             // Add setRelev to sets.
-            sit = sets.find(rows[i].tmpid);
+            sit = sets.find(row.tmpid);
             if (sit == sets.end()) {
-                sets.emplace(rows[i].tmpid, setRelevToNumber(rows[i]));
+                sets.emplace(row.tmpid, setRelevToNumber(row));
             }
 
             // Don't use results after the topmost index in the stack.
-            if (pushed != -1 && pushed != rows[i].idx) {
+            if (pushed != -1 && pushed != row.idx) {
                 continue;
             }
 
-            // Clone setRelev from rows[i].
-            SetRelev setRelev = rows[i];
+            // Clone setRelev from row.
+            SetRelev setRelev(row);
             setRelev.relev = relev;
 
             pushed = setRelev.idx;
@@ -1392,7 +1407,7 @@ void _spatialMatch(uv_work_t* req) {
                     continue;
                 }
                 // @TODO apply addrmod
-                // if (rit->second.relev > relev + addrmod[rows[i].dbid])
+                // if (rit->second.relev > relev + addrmod[row.dbid])
                 rit->second = setRelev;
             } else {
                 rowMemo.emplace(setRelev.tmpid, setRelev);
