@@ -436,7 +436,7 @@ NAN_METHOD(Cache::loadSync)
     NanReturnUndefined();
 }
 
-struct load_baton {
+struct load_baton : carmen::noncopyable {
     uv_work_t request;
     Cache * c;
     NanCallback cb;
@@ -680,7 +680,7 @@ NAN_METHOD(Cache::New)
 }
 
 // cache.phrasematchDegens(termidx, degens)
-struct phrasematchDegensBaton : carmen::noncopyable{
+struct phrasematchDegensBaton : carmen::noncopyable {
     v8::Persistent<v8::Function> callback;
     uv_work_t request;
     std::vector<std::vector<std::uint64_t>> results;
@@ -689,6 +689,7 @@ struct phrasematchDegensBaton : carmen::noncopyable{
     std::map<std::uint64_t,std::uint64_t> querymask;
     std::map<std::uint64_t,std::uint64_t> querydist;
 };
+
 bool sortDegens(uint64_t a, uint64_t b) {
     uint32_t ad = a % 16;
     uint32_t bd = b % 16;
@@ -853,7 +854,7 @@ inline PhraseRelev numberToPhraseRelev(uint64_t num) {
     return PhraseRelev(id,count,relev,reason);
 }
 
-struct phrasematchPhraseRelevBaton {
+struct phrasematchPhraseRelevBaton : carmen::noncopyable {
     v8::Persistent<v8::Function> callback;
     uv_work_t request;
     Cache* cache;
@@ -865,6 +866,7 @@ struct phrasematchPhraseRelevBaton {
     std::map<std::uint64_t,std::uint64_t> querymask;
     std::map<std::uint64_t,std::uint64_t> querydist;
 };
+
 bool sortPhraseRelev(PhraseRelev const& a, PhraseRelev const& b) {
     return a.id < b.id;
 }
@@ -1358,7 +1360,7 @@ NAN_METHOD(Cache::setRelevance) {
     NanReturnValue(ret);
 }
 
-struct SpatialMatchBaton {
+struct SpatialMatchBaton : carmen::noncopyable {
     uv_work_t request;
     // params
     v8::Persistent<v8::Function> callback;
