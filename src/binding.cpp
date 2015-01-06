@@ -680,7 +680,7 @@ NAN_METHOD(Cache::New)
 }
 
 // cache.phrasematchDegens(termidx, degens)
-struct phrasematchDegensBaton {
+struct phrasematchDegensBaton : carmen::noncopyable{
     v8::Persistent<v8::Function> callback;
     uv_work_t request;
     std::vector<std::vector<std::uint64_t>> results;
@@ -783,12 +783,38 @@ NAN_METHOD(Cache::phrasematchDegens)
     NanReturnUndefined();
 }
 
-struct PhraseRelev {
+class PhraseRelev : carmen::noncopyable{
+public:
     double relev;
     unsigned short count;
     unsigned short reason;
     uint64_t id;
+    PhraseRelev(uint64_t _id,
+                unsigned short _count,
+                double _relev,
+                unsigned short _reason) noexcept :
+      relev(_relev),
+      count(_count),
+      reason(_reason),
+      id(_id) {}
+
+    PhraseRelev(PhraseRelev && rhs) noexcept :
+      relev(std::move(rhs.relev)),
+      count(std::move(rhs.count)),
+      reason(std::move(rhs.reason)),
+      id(std::move(rhs.id)) {}
+
+    PhraseRelev& operator=(PhraseRelev && rhs) // move assign
+    {
+        std::swap(relev, rhs.relev);
+        std::swap(count, rhs.count);
+        std::swap(reason, rhs.reason);
+        std::swap(id, rhs.id);
+        return *this;
+    }
+
 };
+
 //relev = 5 bits
 //count = 3 bits
 //reason = 12 bits
@@ -819,13 +845,13 @@ uint64_t phraseRelevToNumber(PhraseRelev const& pr) {
         (pr.id);
     return num;
 }
-PhraseRelev numberToPhraseRelev(uint64_t num) {
-    PhraseRelev pr;
-    pr.id = num % POW2_32;
-    pr.reason = (num >> 33) % POW2_12;
-    pr.count = (num >> 45) % POW2_3;
-    pr.relev = ((num >> 48) % POW2_5) / ((double)POW2_5-1);
-    return pr;
+
+inline PhraseRelev numberToPhraseRelev(uint64_t num) {
+    uint64_t id = num % POW2_32;
+    unsigned short reason = (num >> 33) % POW2_12;
+    unsigned short count = (num >> 45) % POW2_3;
+    double relev = ((num >> 48) % POW2_5) / ((double)POW2_5-1);
+    return PhraseRelev(id,count,relev,reason);
 }
 
 struct phrasematchPhraseRelevBaton {
@@ -930,21 +956,16 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
         // degens of higher distance reduce relev score).
         // printf( "%f \n", relev);
         if (relev >= 0.5) {
-            PhraseRelev pr;
-            pr.id = id;
-            pr.count = count;
-            pr.relev = relev;
-            pr.reason = reason;
-            allPhrases.push_back(pr);
+            allPhrases.emplace_back(id,count,relev,reason);
             if (relev > 0.75) {
-                relevantPhrases.push_back(pr);
+                relevantPhrases.emplace_back(id,count,relev,reason);
             }
         }
     }
 
     // Reduces the relevance bar to 0.50 since all results have identical relevance values
     if (min_relev == max_relev) {
-        relevantPhrases = allPhrases;
+        relevantPhrases = std::move(allPhrases);
     }
 
     std::sort(relevantPhrases.begin(), relevantPhrases.end(), sortPhraseRelev);
@@ -1018,11 +1039,16 @@ NAN_METHOD(Cache::phrasematchPhraseRelev)
     NanReturnUndefined();
 }
 
-struct CoalesceZooms {
+class CoalesceZooms : carmen::noncopyable {
+public:
+    CoalesceZooms() :
+     coalesced(),
+     keys() {}
     std::map<uint64_t,Cache::intarray> coalesced;
     std::map<uint64_t,std::string> keys;
 };
-CoalesceZooms _coalesceZooms(std::vector<Cache::intarray> & grids, Cache::intarray const& zooms) {
+
+void _coalesceZooms(CoalesceZooms & ret, std::vector<Cache::intarray> & grids, Cache::intarray const& zooms) {
     // Filter zooms down to those with matches.
     Cache::intarray matchedZooms;
     std::size_t zooms_size = zooms.size();
@@ -1115,11 +1141,10 @@ CoalesceZooms _coalesceZooms(std::vector<Cache::intarray> & grids, Cache::intarr
             }
         }
     }
-    CoalesceZooms ret;
-    ret.coalesced = coalesced;
+    ret.coalesced = std::move(coalesced);
     ret.keys = keys;
-    return ret;
 }
+
 NAN_METHOD(Cache::coalesceZooms) {
     NanScope();
     if (!args[0]->IsArray()) {
@@ -1139,7 +1164,8 @@ NAN_METHOD(Cache::coalesceZooms) {
 
     Cache::intarray zooms = arrayToVector(Local<Array>::Cast(args[1]));
 
-    CoalesceZooms ret = _coalesceZooms(grids, zooms);
+    CoalesceZooms ret;
+    _coalesceZooms(ret, grids, zooms);
 
     std::map<uint64_t,std::string>::iterator kit;
 
@@ -1163,17 +1189,16 @@ struct SetRelev {
     unsigned short idx;
     bool check;
 };
+
 uint64_t setRelevToNumber(SetRelev const& setRelev) {
-    uint64_t num;
-    unsigned short relev;
-    relev = std::floor(setRelev.relev * (POW2_5-1));
+    unsigned short relev = std::floor(setRelev.relev * (POW2_5-1));
 
     if (relev >= POW2_5) throw std::runtime_error("misuse: setRelev.relev > 5 bits");
     if (setRelev.count >= POW2_3)  throw std::runtime_error("misuse: setRelev.count > 3 bits");
     if (setRelev.reason >= POW2_12)  throw std::runtime_error("misuse: setRelev.reason > 12 bits");
     if (setRelev.idx >= POW2_8)  throw std::runtime_error("misuse: setRelev.idx > 8 bits");
     if (setRelev.id >= POW2_25)  throw std::runtime_error("misuse: setRelev.id > 25 bits");
-    num =
+    uint64_t num =
         (relev * POW2_48) +
         (setRelev.count * POW2_45) +
         (setRelev.reason * POW2_33) +
@@ -1181,7 +1206,8 @@ uint64_t setRelevToNumber(SetRelev const& setRelev) {
         (setRelev.id);
     return num;
 }
-SetRelev numberToSetRelev(uint64_t num) {
+
+inline SetRelev numberToSetRelev(uint64_t num) {
     SetRelev setRelev;
     setRelev.id = num % POW2_25;
     setRelev.idx = (num >> 25) % POW2_8;
@@ -1344,7 +1370,8 @@ void _spatialMatch(uv_work_t* req) {
     std::vector<Cache::intarray> & grids = baton->grids;
     Cache::intarray const& zooms = baton->zooms;
 
-    CoalesceZooms ret = _coalesceZooms(grids, zooms);
+    CoalesceZooms ret;
+    _coalesceZooms(ret, grids, zooms);
 
     std::map<uint64_t,Cache::intarray> const& coalesced = ret.coalesced;
     std::map<uint64_t,Cache::intarray>::const_iterator cit;
