@@ -812,7 +812,6 @@ public:
         std::swap(id, rhs.id);
         return *this;
     }
-
 };
 
 //relev = 5 bits
@@ -1180,7 +1179,8 @@ NAN_METHOD(Cache::coalesceZooms) {
     NanReturnValue(object);
 }
 
-struct SetRelev {
+class SetRelev : carmen::noncopyable {
+public:
     double relev;
     uint64_t id;
     uint64_t tmpid;
@@ -1188,6 +1188,42 @@ struct SetRelev {
     unsigned short reason;
     unsigned short idx;
     bool check;
+    SetRelev(double _relev,
+             uint64_t _id,
+             uint64_t _tmpid,
+             unsigned short _count,
+             unsigned short _reason,
+             unsigned short _idx,
+             bool _check) :
+      relev(_relev),
+      id(_id),
+      tmpid(_tmpid),
+      count(_count),
+      reason(_reason),
+      idx(_idx),
+      check(_check) {}
+
+    SetRelev(SetRelev && rhs) noexcept :
+      relev(std::move(rhs.relev)),
+      id(std::move(rhs.id)),
+      tmpid(std::move(rhs.tmpid)),
+      count(std::move(rhs.count)),
+      reason(std::move(rhs.reason)),
+      idx(std::move(rhs.idx)),
+      check(std::move(rhs.check)) {}
+
+    SetRelev& operator=(SetRelev && rhs) // move assign
+    {
+        std::swap(relev, rhs.relev);
+        std::swap(id, rhs.id);
+        std::swap(tmpid, rhs.tmpid);
+        std::swap(count, rhs.count);
+        std::swap(reason, rhs.reason);
+        std::swap(idx, rhs.idx);
+        std::swap(check, rhs.check);
+        return *this;
+    }
+
 };
 
 uint64_t setRelevToNumber(SetRelev const& setRelev) {
@@ -1208,16 +1244,15 @@ uint64_t setRelevToNumber(SetRelev const& setRelev) {
 }
 
 inline SetRelev numberToSetRelev(uint64_t num) {
-    SetRelev setRelev;
-    setRelev.id = num % POW2_25;
-    setRelev.idx = (num >> 25) % POW2_8;
-    setRelev.tmpid = (setRelev.idx * 1e8) + setRelev.id;
-    setRelev.reason = (num >> 33) % POW2_12;
-    setRelev.count = (num >> 45) % POW2_3;
-    setRelev.relev = ((num >> 48) % POW2_5) / ((double)POW2_5-1);
-    setRelev.check = true;
-    return setRelev;
+    uint64_t id = num % POW2_25;
+    unsigned short idx = (num >> 25) % POW2_8;
+    uint64_t tmpid = (idx * 1e8) + id;
+    unsigned short reason = (num >> 33) % POW2_12;
+    unsigned short count = (num >> 45) % POW2_3;
+    double relev = ((num >> 48) % POW2_5) / ((double)POW2_5-1);
+    return SetRelev(relev,id,tmpid,count,reason,idx,true);
 }
+
 double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets) {
     double relevance = 0;
     double total = queryLength;
@@ -1301,8 +1336,7 @@ NAN_METHOD(Cache::setRelevance) {
     sets.reserve(array->Length());
     for (unsigned short i = 0; i < array->Length(); i++) {
         uint64_t num = array->Get(i)->NumberValue();
-        SetRelev setRelev = numberToSetRelev(num);
-        sets.emplace_back(setRelev);
+        sets.emplace_back(numberToSetRelev(num));
     }
 
     double relevance = _setRelevance(queryLength, sets);
@@ -1361,7 +1395,7 @@ void _spatialMatch(uv_work_t* req) {
     std::map<uint64_t,uint64_t> const& featnums = baton->featnums;
     std::map<uint64_t,uint64_t>::const_iterator fnit;
     std::map<uint64_t,SetRelev> features;
-    std::map<uint64_t,SetRelev>::const_iterator fit;
+    std::map<uint64_t,SetRelev>::iterator fit;
     for (auto const& item : featnums) {
         features.emplace(item.first, numberToSetRelev(item.second));
     }
@@ -1404,14 +1438,14 @@ void _spatialMatch(uv_work_t* req) {
             if (fit->second.check == false) {
                 continue;
             } else {
-                rows.emplace_back(fit->second);
+                rows.emplace_back(std::move(fit->second));
             }
         }
         std::sort(rows.begin(), rows.end(), sortRelevReason);
         double relev = _setRelevance(queryLength, rows);
         std::size_t rows_size = rows.size();
         for (unsigned short i = 0; i < rows_size; i++) {
-            auto const& row = rows[i];
+            auto & row = rows[i];
             // Add setRelev to sets.
             sit = sets.find(row.tmpid);
             if (sit == sets.end()) {
@@ -1424,7 +1458,7 @@ void _spatialMatch(uv_work_t* req) {
             }
 
             // Clone setRelev from row.
-            SetRelev setRelev(row);
+            SetRelev setRelev = std::move(row);
             setRelev.relev = relev;
 
             pushed = setRelev.idx;
@@ -1435,17 +1469,17 @@ void _spatialMatch(uv_work_t* req) {
                 }
                 // @TODO apply addrmod
                 // if (rit->second.relev > relev + addrmod[row.dbid])
-                rit->second = setRelev;
+                rit->second = std::move(setRelev);
             } else {
-                rowMemo.emplace(setRelev.tmpid, setRelev);
+                rowMemo.emplace(setRelev.tmpid, std::move(setRelev));
                 // @TODO apply addrmod
             }
         }
     }
 
     std::vector<SetRelev> sorted;
-    for (auto const& row : rowMemo) {
-        sorted.emplace_back(row.second);
+    for (auto & row : rowMemo) {
+        sorted.emplace_back(std::move(row.second));
     }
     std::sort(sorted.begin(), sorted.end(), sortByRelev);
 
