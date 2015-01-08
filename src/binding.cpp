@@ -1386,8 +1386,8 @@ bool sortRelevReason(SetRelev const& a, SetRelev const& b) {
 bool sortByRelev(SetRelev const& a, SetRelev const& b) {
     if (a.relev > b.relev) return true;
     if (a.relev < b.relev) return false;
-    if (a.idx > b.idx) return true;
-    if (a.idx < b.idx) return false;
+    if (a.idx < b.idx) return true;
+    if (a.idx > b.idx) return false;
     return a.id < b.id;
 }
 void _spatialMatch(uv_work_t* req) {
