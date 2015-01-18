@@ -730,7 +730,9 @@ void _phrasematchDegens(uv_work_t* req) {
 
             it = querydist.find(term);
             if (it == querydist.end()) {
-                querydist.emplace(term, term % 16);
+                querydist.emplace(term, degens[i] % 16);
+            } else {
+                it->second = degens[i] % 16;
             }
         }
     }
