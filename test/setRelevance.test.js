@@ -57,6 +57,15 @@ test('setRelevance', function(t) {
         Relev.encode({ id: 1, relev: 1, reason: 255, count: 2, idx: 2 }),
         Relev.encode({ id: 2, relev: 1, reason: 255, count: 2, idx: 3 })
     ]));
+    // Terms with low enough relev and high enough gap can result in a negative
+    // relevance score. Ensure this is clipped to 0.
+    t.deepEqual({ relevance: 0, sets:[
+        Relev.encode({ id: 3553, relev: 0.01, reason: 2, count: 1, idx: 1 }),
+        Relev.encode({ id: 130305, relev: 0.01, reason: 1, count: 1, idx: 4 })
+    ]}, setRelevance(2, [
+        Relev.encode({ id: 3553, relev: 0.01, reason: 2, count: 1, idx: 1 }),
+        Relev.encode({ id: 130305, relev: 0.01, reason: 1, count: 1, idx: 4 })
+    ]));
     // Test that elements of the stack without contribution are set to false.
     var stack = [
         Relev.encode({ id: 3553, relev: 1, reason: 2, count: 1, idx: 1 }),
