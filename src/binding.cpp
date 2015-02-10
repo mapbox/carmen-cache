@@ -833,17 +833,20 @@ const uint64_t POW2_5 = std::pow(2,5);
 const uint64_t POW2_3 = std::pow(2,3);
 uint64_t phraseRelevToNumber(PhraseRelev const& pr) {
     uint64_t num;
-    unsigned short relev;
-    relev = std::floor(pr.relev * (POW2_5-1));
+    unsigned short relev = std::floor(pr.relev * (POW2_5-1));
+
+    // count + reason are values that may overflow the currently tight
+    // bit constraints given. For now clip to 8/12 bits respectively --
+    // requires a better solution long term.
+    unsigned short count = pr.count < POW2_3 ? pr.count : POW2_3-1;
+    unsigned short reason = pr.reason < POW2_12 ? pr.reason : POW2_12-1;
 
     if (relev >= POW2_5) throw std::runtime_error("misuse: pr.relev > 5 bits");
-    if (pr.count >= POW2_3)  throw std::runtime_error("misuse: pr.count > 3 bits");
-    if (pr.reason >= POW2_12)  throw std::runtime_error("misuse: pr.reason > 12 bits");
     if (pr.id >= POW2_32)  throw std::runtime_error("misuse: pr.id > 32 bits");
     num =
         (relev * POW2_48) +
-        (pr.count * POW2_45) +
-        (pr.reason * POW2_33) +
+        (count * POW2_45) +
+        (reason * POW2_33) +
         (pr.id);
     return num;
 }
@@ -1233,15 +1236,19 @@ public:
 uint64_t setRelevToNumber(SetRelev const& setRelev) {
     unsigned short relev = std::floor(setRelev.relev * (POW2_5-1));
 
+    // count + reason are values that may overflow the currently tight
+    // bit constraints given. For now clip to 8/12 bits respectively --
+    // requires a better solution long term.
+    unsigned short count = setRelev.count < POW2_3 ? setRelev.count : POW2_3-1;
+    unsigned short reason = setRelev.reason < POW2_12 ? setRelev.reason : POW2_12-1;
+
     if (relev >= POW2_5) throw std::runtime_error("misuse: setRelev.relev > 5 bits");
-    if (setRelev.count >= POW2_3)  throw std::runtime_error("misuse: setRelev.count > 3 bits");
-    if (setRelev.reason >= POW2_12)  throw std::runtime_error("misuse: setRelev.reason > 12 bits");
     if (setRelev.idx >= POW2_8)  throw std::runtime_error("misuse: setRelev.idx > 8 bits");
     if (setRelev.id >= POW2_25)  throw std::runtime_error("misuse: setRelev.id > 25 bits");
     uint64_t num =
         (relev * POW2_48) +
-        (setRelev.count * POW2_45) +
-        (setRelev.reason * POW2_33) +
+        (count * POW2_45) +
+        (reason * POW2_33) +
         (setRelev.idx * POW2_25) +
         (setRelev.id);
     return num;
@@ -1321,6 +1328,7 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets) {
     // Penalize relevance slightly based on whether query matches contained
     // "gaps" in continuity between index levels.
     relevance -= 0.01 * gappy;
+    relevance = relevance > 0 ? relevance : 0;
 
     return relevance;
 }
