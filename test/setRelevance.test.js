@@ -41,6 +41,15 @@ test('setRelevance', function(t) {
         Relev.encode({ id: 130305, relev: 1, reason: 1, count: 1, idx: 3 }),
         Relev.encode({ id: 8062, relev: 1, reason: 2, count: 1, idx: 3 })
     ]));
+    // Finds maximal score.
+    t.deepEqual({ relevance: 1, sets:[
+        Relev.encode({ id: 2, relev: 1, reason: 2, count: 1, idx: 1 }),
+        Relev.encode({ id: 3, relev: 1, reason: 1, count: 1, idx: 2 })
+    ]}, setRelevance(2, [
+        Relev.encode({ id: 1, relev: 1, reason: 1, count: 1, idx: 1 }),
+        Relev.encode({ id: 2, relev: 1, reason: 2, count: 1, idx: 1 }),
+        Relev.encode({ id: 3, relev: 1, reason: 1, count: 1, idx: 2 })
+    ]));
     // Repeated terms with fittable counts/db indexes.
     t.deepEqual({ relevance: 1, sets:[
         Relev.encode({ id: 1, relev: 1, reason: 15, count: 2, idx: 2 }),

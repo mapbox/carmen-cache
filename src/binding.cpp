@@ -1257,72 +1257,101 @@ inline SetRelev numberToSetRelev(uint64_t num) {
 }
 
 double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets) {
-    double relevance = 0;
     double total = queryLength;
-    double gappy = 0;
-    unsigned short querymask = 0;
-    unsigned short tally = 0;
-    signed short lastdb = -1;
-
-    std::map<unsigned short,unsigned short> reason2db;
-    std::map<unsigned short,unsigned short>::iterator rit;
-
-    // For each set, score its correspondence with the query
+    double max_relevance = 0;
+    unsigned short max_checkmask = 0;
     std::size_t sets_size = sets.size();
-    for (unsigned short i = 0; i < sets_size; i++) {
-        auto & set = sets[i];
-        rit = reason2db.find(set.reason);
 
-        // Each db may contribute a distinct matching reason to the final
-        // relev. If this entry is for a db that has already contributed
-        // but without the same reason mark it as false.
-        if (lastdb == set.idx && (rit == reason2db.end() || rit->second != set.idx)) {
-            set.check = false;
-            continue;
+    // For a given set: a, b, c, d, iterate over:
+    // a, b, c, d
+    //    b, c, d
+    //       c, d
+    //          d
+    for (unsigned short a = 0; a < sets_size; a++) {
+        double relevance = 0;
+        double gappy = 0;
+        unsigned short checkmask = 0;
+        unsigned short querymask = 0;
+        unsigned short tally = 0;
+        signed short lastdb = -1;
+
+        std::map<unsigned short,unsigned short> reason2db;
+        std::map<unsigned short,unsigned short>::iterator rit;
+
+        // Mark parts of the set that will not be considered due
+        // to `a` offset in the checkmask.
+        for (unsigned short b = 0; b < a; b++) {
+            checkmask += 1<<b;
         }
 
-        unsigned short usage = 0;
-        unsigned short count = set.count;
+        // For each set, score its correspondence with the query
+        for (unsigned short i = a; i < sets_size; i++) {
+            auto & set = sets[i];
+            rit = reason2db.find(set.reason);
 
-        for (unsigned j = 0; j < queryLength; j++) {
-            if (
-                // make sure this term has not already been counted for
-                // relevance. Uses a bitmask to mark positions counted.
-                !(querymask & (1<<j)) &&
-                // if this term matches the reason bitmask for relevance
-                (1 << j & set.reason)
-            ) {
-                ++usage;
-                ++tally;
-                // 'check off' this term of the query so that it isn't
-                // double-counted against a different `sets` reason.
-                querymask += 1<<j;
-                // once a set's term count has been exhausted short circuit.
-                // this prevents a province match from grabbing both instances
-                // of 'new' and 'york' in a 'new york new york' query.
-                if (!--count) break;
+            // Each db may contribute a distinct matching reason to the final
+            // relev. If this entry is for a db that has already contributed
+            // but without the same reason mark it as false.
+            if (lastdb == set.idx) {
+                checkmask += 1<<i;
+                continue;
+            }
+
+            unsigned short usage = 0;
+            unsigned short count = set.count;
+
+            for (unsigned j = 0; j < queryLength; j++) {
+                if (
+                    // make sure this term has not already been counted for
+                    // relevance. Uses a bitmask to mark positions counted.
+                    !(querymask & (1<<j)) &&
+                    // if this term matches the reason bitmask for relevance
+                    (1 << j & set.reason)
+                ) {
+                    ++usage;
+                    ++tally;
+                    // 'check off' this term of the query so that it isn't
+                    // double-counted against a different `sets` reason.
+                    querymask += 1<<j;
+                    // once a set's term count has been exhausted short circuit.
+                    // this prevents a province match from grabbing both instances
+                    // of 'new' and 'york' in a 'new york new york' query.
+                    if (!--count) break;
+                }
+            }
+
+            // If this relevant criteria matched any terms in the query,
+            // increment the total relevance score.
+            if (usage > 0) {
+                relevance += (set.relev * (usage / total));
+                reason2db.emplace(set.reason, set.idx);
+                if (lastdb >= 0) gappy += (std::abs(set.idx - lastdb) - 1);
+                lastdb = set.idx;
+                if (tally == queryLength) break;
+            } else {
+                checkmask += 1<<i;
             }
         }
 
-        // If this relevant criteria matched any terms in the query,
-        // increment the total relevance score.
-        if (usage > 0) {
-            relevance += (set.relev * (usage / total));
-            reason2db.emplace(set.reason, set.idx);
-            if (lastdb >= 0) gappy += (std::abs(set.idx - lastdb) - 1);
-            lastdb = set.idx;
-            if (tally == queryLength) break;
-        } else {
+        // Penalize relevance slightly based on whether query matches contained
+        // "gaps" in continuity between index levels.
+        relevance -= 0.01 * gappy;
+        relevance = relevance > 0 ? relevance : 0;
+
+        if (relevance > max_relevance) {
+            max_relevance = relevance;
+            max_checkmask = checkmask;
+        }
+    }
+
+    for (unsigned short i = 0; i < sets_size; i++) {
+        if (max_checkmask & (1<<i)) {
+            auto & set = sets[i];
             set.check = false;
         }
     }
 
-    // Penalize relevance slightly based on whether query matches contained
-    // "gaps" in continuity between index levels.
-    relevance -= 0.01 * gappy;
-    relevance = relevance > 0 ? relevance : 0;
-
-    return relevance;
+    return max_relevance;
 }
 NAN_METHOD(Cache::setRelevance) {
     NanScope();
