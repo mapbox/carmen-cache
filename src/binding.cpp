@@ -221,19 +221,11 @@ NAN_METHOD(Cache::pack)
         if (size > 0)
         {
             std::size_t usize = static_cast<std::size_t>(size);
-#if NODE_VERSION_AT_LEAST(0, 11, 0)
-            Local<Object> retbuf = node::Buffer::New(usize);
-            if (message.SerializeToArray(node::Buffer::Data(retbuf),size))
+            Local<Object> buf = NanNewBufferHandle(usize);
+            if (message.SerializeToArray(node::Buffer::Data(buf),size))
             {
-                NanReturnValue(retbuf);
+                NanReturnValue(buf);
             }
-#else
-            node::Buffer *retbuf = node::Buffer::New(usize);
-            if (message.SerializeToArray(node::Buffer::Data(retbuf),size))
-            {
-                NanReturnValue(retbuf->handle_);
-            }
-#endif
         } else {
             return NanThrowTypeError("pack: invalid message ByteSize encountered");
         }
