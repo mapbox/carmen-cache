@@ -77,7 +77,7 @@ tape('#phrasematchPhraseRelev', function(assert) {
     });
 });
 
-tape('#phrasematchPhraseRelev ("a a b")', function(assert) {
+tape('#phrasematchPhraseRelev (query: "a a b", phrase: "a b")', function(assert) {
     var cache = new Cache('a', 0);
     var phrases = [ 1 ];
     var queryidx = { 10000: 0, 20000: 2 };
@@ -100,7 +100,7 @@ tape('#phrasematchPhraseRelev ("a a b")', function(assert) {
     });
 });
 
-tape('#phrasematchPhraseRelev ("a a c b")', function(assert) {
+tape('#phrasematchPhraseRelev (query: "a a c b", phrase: "a b")', function(assert) {
     var cache = new Cache('a', 0);
     var phrases = [ 1 ];
     var queryidx = { 10000: 0, 20000: 3 };
