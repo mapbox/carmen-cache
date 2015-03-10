@@ -900,6 +900,7 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
         unsigned short reason = 0;
         unsigned short chardist = 0;
         signed short lastidx = -1;
+        signed short lastmask = -1;
 
         // relev each feature:
         // - across all feature synonyms, find the max relev of the sum
@@ -928,11 +929,21 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
             unsigned short termmask = it->second;
             it = baton->querydist.find(term);
             unsigned short termdist = it->second;
-            if (relev == 0 || termidx == lastidx + 1) {
+
+            // Compare the current termmask against the previous
+            // termmask shifted by 1. Ensures that this term is
+            // contiguous in the query with the previously relevant
+            // term.
+            //
+            // 0000010001 << previous term mask
+            // 0000100010 << previous term mask << 1
+            // 0000100000 << current term mask
+            if (relev == 0 || (termmask & (lastmask << 1))) {
                 relev += phrase[i] % 16;
                 reason = reason | termmask;
                 chardist += termdist;
                 lastidx = termidx;
+                lastmask = termmask;
                 count++;
             }
         }
