@@ -77,4 +77,50 @@ tape('#phrasematchPhraseRelev', function(assert) {
     });
 });
 
+tape('#phrasematchPhraseRelev ("a a b")', function(assert) {
+    var cache = new Cache('a', 0);
+    var phrases = [ 1 ];
+    var queryidx = { 10000: 0, 20000: 2 };
+    var querymask = { 10000: (1 << 0) + (1 << 1), 20000: 1 << 2 };
+    var querydist = { 10000: 0, 20000: 0 };
+    cache._set('phrase', 0, 1, [10009,20006]);
+    cache.phrasematchPhraseRelev(phrases, queryidx, querymask, querydist, function(err, result) {
+        assert.ifError(err);
+        assert.deepEqual(result.result, [1]);
+        assert.deepEqual(new Relev(result.relevs['1']), {
+            id: 1,
+            idx: 0,
+            tmpid: 1,
+            reason: 7,
+            count: 2,
+            relev: 1,
+            check: true
+        });
+        assert.end();
+    });
+});
+
+tape('#phrasematchPhraseRelev ("a a c b")', function(assert) {
+    var cache = new Cache('a', 0);
+    var phrases = [ 1 ];
+    var queryidx = { 10000: 0, 20000: 3 };
+    var querymask = { 10000: (1 << 0) + (1 << 1), 20000: 1 << 3 };
+    var querydist = { 10000: 0, 20000: 0 };
+    cache._set('phrase', 0, 1, [10009,20006]);
+    cache.phrasematchPhraseRelev(phrases, queryidx, querymask, querydist, function(err, result) {
+        assert.ifError(err);
+        assert.deepEqual(result.result, [1]);
+        assert.deepEqual(new Relev(result.relevs['1']), {
+            id: 1,
+            idx: 0,
+            tmpid: 1,
+            reason: 3,
+            count: 1,
+            relev: 0.5806451612903226,
+            check: true
+        });
+        assert.end();
+    });
+});
+
 
