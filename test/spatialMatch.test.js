@@ -1,4 +1,6 @@
 var spatialMatch = require('../index.js').Cache.spatialMatch;
+var Relev = require('./relev');
+var Cover = require('./cover');
 var test = require('tape');
 var mp39 = Math.pow(2,39);
 var mp25 = Math.pow(2,25);
@@ -15,13 +17,140 @@ test('zero case', function(q) {
 });
 
 test('unit', function(assert) {
-    var args = require('./fixtures/spatialMatch-args.json');
-    var testRet = require('./fixtures/spatialMatch-ret.json');
-    spatialMatch(args[0], args[1], args[2], args[3], function(err, ret) {
+    var queryLength = 4;
+    var feat = {
+        1: Relev.encode({
+            id: 1,
+            idx: 0,
+            tmpid: 1,
+            reason: 8,
+            count: 1,
+            relev: 1,
+            check: true
+        }),
+        100000001: Relev.encode({
+            id: 1,
+            idx: 1,
+            tmpid: 100000001,
+            reason: 8,
+            count: 1,
+            relev: 1,
+            check: true
+        }),
+        100000002: Relev.encode({
+            id: 2,
+            idx: 1,
+            tmpid: 100000002,
+            reason: 4,
+            count: 1,
+            relev: 1,
+            check: true
+        }),
+        200000001: Relev.encode({
+            id: 1,
+            idx: 2,
+            tmpid: 200000001,
+            reason: 3,
+            count: 2,
+            relev: 1,
+            check: true
+        }),
+        200000002: Relev.encode({
+            id: 2,
+            idx: 2,
+            tmpid: 200000002,
+            reason: 3,
+            count: 2,
+            relev: 1,
+            check: true
+        })
+    };
+    var cover = [
+        [
+            Cover.encode({ x: 32, y: 32, id: 1 }),
+            Cover.encode({ x: 33, y: 32, id: 1 })
+        ],
+        [
+            Cover.encode({ x: 33, y: 32, id: 2 }),
+            Cover.encode({ x: 32, y: 32, id: 1 })
+        ],
+        [
+            Cover.encode({ x: 32, y: 32, id: 1 }),
+            Cover.encode({ x: 33, y: 32, id: 2 })
+        ]
+    ];
+    var zooms = [6,6,6];
+
+    spatialMatch(queryLength, feat, cover, zooms, function(err, ret) {
         assert.ifError(err);
-        assert.deepEqual(ret.coalesced, testRet.coalesced);
-        assert.deepEqual(ret.sets, testRet.sets);
-        assert.deepEqual(ret.results, testRet.results);
+        assert.deepEqual(ret.sets, {
+            1: Relev.encode({
+                id: 1,
+                idx: 0,
+                tmpid: 1,
+                reason: 8,
+                count: 1,
+                relev: 1,
+                check: true
+            }),
+            100000001: Relev.encode({
+                id: 1,
+                idx: 1,
+                tmpid: 100000001,
+                reason: 8,
+                count: 1,
+                relev: 1,
+                check: true
+            }),
+            100000002: Relev.encode({
+                id: 2,
+                idx: 1,
+                tmpid: 100000002,
+                reason: 4,
+                count: 1,
+                relev: 1,
+                check: true
+            }),
+            200000001: Relev.encode({
+                id: 1,
+                idx: 2,
+                tmpid: 200000001,
+                reason: 3,
+                count: 2,
+                relev: 1,
+                check: true
+            }),
+            200000002: Relev.encode({
+                id: 2,
+                idx: 2,
+                tmpid: 200000002,
+                reason: 3,
+                count: 2,
+                relev: 1,
+                check: true
+            })
+        });
+        assert.deepEqual(ret.results, [ Relev.encode({
+            id: 2,
+            idx: 2,
+            tmpid: 200000002,
+            reason: 3,
+            count: 2,
+            relev: 1,
+            check: true
+        }) ]);
+        assert.deepEqual(ret.coalesced, {
+            1611137056: [
+                1,
+                100000001,
+                200000001
+            ],
+            1611153440: [
+                1,
+                100000002,
+                200000002
+            ]
+        });
         assert.end();
     });
 });
