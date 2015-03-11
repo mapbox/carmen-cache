@@ -140,7 +140,7 @@ test('setRelevance', function(t) {
     t.deepEqual(setRelevance(4, stack), {
         relevance: 0.75,
         sets: [ stack[0], stack[1] ]
-    }, 'ASDF');
+    }, 'elements with an early reason cannot seek backwards to match an earlier term');
 
     t.end();
 });

@@ -1475,7 +1475,6 @@ void _spatialMatch(uv_work_t* req) {
     std::map<uint64_t,SetRelev>::iterator rit;
 
     for (auto const& item : coalesced) {
-        signed int pushed = -1;
         kit = keys.find(item.first);
         std::string key = kit->second;
         dit = done.find(key);
@@ -1499,7 +1498,10 @@ void _spatialMatch(uv_work_t* req) {
         std::sort(rows.begin(), rows.end(), sortRelevReason);
         double relev = _setRelevance(queryLength, rows);
         std::size_t rows_size = rows.size();
-        signed lastreason = -1;
+
+        signed int lastreason = -1;
+        signed int lastidx = -1;
+
         for (unsigned short i = 0; i < rows_size; i++) {
             auto & row = rows[i];
             // Add setRelev to sets.
@@ -1509,24 +1511,22 @@ void _spatialMatch(uv_work_t* req) {
             }
 
             // Push results until row reason doesn't match first in stack.
-            if (pushed != -1 && lastreason != row.reason) {
-                continue;
-            }
+            if (lastidx == -1 || (lastreason == row.reason) || (lastidx == row.idx)) {
+                // Clone setRelev from row.
+                SetRelev setRelev = std::move(row);
+                setRelev.relev = relev;
 
-            // Clone setRelev from row.
-            SetRelev setRelev = std::move(row);
-            setRelev.relev = relev;
-
-            pushed = setRelev.idx;
-            lastreason = setRelev.reason;
-            rit = rowMemo.find(setRelev.tmpid);
-            if (rit != rowMemo.end()) {
-                if (rit->second.relev > relev) {
-                    continue;
+                lastidx = setRelev.idx;
+                lastreason = setRelev.reason;
+                rit = rowMemo.find(setRelev.tmpid);
+                if (rit != rowMemo.end()) {
+                    if (rit->second.relev > relev) {
+                        continue;
+                    }
+                    rit->second = std::move(setRelev);
+                } else {
+                    rowMemo.emplace(setRelev.tmpid, std::move(setRelev));
                 }
-                rit->second = std::move(setRelev);
-            } else {
-                rowMemo.emplace(setRelev.tmpid, std::move(setRelev));
             }
         }
     }
