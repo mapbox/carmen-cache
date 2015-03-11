@@ -110,20 +110,11 @@ test('unit', function(assert) {
 test('tied-top', function(assert) {
     var queryLength = 2;
     var feat = {
-        1: Relev.encode({
-            id: 1,
-            idx: 0,
-            tmpid: 1,
-            reason: 1,
-            count: 1,
-            relev: 1,
-            check: true
-        }),
         100000001: Relev.encode({
             id: 1,
             idx: 1,
             tmpid: 100000001,
-            reason: 2,
+            reason: 1,
             count: 1,
             relev: 1,
             check: true
@@ -132,11 +123,20 @@ test('tied-top', function(assert) {
             id: 2,
             idx: 1,
             tmpid: 100000002,
+            reason: 1,
+            count: 1,
+            relev: 1,
+            check: true
+        }),
+        1: Relev.encode({
+            id: 1,
+            idx: 0,
+            tmpid: 1,
             reason: 2,
             count: 1,
             relev: 1,
             check: true
-        })
+        }),
     };
     var cover = [
         [
@@ -168,14 +168,82 @@ test('tied-top', function(assert) {
     });
 });
 
+test('tied-multitop', function(assert) {
+    var queryLength = 2;
+    var feat = {
+        100000001: Relev.encode({
+            id: 1,
+            idx: 1,
+            tmpid: 100000001,
+            reason: 1,
+            count: 1,
+            relev: 1,
+            check: true
+        }),
+        200000001: Relev.encode({
+            id: 1,
+            idx: 2,
+            tmpid: 200000002,
+            reason: 1,
+            count: 1,
+            relev: 1,
+            check: true
+        }),
+        1: Relev.encode({
+            id: 1,
+            idx: 0,
+            tmpid: 1,
+            reason: 2,
+            count: 1,
+            relev: 1,
+            check: true
+        }),
+    };
+    var cover = [
+        [
+            Cover.encode({ x: 32, y: 32, id: 1 })
+        ],
+        [
+            Cover.encode({ x: 32, y: 32, id: 1 })
+        ],
+        [
+            Cover.encode({ x: 32, y: 32, id: 1 })
+        ],
+    ];
+    var zooms = [6,6,6];
+
+    spatialMatch(queryLength, feat, cover, zooms, function(err, ret) {
+        assert.ifError(err);
+        assert.deepEqual(ret.sets, {
+            1: feat['1'],
+            100000001: feat['100000001'],
+            200000001: feat['200000001']
+        });
+        // Ideally should surface features from both idx 1 + idx 2 as
+        // they have maximum relevance score for the same reason/count.
+        assert.deepEqual(ret.results, [ feat['100000001'], feat['200000001'] ]);
+        assert.deepEqual(ret.coalesced, {
+            1611137056: [
+                1,
+                100000001,
+                200000001
+            ]
+        });
+        assert.end();
+    });
+});
+
 test('real', function(assert) {
     var args = require('./fixtures/spatialMatch-real-args.json');
     spatialMatch(args[0], args[1], args[2], args[3], function(err, ret) {
         assert.ifError(err);
-        var testRet = require('./fixtures/spatialMatch-real-ret.json');
-        assert.deepEqual(ret.coalesced, testRet[1].coalesced);
-        assert.deepEqual(ret.sets, testRet[1].sets);
-        assert.deepEqual(ret.results, testRet[1].results);
+        if (process.env.UPDATE) {
+            require('fs').writeFileSync(__dirname + '/fixtures/spatialMatch-real-ret.json', JSON.stringify(ret, null, 2));
+        }
+        var expected = require('./fixtures/spatialMatch-real-ret.json');
+        assert.deepEqual(ret.coalesced, expected.coalesced);
+        assert.deepEqual(ret.sets, expected.sets);
+        assert.deepEqual(ret.results.length, expected.results.length);
         assert.end();
     });
 });
