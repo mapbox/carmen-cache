@@ -1284,7 +1284,7 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets, s
         unsigned short checkmask = 0;
         unsigned short querymask = 0;
         unsigned short tally = 0;
-        signed short lastdb = -1;
+        signed short lastgroup = -1;
         signed short lastreason = -1;
         signed short laststart = 0;
 
@@ -1301,7 +1301,7 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets, s
             // Each db may contribute a distinct matching reason to the final
             // relev. If this entry is for a db that has already contributed
             // but without the same reason mark it as false.
-            if (lastdb == set.idx && lastreason != set.reason) {
+            if (lastgroup == groups[set.idx] && lastreason != set.reason) {
                 checkmask += 1<<i;
                 continue;
             }
@@ -1347,8 +1347,8 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets, s
             // increment the total relevance score.
             if (usage > 0) {
                 relevance += (set.relev * (usage / total));
-                if (lastdb >= 0) gappy += (std::abs(set.idx - lastdb) - 1);
-                lastdb = set.idx;
+                if (lastgroup >= 0) gappy += (std::abs(groups[set.idx] - lastgroup) - 1);
+                lastgroup = groups[set.idx];
                 lastreason = set.reason;
             } else if (lastreason != set.reason) {
                 checkmask += 1<<i;
@@ -1512,8 +1512,7 @@ void _spatialMatch(uv_work_t* req) {
         double relev = _setRelevance(queryLength, rows, groups);
         std::size_t rows_size = rows.size();
 
-        signed int lastreason = -1;
-        signed int lastidx = -1;
+        signed int lastgroup = -1;
 
         for (unsigned short i = 0; i < rows_size; i++) {
             auto & row = rows[i];
@@ -1523,14 +1522,13 @@ void _spatialMatch(uv_work_t* req) {
                 sets.emplace(row.tmpid, setRelevToNumber(row));
             }
 
-            // Push results until row reason doesn't match first in stack.
-            if (lastidx == -1 || (lastreason == row.reason) || (lastidx == row.idx)) {
+            // Push results from the top index group.
+            if (lastgroup == -1 || lastgroup == groups[row.idx]) {
                 // Clone setRelev from row.
                 SetRelev setRelev = std::move(row);
                 setRelev.relev = relev;
 
-                lastidx = setRelev.idx;
-                lastreason = setRelev.reason;
+                lastgroup = groups[setRelev.idx];
                 rit = rowMemo.find(setRelev.tmpid);
                 if (rit != rowMemo.end()) {
                     if (rit->second.relev > relev) {

@@ -213,7 +213,7 @@ test('tied-multitop', function(assert) {
         ],
     ];
     var zooms = [6,6,6];
-    var groups = [0,1,2];
+    var groups = [0,1,1];
 
     spatialMatch(queryLength, feat, cover, zooms, groups, function(err, ret) {
         assert.ifError(err);
