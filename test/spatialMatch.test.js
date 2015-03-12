@@ -6,7 +6,7 @@ var mp39 = Math.pow(2,39);
 var mp25 = Math.pow(2,25);
 
 test('zero case', function(q) {
-    spatialMatch(1, {}, [], [], function(err, res) {
+    spatialMatch(1, {}, [], [], [], function(err, res) {
         q.deepEqual(res, {
             coalesced:{},
             results:[],
@@ -80,8 +80,9 @@ test('unit', function(assert) {
         ]
     ];
     var zooms = [6,6,6];
+    var groups = [0,1,2];
 
-    spatialMatch(queryLength, feat, cover, zooms, function(err, ret) {
+    spatialMatch(queryLength, feat, cover, zooms, groups, function(err, ret) {
         assert.ifError(err);
         assert.deepEqual(ret.sets, {
             1: feat['1'],
@@ -148,8 +149,9 @@ test('tied-top', function(assert) {
         ],
     ];
     var zooms = [6,6];
+    var groups = [0,1,2];
 
-    spatialMatch(queryLength, feat, cover, zooms, function(err, ret) {
+    spatialMatch(queryLength, feat, cover, zooms, groups, function(err, ret) {
         assert.ifError(err);
         assert.deepEqual(ret.sets, {
             1: feat['1'],
@@ -211,8 +213,9 @@ test('tied-multitop', function(assert) {
         ],
     ];
     var zooms = [6,6,6];
+    var groups = [0,1,2];
 
-    spatialMatch(queryLength, feat, cover, zooms, function(err, ret) {
+    spatialMatch(queryLength, feat, cover, zooms, groups, function(err, ret) {
         assert.ifError(err);
         assert.deepEqual(ret.sets, {
             1: feat['1'],
@@ -235,7 +238,7 @@ test('tied-multitop', function(assert) {
 
 test('real', function(assert) {
     var args = require('./fixtures/spatialMatch-real-args.json');
-    spatialMatch(args[0], args[1], args[2], args[3], function(err, ret) {
+    spatialMatch(args[0], args[1], args[2], args[3], [0,1,2,3,4,5], function(err, ret) {
         assert.ifError(err);
         if (process.env.UPDATE) {
             require('fs').writeFileSync(__dirname + '/fixtures/spatialMatch-real-ret.json', JSON.stringify(ret, null, 2));

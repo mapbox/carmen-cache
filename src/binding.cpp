@@ -1267,7 +1267,7 @@ inline SetRelev numberToSetRelev(uint64_t num) {
     return SetRelev(relev,id,tmpid,count,reason,idx,true);
 }
 
-double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets) {
+double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets, std::vector<unsigned short> & groups) {
     double total = queryLength;
     double max_relevance = 0;
     unsigned short max_checkmask = 0;
@@ -1383,10 +1383,13 @@ NAN_METHOD(Cache::setRelevance) {
     if (!args[1]->IsArray()) {
         return NanThrowTypeError("second arg must be a sets array");
     }
+    if (!args[2]->IsArray()) {
+        return NanThrowTypeError("third arg must be a group mapping array");
+    }
 
     uint64_t queryLength = args[0]->NumberValue();
-    std::vector<SetRelev> sets;
 
+    std::vector<SetRelev> sets;
     Local<Array> array = Local<Array>::Cast(args[1]);
     sets.reserve(array->Length());
     for (unsigned short i = 0; i < array->Length(); i++) {
@@ -1394,7 +1397,15 @@ NAN_METHOD(Cache::setRelevance) {
         sets.emplace_back(numberToSetRelev(num));
     }
 
-    double relevance = _setRelevance(queryLength, sets);
+    std::vector<unsigned short> groups;
+    Local<Array> groupsArray = Local<Array>::Cast(args[2]);
+    groups.reserve(groupsArray->Length());
+    for (unsigned short i = 0; i < groupsArray->Length(); i++) {
+        unsigned short num = groupsArray->Get(i)->NumberValue();
+        groups.emplace_back(num);
+    }
+
+    double relevance = _setRelevance(queryLength, sets, groups);
 
     std::size_t size = sets.size();
     Local<Array> setsArray = NanNew<Array>();
@@ -1419,6 +1430,7 @@ struct SpatialMatchBaton : carmen::noncopyable {
     v8::Persistent<v8::Function> callback;
     std::map<uint64_t,uint64_t> featnums;
     std::vector<Cache::intarray> grids;
+    std::vector<unsigned short> groups;
     Cache::intarray zooms;
     // return
     std::map<uint64_t,uint64_t> sets;
@@ -1458,6 +1470,7 @@ void _spatialMatch(uv_work_t* req) {
     unsigned short queryLength = baton->queryLength;
     std::vector<Cache::intarray> & grids = baton->grids;
     Cache::intarray const& zooms = baton->zooms;
+    std::vector<unsigned short> & groups = baton->groups;
 
     CoalesceZooms ret;
     _coalesceZooms(ret, grids, zooms);
@@ -1496,7 +1509,7 @@ void _spatialMatch(uv_work_t* req) {
             }
         }
         std::sort(rows.begin(), rows.end(), sortRelevReason);
-        double relev = _setRelevance(queryLength, rows);
+        double relev = _setRelevance(queryLength, rows, groups);
         std::size_t rows_size = rows.size();
 
         signed int lastreason = -1;
@@ -1602,8 +1615,11 @@ NAN_METHOD(Cache::spatialMatch) {
     if (!args[3]->IsArray()) {
         return NanThrowTypeError("fourth arg must be an array of zoom integers");
     }
-    if (!args[4]->IsFunction()) {
-        return NanThrowTypeError("fifth arg must be a callback function");
+    if (!args[4]->IsArray()) {
+        return NanThrowTypeError("fifth arg must be an array of group integers");
+    }
+    if (!args[5]->IsFunction()) {
+        return NanThrowTypeError("sixth arg must be a callback function");
     }
 
     SpatialMatchBaton *baton = new SpatialMatchBaton();
@@ -1632,8 +1648,16 @@ NAN_METHOD(Cache::spatialMatch) {
     // zooms
     baton->zooms = arrayToVector(Local<Array>::Cast(args[3]));
 
+    // groups
+    Local<Array> groupsArray = Local<Array>::Cast(args[4]);
+    baton->groups.reserve(groupsArray->Length());
+    for (unsigned short i = 0; i < groupsArray->Length(); i++) {
+        unsigned short num = groupsArray->Get(i)->NumberValue();
+        baton->groups.emplace_back(num);
+    }
+
     // callback
-    Local<Value> callback = args[4];
+    Local<Value> callback = args[5];
     baton->queryLength = queryLength;
     baton->request.data = baton;
     NanAssignPersistent(baton->callback, callback.As<Function>());
