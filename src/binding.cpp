@@ -1267,7 +1267,7 @@ inline SetRelev numberToSetRelev(uint64_t num) {
     return SetRelev(relev,id,tmpid,count,reason,idx,true);
 }
 
-double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets) {
+double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets, std::vector<unsigned short> & groups) {
     double total = queryLength;
     double max_relevance = 0;
     unsigned short max_checkmask = 0;
@@ -1284,10 +1284,9 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets) {
         unsigned short checkmask = 0;
         unsigned short querymask = 0;
         unsigned short tally = 0;
-        signed short lastdb = -1;
-
-        std::map<unsigned short,unsigned short> reason2db;
-        std::map<unsigned short,unsigned short>::iterator rit;
+        signed short lastgroup = -1;
+        signed short lastreason = -1;
+        signed short laststart = 0;
 
         // Mark parts of the set that will not be considered due
         // to `a` offset in the checkmask.
@@ -1298,29 +1297,42 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets) {
         // For each set, score its correspondence with the query
         for (unsigned short i = a; i < sets_size; i++) {
             auto & set = sets[i];
-            rit = reason2db.find(set.reason);
 
             // Each db may contribute a distinct matching reason to the final
             // relev. If this entry is for a db that has already contributed
             // but without the same reason mark it as false.
-            if (lastdb == set.idx) {
+            if (lastgroup == groups[set.idx] && lastreason != set.reason) {
                 checkmask += 1<<i;
                 continue;
             }
 
             unsigned short usage = 0;
             unsigned short count = set.count;
+            bool laststart_set = false;
 
-            for (unsigned j = 0; j < queryLength; j++) {
+            for (unsigned j = laststart; j < queryLength; j++) {
                 if (
                     // make sure this term has not already been counted for
                     // relevance. Uses a bitmask to mark positions counted.
-                    !(querymask & (1<<j)) &&
+                    ((querymask & (1<<j)) == 0) &&
                     // if this term matches the reason bitmask for relevance
-                    (1 << j & set.reason)
+                    ((set.reason & (1<<j)) != 0)
                 ) {
                     ++usage;
                     ++tally;
+                    // store the position of the first bit of the querymask
+                    // for the current matching term. The next matching term
+                    // may not match parts prior to this in the query.
+                    //
+                    // stack: a b c
+                    // query: a b c === relev 1
+                    //
+                    // stack: a b c
+                    // query: c a b === relev 0.66 (once a has matched, don't seek backwards to match c)
+                    if (!laststart_set) {
+                        laststart = j;
+                        laststart_set = true;
+                    }
                     // 'check off' this term of the query so that it isn't
                     // double-counted against a different `sets` reason.
                     querymask += 1<<j;
@@ -1335,11 +1347,10 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets) {
             // increment the total relevance score.
             if (usage > 0) {
                 relevance += (set.relev * (usage / total));
-                reason2db.emplace(set.reason, set.idx);
-                if (lastdb >= 0) gappy += (std::abs(set.idx - lastdb) - 1);
-                lastdb = set.idx;
-                if (tally == queryLength) break;
-            } else {
+                if (lastgroup >= 0) gappy += (std::abs(groups[set.idx] - lastgroup) - 1);
+                lastgroup = groups[set.idx];
+                lastreason = set.reason;
+            } else if (lastreason != set.reason) {
                 checkmask += 1<<i;
             }
         }
@@ -1372,10 +1383,13 @@ NAN_METHOD(Cache::setRelevance) {
     if (!args[1]->IsArray()) {
         return NanThrowTypeError("second arg must be a sets array");
     }
+    if (!args[2]->IsArray()) {
+        return NanThrowTypeError("third arg must be a group mapping array");
+    }
 
     uint64_t queryLength = args[0]->NumberValue();
-    std::vector<SetRelev> sets;
 
+    std::vector<SetRelev> sets;
     Local<Array> array = Local<Array>::Cast(args[1]);
     sets.reserve(array->Length());
     for (unsigned short i = 0; i < array->Length(); i++) {
@@ -1383,7 +1397,15 @@ NAN_METHOD(Cache::setRelevance) {
         sets.emplace_back(numberToSetRelev(num));
     }
 
-    double relevance = _setRelevance(queryLength, sets);
+    std::vector<unsigned short> groups;
+    Local<Array> groupsArray = Local<Array>::Cast(args[2]);
+    groups.reserve(groupsArray->Length());
+    for (unsigned short i = 0; i < groupsArray->Length(); i++) {
+        unsigned short num = groupsArray->Get(i)->NumberValue();
+        groups.emplace_back(num);
+    }
+
+    double relevance = _setRelevance(queryLength, sets, groups);
 
     std::size_t size = sets.size();
     Local<Array> setsArray = NanNew<Array>();
@@ -1408,6 +1430,7 @@ struct SpatialMatchBaton : carmen::noncopyable {
     v8::Persistent<v8::Function> callback;
     std::map<uint64_t,uint64_t> featnums;
     std::vector<Cache::intarray> grids;
+    std::vector<unsigned short> groups;
     Cache::intarray zooms;
     // return
     std::map<uint64_t,uint64_t> sets;
@@ -1447,6 +1470,7 @@ void _spatialMatch(uv_work_t* req) {
     unsigned short queryLength = baton->queryLength;
     std::vector<Cache::intarray> & grids = baton->grids;
     Cache::intarray const& zooms = baton->zooms;
+    std::vector<unsigned short> & groups = baton->groups;
 
     CoalesceZooms ret;
     _coalesceZooms(ret, grids, zooms);
@@ -1464,7 +1488,6 @@ void _spatialMatch(uv_work_t* req) {
     std::map<uint64_t,SetRelev>::iterator rit;
 
     for (auto const& item : coalesced) {
-        signed int pushed = -1;
         kit = keys.find(item.first);
         std::string key = kit->second;
         dit = done.find(key);
@@ -1486,8 +1509,11 @@ void _spatialMatch(uv_work_t* req) {
             }
         }
         std::sort(rows.begin(), rows.end(), sortRelevReason);
-        double relev = _setRelevance(queryLength, rows);
+        double relev = _setRelevance(queryLength, rows, groups);
         std::size_t rows_size = rows.size();
+
+        signed int lastgroup = -1;
+
         for (unsigned short i = 0; i < rows_size; i++) {
             auto & row = rows[i];
             // Add setRelev to sets.
@@ -1496,27 +1522,22 @@ void _spatialMatch(uv_work_t* req) {
                 sets.emplace(row.tmpid, setRelevToNumber(row));
             }
 
-            // Don't use results after the topmost index in the stack.
-            if (pushed != -1 && pushed != row.idx) {
-                continue;
-            }
+            // Push results from the top index group.
+            if (lastgroup == -1 || lastgroup == groups[row.idx]) {
+                // Clone setRelev from row.
+                SetRelev setRelev = std::move(row);
+                setRelev.relev = relev;
 
-            // Clone setRelev from row.
-            SetRelev setRelev = std::move(row);
-            setRelev.relev = relev;
-
-            pushed = setRelev.idx;
-            rit = rowMemo.find(setRelev.tmpid);
-            if (rit != rowMemo.end()) {
-                if (rit->second.relev > relev) {
-                    continue;
+                lastgroup = groups[setRelev.idx];
+                rit = rowMemo.find(setRelev.tmpid);
+                if (rit != rowMemo.end()) {
+                    if (rit->second.relev > relev) {
+                        continue;
+                    }
+                    rit->second = std::move(setRelev);
+                } else {
+                    rowMemo.emplace(setRelev.tmpid, std::move(setRelev));
                 }
-                // @TODO apply addrmod
-                // if (rit->second.relev > relev + addrmod[row.dbid])
-                rit->second = std::move(setRelev);
-            } else {
-                rowMemo.emplace(setRelev.tmpid, std::move(setRelev));
-                // @TODO apply addrmod
             }
         }
     }
@@ -1592,8 +1613,11 @@ NAN_METHOD(Cache::spatialMatch) {
     if (!args[3]->IsArray()) {
         return NanThrowTypeError("fourth arg must be an array of zoom integers");
     }
-    if (!args[4]->IsFunction()) {
-        return NanThrowTypeError("fifth arg must be a callback function");
+    if (!args[4]->IsArray()) {
+        return NanThrowTypeError("fifth arg must be an array of group integers");
+    }
+    if (!args[5]->IsFunction()) {
+        return NanThrowTypeError("sixth arg must be a callback function");
     }
 
     SpatialMatchBaton *baton = new SpatialMatchBaton();
@@ -1622,8 +1646,16 @@ NAN_METHOD(Cache::spatialMatch) {
     // zooms
     baton->zooms = arrayToVector(Local<Array>::Cast(args[3]));
 
+    // groups
+    Local<Array> groupsArray = Local<Array>::Cast(args[4]);
+    baton->groups.reserve(groupsArray->Length());
+    for (unsigned short i = 0; i < groupsArray->Length(); i++) {
+        unsigned short num = groupsArray->Get(i)->NumberValue();
+        baton->groups.emplace_back(num);
+    }
+
     // callback
-    Local<Value> callback = args[4];
+    Local<Value> callback = args[5];
     baton->queryLength = queryLength;
     baton->request.data = baton;
     NanAssignPersistent(baton->callback, callback.As<Function>());
