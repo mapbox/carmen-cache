@@ -1,7 +1,7 @@
 {
   "name": "carmen-cache",
   "description": "C++ protobuf cache used by carmen",
-  "version": "0.2.0-many",
+  "version": "0.2.0-groups",
   "url": "http://github.com/mapbox/carmen-cache",
   "author": "Mapbox (https://www.mapbox.com)",
   "license": "BSD",
