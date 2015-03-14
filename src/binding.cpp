@@ -1301,8 +1301,10 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets, s
             // Each db may contribute a distinct matching reason to the final
             // relev. If this entry is for a db that has already contributed
             // but without the same reason mark it as false.
-            if (lastgroup == groups[set.idx] && lastreason != set.reason) {
-                checkmask += 1<<i;
+            if (lastgroup == groups[set.idx]) {
+                if (lastreason != set.reason) {
+                    checkmask += 1<<i;
+                }
                 continue;
             }
 
