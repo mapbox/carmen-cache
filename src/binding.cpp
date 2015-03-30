@@ -173,7 +173,7 @@ NAN_METHOD(Cache::pack)
         carmen::proto::object message;
         if (itr != mem.end()) {
             for (auto const& item : itr->second) {
-                ::carmen::proto::object_item * new_item = message.add_items(); 
+                ::carmen::proto::object_item * new_item = message.add_items();
                 new_item->set_key(item.first);
                 Cache::intarray const & varr = item.second;
                 for (auto const& vitem : varr) {
@@ -761,7 +761,7 @@ NAN_METHOD(Cache::phrasematchDegens)
     }
 
     phrasematchDegensBaton *baton = new phrasematchDegensBaton();
- 
+
     // convert v8 results array into nested std::map
     Local<Array> resultsArray = Local<Array>::Cast(args[0]);
     baton->results.reserve(resultsArray->Length());
@@ -896,6 +896,7 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
         }
 
         double relev = 0;
+        double relevPenalty = 0;
         unsigned short count = 0;
         unsigned short reason = 0;
         unsigned short chardist = 0;
@@ -933,23 +934,23 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
             // Compare the current termmask against the previous
             // termmask shifted by 1. Ensures that this term is
             // contiguous in the query with the previously relevant
-            // term.
+            // term. If it is not continuous, a penalty is added
             //
             // 0000010001 << previous term mask
             // 0000100010 << previous term mask << 1
             // 0000100000 << current term mask
-            if (relev == 0 || (termmask & (lastmask << 1))) {
-                relev += phrase[i] % 16;
-                reason = reason | termmask;
-                chardist += termdist;
-                lastidx = termidx;
-                lastmask = termmask;
-                count++;
+            if (count != 0 && !(termmask & (lastmask << 1))) {
+                relevPenalty += 0.10;
             }
+            relev += phrase[i] % 16;
+            reason = reason | termmask;
+            chardist += termdist;
+            lastidx = termidx;
+            lastmask = termmask;
+            count++;
         }
-
         // get relev back to float-land.
-        relev = relev / total;
+        relev = relev / total - relevPenalty;
         relev = (relev > 0.99 ? 1 : relev) - (chardist * 0.01);
 
         if (relev > max_relev) {
