@@ -897,11 +897,10 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
 
         double relev = 0;
         double relevPenalty = 0;
+        double relevPenaltyTmp = 0;
         unsigned short count = 0;
         unsigned short reason = 0;
         unsigned short chardist = 0;
-        signed short lastidx = -1;
-        signed short lastmask = -1;
 
         // relev each feature:
         // - across all feature synonyms, find the max relev of the sum
@@ -915,39 +914,32 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
             std::map<std::uint64_t,std::uint64_t>::iterator it;
             it = baton->querymask.find(term);
 
-            // Short circuit
             if (it == baton->querymask.end()) {
-                if (relev != 0) {
-                    break;
-                } else {
-                    continue;
+                relevPenaltyTmp += 0.10;
+            } else {
+                if (relevPenaltyTmp > 0) {
+                    relevPenalty += relevPenaltyTmp;
+                    relevPenaltyTmp = 0;
                 }
-            }
 
-            it = baton->queryidx.find(term);
-            unsigned short termidx = it->second;
-            it = baton->querymask.find(term);
-            unsigned short termmask = it->second;
-            it = baton->querydist.find(term);
-            unsigned short termdist = it->second;
+                it = baton->querymask.find(term);
+                unsigned short termmask = it->second;
+                it = baton->querydist.find(term);
+                unsigned short termdist = it->second;
 
-            // Compare the current termmask against the previous
-            // termmask shifted by 1. Ensures that this term is
-            // contiguous in the query with the previously relevant
-            // term. If it is not continuous, a penalty is added
-            //
-            // 0000010001 << previous term mask
-            // 0000100010 << previous term mask << 1
-            // 0000100000 << current term mask
-            if (count != 0 && !(termmask & (lastmask << 1))) {
-                relevPenalty += 0.10;
+                // Compare the current termmask against the previous
+                // termmask shifted by 1. Ensures that this term is
+                // contiguous in the query with the previously relevant
+                // term. If it is not continuous, a penalty is added
+                //
+                // 0000010001 << previous term mask
+                // 0000100010 << previous term mask << 1
+                // 0000100000 << current term mas
+                relev += phrase[i] % 16;
+                reason = reason | termmask;
+                chardist += termdist;
+                count++;
             }
-            relev += phrase[i] % 16;
-            reason = reason | termmask;
-            chardist += termdist;
-            lastidx = termidx;
-            lastmask = termmask;
-            count++;
         }
         // get relev back to float-land.
         relev = relev / total - relevPenalty;

@@ -114,8 +114,8 @@ tape('#phrasematchPhraseRelev (query: "a a c b", phrase: "a b")', function(asser
             id: 1,
             idx: 0,
             tmpid: 1,
-            reason: 3,
-            count: 1,
+            reason: 11,
+            count: 2,
             relev: 0.5806451612903226,
             check: true
         });
@@ -124,3 +124,27 @@ tape('#phrasematchPhraseRelev (query: "a a c b", phrase: "a b")', function(asser
 });
 
 
+tape('#phrasematchPhraseRelev (query: "a c", phrase: "a b c")', function(assert) {
+    var cache = new Cache('a', 0);
+    var phrases = [ 1 ];
+
+    //Position of terms in index
+    var queryidx = { 10000: 0, 30000: 1 };
+    var querymask = { 10000: 1, 2000: 0, 30000: 1 << 2 };
+    var querydist = { 10000: 0, 30000: 0 };
+    cache._set('phrase', 0, 1, [10009,20009,30009]);
+    cache.phrasematchPhraseRelev(phrases, queryidx, querymask, querydist, function(err, result) {
+        assert.ifError(err);
+        assert.deepEqual(result.result, [1]);
+        assert.deepEqual(new Relev(result.relevs['1']), {
+            id: 1,
+            idx: 0,
+            tmpid: 1,
+            reason: 5,
+            count: 2,
+            relev: 0.5483870967741935,
+            check: true
+        });
+        assert.end();
+    });
+});
