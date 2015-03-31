@@ -141,7 +141,7 @@ tape('#phrasematchPhraseRelev (query: "a c", phrase: "a b c")', function(assert)
             tmpid: 1,
             reason: 5,
             count: 2,
-            relev: 0.5483870967741935,
+            relev: 0.6451612903225806,
             check: true
         });
         assert.end();
