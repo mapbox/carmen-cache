@@ -934,6 +934,10 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
                 it = baton->querydist.find(term);
                 unsigned short termdist = it->second;
 
+                //If there is gap between the current termmask
+                // and the last termmask then it means that the query
+                //has extra input ie: Query(a d c)  to find (a b c)
+                //This adds a penalty to these gaps
                 if (lastmask < termmask && lastmask != 0) {
                     while (!(termmask & (lastmask << 1))) {
                         relevPenalty += 0.10;
