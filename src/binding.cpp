@@ -173,7 +173,7 @@ NAN_METHOD(Cache::pack)
         carmen::proto::object message;
         if (itr != mem.end()) {
             for (auto const& item : itr->second) {
-                ::carmen::proto::object_item * new_item = message.add_items(); 
+                ::carmen::proto::object_item * new_item = message.add_items();
                 new_item->set_key(item.first);
                 Cache::intarray const & varr = item.second;
                 for (auto const& vitem : varr) {
@@ -761,7 +761,7 @@ NAN_METHOD(Cache::phrasematchDegens)
     }
 
     phrasematchDegensBaton *baton = new phrasematchDegensBaton();
- 
+
     // convert v8 results array into nested std::map
     Local<Array> resultsArray = Local<Array>::Cast(args[0]);
     baton->results.reserve(resultsArray->Length());
@@ -896,11 +896,12 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
         }
 
         double relev = 0;
+        double relevPenalty = 0;
+        unsigned short relevPenaltyCount = 0;
         unsigned short count = 0;
         unsigned short reason = 0;
         unsigned short chardist = 0;
-        signed short lastidx = -1;
-        signed short lastmask = -1;
+        signed short lastmask = 0;
 
         // relev each feature:
         // - across all feature synonyms, find the max relev of the sum
@@ -914,43 +915,47 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
             std::map<std::uint64_t,std::uint64_t>::iterator it;
             it = baton->querymask.find(term);
 
-            // Short circuit
-            if (it == baton->querymask.end()) {
-                if (relev != 0) {
-                    break;
-                } else {
-                    continue;
+            //If query is missing term, add a relevPenalty
+            //This penalty is only added if a token in the query
+            //matches further along in the query.
+            //This allows Query(a c) to find (a b c) (penalty 0.10, count 2)
+            //and Query(a d) to find (a b c) (penalty 0, count 1)
+            if (relev != 0 && it == baton->querymask.end()) {
+                relevPenaltyCount++;
+            } else {
+                if (relevPenaltyCount > 0) {
+                    relevPenalty += relevPenaltyCount * 0.01;
+                    lastmask = lastmask << relevPenaltyCount;
+                    relevPenaltyCount = 0;
                 }
-            }
 
-            it = baton->queryidx.find(term);
-            unsigned short termidx = it->second;
-            it = baton->querymask.find(term);
-            unsigned short termmask = it->second;
-            it = baton->querydist.find(term);
-            unsigned short termdist = it->second;
+                it = baton->querymask.find(term);
+                unsigned short termmask = it->second;
+                it = baton->querydist.find(term);
+                unsigned short termdist = it->second;
 
-            // Compare the current termmask against the previous
-            // termmask shifted by 1. Ensures that this term is
-            // contiguous in the query with the previously relevant
-            // term.
-            //
-            // 0000010001 << previous term mask
-            // 0000100010 << previous term mask << 1
-            // 0000100000 << current term mask
-            if (relev == 0 || (termmask & (lastmask << 1))) {
+                //If there is gap between the current termmask
+                // and the last termmask then it means that the query
+                //has extra input ie: Query(a d c)  to find (a b c)
+                //This adds a penalty to these gaps
+                if (lastmask < termmask && lastmask != 0) {
+                    while (!(termmask & (lastmask << 1))) {
+                        relevPenalty += 0.10;
+                        lastmask = lastmask << 1;
+                    }
+                }
+
                 relev += phrase[i] % 16;
                 reason = reason | termmask;
                 chardist += termdist;
-                lastidx = termidx;
                 lastmask = termmask;
                 count++;
             }
         }
-
         // get relev back to float-land.
-        relev = relev / total;
+        relev = relev / total - relevPenalty;
         relev = (relev > 0.99 ? 1 : relev) - (chardist * 0.01);
+        if (relev < 0) relev = 0;
 
         if (relev > max_relev) {
             max_relev = relev;
