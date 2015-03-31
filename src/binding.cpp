@@ -897,11 +897,11 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
 
         double relev = 0;
         double relevPenalty = 0;
-        double relevPenaltyTmp = 0;
+        unsigned short relevPenaltyCount = 0;
         unsigned short count = 0;
         unsigned short reason = 0;
         unsigned short chardist = 0;
-        signed short lastmask = -1;
+        signed short lastmask = 0;
 
         // relev each feature:
         // - across all feature synonyms, find the max relev of the sum
@@ -921,12 +921,12 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
             //This allows Query(a c) to find (a b c) (penalty 0.10, count 2)
             //and Query(a d) to find (a b c) (penalty 0, count 1)
             if (relev != 0 && it == baton->querymask.end()) {
-                relevPenaltyTmp += 0.10;
-                lastmask = lastmask << 1;
+                relevPenaltyCount++;
             } else {
-                if (relevPenaltyTmp > 0) {
-                    relevPenalty += relevPenaltyTmp;
-                    relevPenaltyTmp = 0;
+                if (relevPenaltyCount > 0) {
+                    relevPenalty += relevPenaltyCount * 0.10;
+                    lastmask = lastmask << relevPenaltyCount;
+                    relevPenaltyCount = 0;
                 }
 
                 it = baton->querymask.find(term);
@@ -934,7 +934,7 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
                 it = baton->querydist.find(term);
                 unsigned short termdist = it->second;
 
-                if (lastmask > 0) {
+                if (lastmask < termmask && lastmask != 0) {
                     while (!(termmask & (lastmask << 1))) {
                         relevPenalty += 0.10;
                         lastmask = lastmask << 1;
