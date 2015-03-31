@@ -901,6 +901,7 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
         unsigned short count = 0;
         unsigned short reason = 0;
         unsigned short chardist = 0;
+        signed short lastmask = -1;
 
         // relev each feature:
         // - across all feature synonyms, find the max relev of the sum
@@ -914,8 +915,14 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
             std::map<std::uint64_t,std::uint64_t>::iterator it;
             it = baton->querymask.find(term);
 
-            if (it == baton->querymask.end()) {
+            //If query is missing term, add a relevPenalty
+            //This penalty is only added if a token in the query
+            //matches further along in the query.
+            //This allows Query(a c) to find (a b c) (penalty 0.10, count 2)
+            //and Query(a d) to find (a b c) (penalty 0, count 1)
+            if (relev != 0 && it == baton->querymask.end()) {
                 relevPenaltyTmp += 0.10;
+                lastmask = lastmask << 1;
             } else {
                 if (relevPenaltyTmp > 0) {
                     relevPenalty += relevPenaltyTmp;
@@ -927,17 +934,17 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
                 it = baton->querydist.find(term);
                 unsigned short termdist = it->second;
 
-                // Compare the current termmask against the previous
-                // termmask shifted by 1. Ensures that this term is
-                // contiguous in the query with the previously relevant
-                // term. If it is not continuous, a penalty is added
-                //
-                // 0000010001 << previous term mask
-                // 0000100010 << previous term mask << 1
-                // 0000100000 << current term mas
+                if (lastmask > 0) {
+                    while (!(termmask & (lastmask << 1))) {
+                        relevPenalty += 0.10;
+                        lastmask = lastmask << 1;
+                    }
+                }
+
                 relev += phrase[i] % 16;
                 reason = reason | termmask;
                 chardist += termdist;
+                lastmask = termmask;
                 count++;
             }
         }

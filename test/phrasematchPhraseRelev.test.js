@@ -116,13 +116,12 @@ tape('#phrasematchPhraseRelev (query: "a a c b", phrase: "a b")', function(asser
             tmpid: 1,
             reason: 11,
             count: 2,
-            relev: 0.5806451612903226,
+            relev: 0.8709677419354839,
             check: true
         });
         assert.end();
     });
 });
-
 
 tape('#phrasematchPhraseRelev (query: "a c", phrase: "a b c")', function(assert) {
     var cache = new Cache('a', 0);
