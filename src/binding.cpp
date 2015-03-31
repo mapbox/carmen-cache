@@ -924,7 +924,7 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
                 relevPenaltyCount++;
             } else {
                 if (relevPenaltyCount > 0) {
-                    relevPenalty += relevPenaltyCount * 0.10;
+                    relevPenalty += relevPenaltyCount * 0.01;
                     lastmask = lastmask << relevPenaltyCount;
                     relevPenaltyCount = 0;
                 }
