@@ -814,14 +814,17 @@ public:
 //reason = 12 bits
 //* 1 bit gap
 //id = 32 bits
+const uint64_t POW2_52 = std::pow(2,52);
 const uint64_t POW2_48 = std::pow(2,48);
 const uint64_t POW2_45 = std::pow(2,45);
 const uint64_t POW2_33 = std::pow(2,33);
 const uint64_t POW2_32 = std::pow(2,32);
+const uint64_t POW2_28 = std::pow(2,28);
 const uint64_t POW2_25 = std::pow(2,25);
 const uint64_t POW2_12 = std::pow(2,12);
 const uint64_t POW2_8 = std::pow(2,8);
 const uint64_t POW2_5 = std::pow(2,5);
+const uint64_t POW2_4 = std::pow(2,4);
 const uint64_t POW2_3 = std::pow(2,3);
 uint64_t phraseRelevToNumber(PhraseRelev const& pr) {
     uint64_t num;
@@ -864,6 +867,9 @@ struct phrasematchPhraseRelevBaton : carmen::noncopyable {
     std::map<std::uint64_t,std::uint64_t> querydist;
 };
 
+bool isDataTerm(uint64_t num) {
+    return num >= POW2_32;
+}
 bool sortPhraseRelev(PhraseRelev const& a, PhraseRelev const& b) {
     return a.id < b.id;
 }
@@ -909,13 +915,29 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
         // - for the max relev also store the 'reason' -- the index of
         //   each query token that contributed to its relev.
         for (unsigned short i = 0; i < size; i++) {
-            uint64_t term = phrase[i] >> 4 << 4;
-
             std::map<std::uint64_t,std::uint64_t>::iterator it;
-            it = baton->querymask.find(term);
+            uint64_t term = phrase[i] >> 4 << 4;
+            uint64_t matched = 0;
+
+            if (isDataTerm(phrase[i])) {
+                uint32_t min = std::floor((phrase[i]%POW2_28)/POW2_8);
+                uint32_t max = std::floor((phrase[i]%POW2_52)/POW2_28);
+                for (auto const& pair : baton->querymask) {
+                    uint32_t termnum = pair.first >> 4;
+                    if (termnum >= min && termnum <= max) {
+                        matched = pair.first;
+                        break;
+                    }
+                }
+            } else {
+                it = baton->querymask.find(term);
+                if (it != baton->querymask.end()) {
+                    matched = term;
+                }
+            }
 
             // Short circuit
-            if (it == baton->querymask.end()) {
+            if (matched == 0) {
                 if (relev != 0) {
                     break;
                 } else {
@@ -923,11 +945,11 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
                 }
             }
 
-            it = baton->queryidx.find(term);
+            it = baton->queryidx.find(matched);
             unsigned short termidx = it->second;
-            it = baton->querymask.find(term);
+            it = baton->querymask.find(matched);
             unsigned short termmask = it->second;
-            it = baton->querydist.find(term);
+            it = baton->querydist.find(matched);
             unsigned short termdist = it->second;
 
             // Compare the current termmask against the previous
