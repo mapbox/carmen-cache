@@ -8,24 +8,37 @@ var POW2_8 = Math.pow(2,8);
 var POW2_5 = Math.pow(2,5);
 var POW2_3 = Math.pow(2,3);
 
-// Prototype for relevance relevd rows of Carmen.search.
-// Defined to take advantage of V8 class performance.
-module.exports = function Relev(num) {
+module.exports = Relev;
+module.exports.encode = encode;
+
+/**
+ * Relev - Prototype for relevance relevd rows of Carmen.search.
+ *         Defined to take advantage of V8 class performance.
+ *
+ * @param  {Integer} num Relevence Integer
+ */
+function Relev(num) {
     this.id = num % POW2_25;
     this.idx = (num / POW2_25 | 0) % POW2_8;
-    this.tmpid = (this.idx * 1e8) + this.id;
+    this.tmpid = (this.idx * POW2_25) + this.id;
     this.reason = (num / POW2_33 | 0) % POW2_12;
     this.count = (num / POW2_45 | 0) % POW2_3;
     this.relev = ((num / POW2_48 | 0) % POW2_5) / (POW2_5-1);
     this.check = true;
-};
+}
 
-module.exports.encode = function(r) {
+
+/**
+ * encode - Encodes a Relev object into a relevence ID
+ *
+ * @param  {Relev}   r  A Relev object
+ * @return {Integer}    Returns a Relevence Integer
+ */
+function encode(r) {
     var relev = Math.floor(r.relev * (POW2_5-1));
     return (relev * POW2_48) +
         (r.count * POW2_45) +
         (r.reason * POW2_33) +
         (r.idx * POW2_25) +
         (r.id);
-};
-
+}
