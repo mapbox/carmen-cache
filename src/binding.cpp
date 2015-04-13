@@ -1106,7 +1106,7 @@ void _coalesceZooms(CoalesceZooms & ret, std::vector<Cache::intarray> & grids, C
         std::size_t zoom_cache_size = zoom_cache.size();
         std::size_t grid_size = grid.size();
         for (unsigned i = 0; i < grid_size; i++) {
-            uint64_t tmpid = h * 1e8 + (grid[i] % yd);
+            uint32_t tmpid = (h * POW2_25) + (grid[i] % yd);
             uint64_t x = std::floor(grid[i]/xd);
             uint64_t y = std::floor(grid[i]%xd/yd);
             uint64_t zxy = (z * mp2_28) + (x * mp2_14) + y;
@@ -1193,14 +1193,14 @@ class SetRelev : carmen::noncopyable {
 public:
     double relev;
     uint64_t id;
-    uint64_t tmpid;
+    uint32_t tmpid;
     unsigned short count;
     unsigned short reason;
     unsigned short idx;
     bool check;
     SetRelev(double _relev,
              uint64_t _id,
-             uint64_t _tmpid,
+             uint32_t _tmpid,
              unsigned short _count,
              unsigned short _reason,
              unsigned short _idx,
@@ -1260,7 +1260,7 @@ uint64_t setRelevToNumber(SetRelev const& setRelev) {
 inline SetRelev numberToSetRelev(uint64_t num) {
     uint64_t id = num % POW2_25;
     unsigned short idx = (num >> 25) % POW2_8;
-    uint64_t tmpid = (idx * 1e8) + id;
+    uint32_t tmpid = (idx * POW2_25) + id;
     unsigned short reason = (num >> 33) % POW2_12;
     unsigned short count = (num >> 45) % POW2_3;
     double relev = ((num >> 48) % POW2_5) / ((double)POW2_5-1);
