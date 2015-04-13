@@ -22,43 +22,38 @@ test('unit', function(assert) {
         1: Relev.encode({
             id: 1,
             idx: 0,
-            tmpid: 1,
             reason: 8,
             count: 1,
             relev: 1,
             check: true
         }),
-        100000001: Relev.encode({
+        33554433: Relev.encode({
             id: 1,
             idx: 1,
-            tmpid: 100000001,
             reason: 8,
             count: 1,
             relev: 1,
             check: true
         }),
-        100000002: Relev.encode({
+        33554434: Relev.encode({
             id: 2,
             idx: 1,
-            tmpid: 100000002,
             reason: 4,
             count: 1,
             relev: 1,
             check: true
         }),
-        200000001: Relev.encode({
+        67108865: Relev.encode({
             id: 1,
             idx: 2,
-            tmpid: 200000001,
             reason: 3,
             count: 2,
             relev: 1,
             check: true
         }),
-        200000002: Relev.encode({
+        67108866: Relev.encode({
             id: 2,
             idx: 2,
-            tmpid: 200000002,
             reason: 3,
             count: 2,
             relev: 1,
@@ -86,22 +81,22 @@ test('unit', function(assert) {
         assert.ifError(err);
         assert.deepEqual(ret.sets, {
             1: feat['1'],
-            100000001: feat['100000001'],
-            100000002: feat['100000002'],
-            200000001: feat['200000001'],
-            200000002: feat['200000002']
+            33554433: feat['33554433'],
+            33554434: feat['33554434'],
+            67108865: feat['67108865'],
+            67108866: feat['67108866']
         });
-        assert.deepEqual(ret.results, [ feat['200000002'] ]);
+        assert.deepEqual(ret.results, [ feat['67108866'] ]);
         assert.deepEqual(ret.coalesced, {
             1611137056: [
                 1,
-                100000001,
-                200000001
+                33554433,
+                67108865
             ],
             1611153440: [
                 1,
-                100000002,
-                200000002
+                33554434,
+                67108866
             ]
         });
         assert.end();
@@ -111,19 +106,17 @@ test('unit', function(assert) {
 test('tied-top', function(assert) {
     var queryLength = 2;
     var feat = {
-        100000001: Relev.encode({
+        33554433: Relev.encode({
             id: 1,
             idx: 1,
-            tmpid: 100000001,
             reason: 1,
             count: 1,
             relev: 1,
             check: true
         }),
-        100000002: Relev.encode({
+        33554434: Relev.encode({
             id: 2,
             idx: 1,
-            tmpid: 100000002,
             reason: 1,
             count: 1,
             relev: 1,
@@ -155,15 +148,15 @@ test('tied-top', function(assert) {
         assert.ifError(err);
         assert.deepEqual(ret.sets, {
             1: feat['1'],
-            100000001: feat['100000001'],
-            100000002: feat['100000002']
+            33554433: feat['33554433'],
+            33554434: feat['33554434']
         });
-        assert.deepEqual(ret.results, [ feat['100000001'], feat['100000002'] ]);
+        assert.deepEqual(ret.results, [ feat['33554433'], feat['33554434'] ]);
         assert.deepEqual(ret.coalesced, {
             1611137056: [
                 1,
-                100000001,
-                100000002
+                33554433,
+                33554434
             ]
         });
         assert.end();
@@ -173,19 +166,17 @@ test('tied-top', function(assert) {
 test('tied-multitop', function(assert) {
     var queryLength = 2;
     var feat = {
-        100000001: Relev.encode({
+        33554433: Relev.encode({
             id: 1,
             idx: 1,
-            tmpid: 100000001,
             reason: 1,
             count: 1,
             relev: 1,
             check: true
         }),
-        200000001: Relev.encode({
+        67108865: Relev.encode({
             id: 1,
             idx: 2,
-            tmpid: 200000002,
             reason: 1,
             count: 1,
             relev: 1,
@@ -194,7 +185,6 @@ test('tied-multitop', function(assert) {
         1: Relev.encode({
             id: 1,
             idx: 0,
-            tmpid: 1,
             reason: 2,
             count: 1,
             relev: 1,
@@ -219,34 +209,19 @@ test('tied-multitop', function(assert) {
         assert.ifError(err);
         assert.deepEqual(ret.sets, {
             1: feat['1'],
-            100000001: feat['100000001'],
-            200000001: feat['200000001']
+            33554433: feat['33554433'],
+            67108865: feat['67108865']
         });
         // Ideally should surface features from both idx 1 + idx 2 as
         // they have maximum relevance score for the same reason/count.
-        assert.deepEqual(ret.results, [ feat['100000001'], feat['200000001'] ]);
+        assert.deepEqual(ret.results, [ feat['33554433'], feat['67108865'] ]);
         assert.deepEqual(ret.coalesced, {
             1611137056: [
                 1,
-                100000001,
-                200000001
+                33554433,
+                67108865
             ]
         });
-        assert.end();
-    });
-});
-
-test('real', function(assert) {
-    var args = require('./fixtures/spatialMatch-real-args.json');
-    spatialMatch(args[0], args[1], args[2], args[3], [0,1,2,3,4,5], function(err, ret) {
-        assert.ifError(err);
-        if (process.env.UPDATE) {
-            require('fs').writeFileSync(__dirname + '/fixtures/spatialMatch-real-ret.json', JSON.stringify(ret, null, 2));
-        }
-        var expected = require('./fixtures/spatialMatch-real-ret.json');
-        assert.deepEqual(ret.coalesced, expected.coalesced);
-        assert.deepEqual(ret.sets, expected.sets);
-        assert.deepEqual(ret.results.length, expected.results.length);
         assert.end();
     });
 });
