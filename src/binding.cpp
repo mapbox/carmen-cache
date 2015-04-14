@@ -898,6 +898,7 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
         double relev = 0;
         unsigned short count = 0;
         unsigned short reason = 0;
+        unsigned short counter = 0;
         unsigned short chardist = 0;
         signed short lastidx = -1;
         signed short lastmask = -1;
@@ -944,7 +945,10 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
                 chardist += termdist;
                 lastidx = termidx;
                 lastmask = termmask;
-                count++;
+                if ((counter & (1 << termidx)) == 0) {
+                    count++;
+                    counter = counter | (1 << termidx);
+                }
             }
         }
 
