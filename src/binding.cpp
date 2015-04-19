@@ -898,7 +898,8 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
         // Get total relev score of phrase.
         unsigned short total = 0;
         for (unsigned short i = 0; i < size; i++) {
-            total += phrase[i] % 16;
+            unsigned short weight = std::floor((phrase[i] % 16)/4)+1;
+            total += weight;
         }
 
         double relev = 0;
@@ -962,9 +963,9 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
             // 0000100010 << previous term mask << 1
             // 0000100000 << current term mask
             if (relev == 0 || (termmask & (lastmask << 1))) {
-                relev += phrase[i] % 16;
+                unsigned short weight = std::floor((phrase[i] % 16)/4)+1;
+                relev += weight;
                 reason = reason | termmask;
-                chardist += termdist;
                 lastidx = termidx;
                 lastmask = termmask;
                 if ((counter & (1 << termidx)) == 0) {
@@ -976,7 +977,7 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
 
         // get relev back to float-land.
         relev = relev / total;
-        relev = (relev > 0.99 ? 1 : relev) - (chardist * 0.01);
+        relev = (relev > 0.99 ? 1 : relev); // - (chardist * 0.01);
 
         if (relev > max_relev) {
             max_relev = relev;
@@ -992,15 +993,14 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
         // printf( "%f \n", relev);
         if (relev >= 0.5) {
             allPhrases.emplace_back(id,count,relev,reason);
-            if (relev > 0.75) {
-                relevantPhrases.emplace_back(id,count,relev,reason);
-            }
         }
     }
 
     // Reduces the relevance bar to 0.50 since all results have identical relevance values
-    if (min_relev == max_relev) {
-        relevantPhrases = std::move(allPhrases);
+    for (unsigned short i = 0; i < allPhrases.size(); i++) {
+        if (allPhrases[i].relev >= (max_relev - 0.25)) {
+            relevantPhrases.emplace_back(allPhrases[i].id,allPhrases[i].count,allPhrases[i].relev,allPhrases[i].reason);
+        }
     }
 
     std::sort(relevantPhrases.begin(), relevantPhrases.end(), sortPhraseRelev);
@@ -1579,7 +1579,7 @@ void _spatialMatch(uv_work_t* req) {
     double lastRelev = 0;
     std::vector<uint64_t> results;
     for (auto const& s : sorted) {
-        if (lastRelev == 0 || lastRelev - s.relev < 0.1) {
+        if (lastRelev == 0 || lastRelev - s.relev < 0.25) {
             lastRelev = s.relev;
             results.emplace_back(setRelevToNumber(s));
         }
