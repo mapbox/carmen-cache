@@ -859,6 +859,7 @@ struct phrasematchPhraseRelevBaton : carmen::noncopyable {
     uv_work_t request;
     Cache* cache;
     uint64_t shardlevel;
+    uint64_t querylen;
     std::string error;
     std::vector<PhraseRelev> relevantPhrases;
     std::vector<std::uint64_t> phrases;
@@ -1036,35 +1037,40 @@ void phrasematchPhraseRelevAfter(uv_work_t* req) {
 NAN_METHOD(Cache::phrasematchPhraseRelev)
 {
     NanScope();
-    if (!args[0]->IsArray()) {
-        return NanThrowTypeError("first arg must be a results array");
+    if (!args[0]->IsNumber()) {
+        return NanThrowTypeError("first arg must be a queryLength number");
     }
-    if (!args[1]->IsObject()) {
-        return NanThrowTypeError("second arg must be a queryidx object");
+    if (!args[1]->IsArray()) {
+        return NanThrowTypeError("second arg must be a results array");
     }
     if (!args[2]->IsObject()) {
-        return NanThrowTypeError("third arg must be a querymask object");
+        return NanThrowTypeError("third arg must be a queryidx object");
     }
     if (!args[3]->IsObject()) {
-        return NanThrowTypeError("fourth arg must be a querydist object");
+        return NanThrowTypeError("fourth arg must be a querymask object");
     }
-    if (!args[4]->IsFunction()) {
-        return NanThrowTypeError("fifth arg must be a callback");
+    if (!args[4]->IsObject()) {
+        return NanThrowTypeError("fifth arg must be a querydist object");
+    }
+    if (!args[5]->IsFunction()) {
+        return NanThrowTypeError("sixth arg must be a callback");
     }
 
     uint64_t shardlevel = args.This()->Get(NanNew("shardlevel"))->NumberValue();
-    Cache::intarray phrases = arrayToVector(Local<Array>::Cast(args[0]));
-    std::map<std::uint64_t,std::uint64_t> queryidx = objectToMap(Local<Object>::Cast(args[1]));
-    std::map<std::uint64_t,std::uint64_t> querymask = objectToMap(Local<Object>::Cast(args[2]));
-    std::map<std::uint64_t,std::uint64_t> querydist = objectToMap(Local<Object>::Cast(args[3]));
+    uint64_t querylen = args[0]->NumberValue();
+    Cache::intarray phrases = arrayToVector(Local<Array>::Cast(args[1]));
+    std::map<std::uint64_t,std::uint64_t> queryidx = objectToMap(Local<Object>::Cast(args[2]));
+    std::map<std::uint64_t,std::uint64_t> querymask = objectToMap(Local<Object>::Cast(args[3]));
+    std::map<std::uint64_t,std::uint64_t> querydist = objectToMap(Local<Object>::Cast(args[4]));
     Cache* cache = node::ObjectWrap::Unwrap<Cache>(args.This());
 
     // callback
-    Local<Value> callback = args[4];
+    Local<Value> callback = args[5];
     phrasematchPhraseRelevBaton *baton = new phrasematchPhraseRelevBaton();
     baton->shardlevel = shardlevel;
     baton->cache = cache;
     baton->phrases = std::move(phrases);
+    baton->querylen = std::move(querylen);
     baton->queryidx = std::move(queryidx);
     baton->querymask = std::move(querymask);
     baton->querydist = std::move(querydist);

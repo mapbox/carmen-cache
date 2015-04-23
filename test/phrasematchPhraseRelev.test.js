@@ -21,7 +21,7 @@ tape('#phrasematchPhraseRelev', function(assert) {
     };
     cache._set('phrase', 0, 1, [10009,20006]);
     cache._set('phrase', 0, 2, [20013,30002]);
-    cache.phrasematchPhraseRelev(phrases, queryidx, querymask, querydist, function(err, result) {
+    cache.phrasematchPhraseRelev(2, phrases, queryidx, querymask, querydist, function(err, result) {
         assert.ifError(err);
         assert.deepEqual(result, {
             result: [ 1, 2 ],
@@ -63,7 +63,7 @@ tape('#phrasematchPhraseRelev', function(assert) {
     };
     cache._set('phrase', 0, 1, [10009,20006]);
     cache._set('phrase', 0, 2, [20013,30002]);
-    cache.phrasematchPhraseRelev(phrases, queryidx, querymask, querydist, function(err, result) {
+    cache.phrasematchPhraseRelev(2, phrases, queryidx, querymask, querydist, function(err, result) {
         assert.ifError(err);
         assert.deepEqual(result, {
             result: [ 1, 2 ],
@@ -99,7 +99,7 @@ tape('#phrasematchPhraseRelev (query: "100 a b", phrase: "[1-100] a b")', functi
         10009,
         20006
     ]);
-    cache.phrasematchPhraseRelev(phrases, queryidx, querymask, querydist, function(err, result) {
+    cache.phrasematchPhraseRelev(3, phrases, queryidx, querymask, querydist, function(err, result) {
         assert.ifError(err);
         assert.deepEqual(result.result, [1]);
         assert.deepEqual(new Relev(result.relevs['1']), {
@@ -125,7 +125,7 @@ tape('#phrasematchPhraseRelev (query: "100 a", phrase: "[1-100] 100")', function
         dataterm.encodeData({type:'range',min:1,max:100}),
         1615
     ]);
-    cache.phrasematchPhraseRelev(phrases, queryidx, querymask, querydist, function(err, result) {
+    cache.phrasematchPhraseRelev(3, phrases, queryidx, querymask, querydist, function(err, result) {
         assert.ifError(err);
         assert.deepEqual(result.result, [1]);
         assert.deepEqual(new Relev(result.relevs['1']), {
@@ -153,7 +153,7 @@ tape('#phrasematchPhraseRelev (query: "110 a b", phrase: "[1-100] a b")', functi
         10009,
         20006
     ]);
-    cache.phrasematchPhraseRelev(phrases, queryidx, querymask, querydist, function(err, result) {
+    cache.phrasematchPhraseRelev(3, phrases, queryidx, querymask, querydist, function(err, result) {
         assert.ifError(err);
         assert.deepEqual(result.result, [1]);
         assert.deepEqual(new Relev(result.relevs['1']), {
@@ -176,7 +176,7 @@ tape('#phrasematchPhraseRelev (query: "a a b", phrase: "a b")', function(assert)
     var querymask = { 10000: (1 << 0) + (1 << 1), 20000: 1 << 2 };
     var querydist = { 10000: 0, 20000: 0 };
     cache._set('phrase', 0, 1, [10009,20006]);
-    cache.phrasematchPhraseRelev(phrases, queryidx, querymask, querydist, function(err, result) {
+    cache.phrasematchPhraseRelev(3, phrases, queryidx, querymask, querydist, function(err, result) {
         assert.ifError(err);
         assert.deepEqual(result.result, [1]);
         assert.deepEqual(new Relev(result.relevs['1']), {
@@ -199,7 +199,7 @@ tape('#phrasematchPhraseRelev (query: "a a c b", phrase: "a b")', function(asser
     var querymask = { 10000: (1 << 0) + (1 << 1), 20000: 1 << 3 };
     var querydist = { 10000: 0, 20000: 0 };
     cache._set('phrase', 0, 1, [10009,20006]);
-    cache.phrasematchPhraseRelev(phrases, queryidx, querymask, querydist, function(err, result) {
+    cache.phrasematchPhraseRelev(4, phrases, queryidx, querymask, querydist, function(err, result) {
         assert.ifError(err);
         assert.deepEqual(result.result, [1]);
         assert.deepEqual(new Relev(result.relevs['1']), {
