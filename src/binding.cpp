@@ -702,7 +702,7 @@ void _phrasematchDegens(uv_work_t* req) {
         std::vector<std::uint64_t> & degens = baton->results[idx];
         std::sort(degens.begin(), degens.end(), sortDegens);
         std::size_t degens_size = degens.size();
-        for (std::size_t i = 0; i < degens_size && i < 10; i++) {
+        for (std::size_t i = 0; i < degens_size && i < 30; i++) {
             uint64_t term = degens[i] >> 4 << 4;
             terms.emplace_back(term);
 
@@ -859,7 +859,7 @@ struct phrasematchPhraseRelevBaton : carmen::noncopyable {
     uv_work_t request;
     Cache* cache;
     uint64_t shardlevel;
-    uint64_t querylen;
+    unsigned short querylen;
     std::string error;
     std::vector<PhraseRelev> relevantPhrases;
     std::vector<std::uint64_t> phrases;
@@ -896,14 +896,8 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
 
         unsigned short size = phrase.size();
 
-        // Get total relev score of phrase.
-        unsigned short total = 0;
-        for (unsigned short i = 0; i < size; i++) {
-            unsigned short weight = std::floor((phrase[i] % 16)/4)+1;
-            total += weight;
-        }
-
         double relev = 0;
+        unsigned short total = 0;
         unsigned short count = 0;
         unsigned short reason = 0;
         unsigned short counter = 0;
@@ -939,13 +933,16 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
                 }
             }
 
-            // Short circuit
+            // Get total relev score of phrase.
+            unsigned short weight = 0;
+            if (i < baton->querylen) {
+                weight = std::floor((phrase[i] % 16)/4)+1;
+                total += weight;
+            }
+
+            // This is effectively a short circuit.
             if (matched == 0) {
-                if (relev != 0) {
-                    break;
-                } else {
-                    continue;
-                }
+                continue;
             }
 
             it = baton->queryidx.find(matched);
@@ -964,7 +961,6 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
             // 0000100010 << previous term mask << 1
             // 0000100000 << current term mask
             if (relev == 0 || (termmask & (lastmask << 1))) {
-                unsigned short weight = std::floor((phrase[i] % 16)/4)+1;
                 relev += weight;
                 reason = reason | termmask;
                 lastidx = termidx;
@@ -1057,7 +1053,7 @@ NAN_METHOD(Cache::phrasematchPhraseRelev)
     }
 
     uint64_t shardlevel = args.This()->Get(NanNew("shardlevel"))->NumberValue();
-    uint64_t querylen = args[0]->NumberValue();
+    unsigned short querylen = args[0]->NumberValue();
     Cache::intarray phrases = arrayToVector(Local<Array>::Cast(args[1]));
     std::map<std::uint64_t,std::uint64_t> queryidx = objectToMap(Local<Object>::Cast(args[2]));
     std::map<std::uint64_t,std::uint64_t> querymask = objectToMap(Local<Object>::Cast(args[3]));
@@ -1070,7 +1066,7 @@ NAN_METHOD(Cache::phrasematchPhraseRelev)
     baton->shardlevel = shardlevel;
     baton->cache = cache;
     baton->phrases = std::move(phrases);
-    baton->querylen = std::move(querylen);
+    baton->querylen = querylen;
     baton->queryidx = std::move(queryidx);
     baton->querymask = std::move(querymask);
     baton->querydist = std::move(querydist);
