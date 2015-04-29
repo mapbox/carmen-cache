@@ -898,6 +898,7 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
 
         double relev = 0;
         unsigned short total = 0;
+        unsigned short totalCount = 0;
         unsigned short count = 0;
         unsigned short reason = 0;
         unsigned short counter = 0;
@@ -938,6 +939,7 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
             if (i < baton->querylen) {
                 weight = std::floor((phrase[i] % 16)/4)+1;
                 total += weight;
+                totalCount++;
             }
 
             // This is effectively a short circuit.
@@ -975,6 +977,13 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
         // get relev back to float-land.
         relev = relev / total;
         relev = (relev > 0.99 ? 1 : relev); // - (chardist * 0.01);
+
+        // if totalCount < size, terms from the phrase were excluded
+        // from the total weight assuming autocomplete is in play.
+        // penalize the relev accordingly.
+        if (totalCount < size) {
+            relev = relev - 0.01;
+        }
 
         if (relev > max_relev) {
             max_relev = relev;
@@ -1387,7 +1396,7 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets, s
 
         // Penalize relevance slightly based on whether query matches contained
         // "gaps" in continuity between index levels.
-        relevance -= 0.01 * gappy;
+        relevance -= 0.001 * gappy;
         relevance = relevance > 0 ? relevance : 0;
 
         if (relevance > max_relevance) {

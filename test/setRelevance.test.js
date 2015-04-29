@@ -20,7 +20,7 @@ test('setRelevance', function(t) {
         Relev.encode({ id: 3553, relev: 1, reason: 2, count: 1, idx: 1 })
     ], [0,1,2]));
     // Relev penalized for 2 of 2 terms, but with a gap in db index.
-    t.deepEqual({ relevance: 0.99, sets:[
+    t.deepEqual({ relevance: 0.999, sets:[
         Relev.encode({ id: 130305, relev: 1, reason: 1, count: 1, idx: 3 }),
         Relev.encode({ id: 3553, relev: 1, reason: 2, count: 1, idx: 1 })
     ]}, setRelevance(2, [
