@@ -900,7 +900,6 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
         unsigned short total = 0;
         unsigned short count = 0;
         unsigned short reason = 0;
-        unsigned short counter = 0;
         unsigned short chardist = 0;
         signed short lastidx = -1;
         signed short lastmask = -1;
@@ -965,10 +964,7 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
                 reason = reason | termmask;
                 lastidx = termidx;
                 lastmask = termmask;
-                if ((counter & (1 << termidx)) == 0) {
-                    count++;
-                    counter = counter | (1 << termidx);
-                }
+                count++;
             }
         }
 
@@ -1388,7 +1384,6 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets, s
         }
 
         // Bonus when multiple features have stacked: +0.01
-        relevance -= 0.01;
         relevance += 0.01 * stacky;
         // Penalize stacking bonus slightly based on whether stacking matches
         // contained "gaps" in continuity between index levels.
