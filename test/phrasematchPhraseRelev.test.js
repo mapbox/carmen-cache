@@ -219,6 +219,29 @@ tape('#phrasematchPhraseRelev (query: "a a b", phrase: "a b")', function(assert)
     });
 });
 
+tape('#phrasematchPhraseRelev (query: "a a", phrase: "a a")', function(assert) {
+    var cache = new Cache('a', 0);
+    var phrases = [ 1 ];
+    var queryidx = { 10000: 0 };
+    var querymask = { 10000: (1 << 0) + (1 << 1) };
+    var querydist = { 10000: 0 };
+    cache._set('phrase', 0, 1, [10015,10015]);
+    cache.phrasematchPhraseRelev(2, phrases, queryidx, querymask, querydist, function(err, result) {
+        assert.ifError(err);
+        assert.deepEqual(result.result, [1]);
+        assert.deepEqual(new Relev(result.relevs['1']), {
+            id: 1,
+            idx: 0,
+            tmpid: 1,
+            reason: parseInt('11',2),
+            count: 2,
+            relev: 1,
+            check: true
+        });
+        assert.end();
+    });
+});
+
 tape('#phrasematchPhraseRelev (query: "a a c b", phrase: "a b")', function(assert) {
     var cache = new Cache('a', 0);
     var phrases = [ 1 ];
