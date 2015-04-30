@@ -1384,6 +1384,7 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets, s
         }
 
         // Bonus when multiple features have stacked: +0.01
+        relevance -= 0.01;
         relevance += 0.01 * stacky;
         // Penalize stacking bonus slightly based on whether stacking matches
         // contained "gaps" in continuity between index levels.
