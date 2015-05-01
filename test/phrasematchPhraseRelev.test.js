@@ -169,12 +169,12 @@ tape('#phrasematchPhraseRelev (query: "100 a", phrase: "[1-100] 100")', function
 });
 
 
-tape('#phrasematchPhraseRelev (query: "110 a b", phrase: "[1-100] a b")', function(assert) {
+tape('#phrasematchPhraseRelev (query: "510 a b", phrase: "[1-100] a b")', function(assert) {
     var cache = new Cache('a', 0);
     var phrases = [ 1 ];
-    var queryidx = { 1760: 0, 10000: 1, 20000: 2 };
-    var querymask = { 1760: 1 << 0, 10000: 1 << 1, 20000: 1 << 2 };
-    var querydist = { 1760: 0, 10000: 0, 20000: 0 };
+    var queryidx = { 8160: 0, 10000: 1, 20000: 2 };
+    var querymask = { 8160: 1 << 0, 10000: 1 << 1, 20000: 1 << 2 };
+    var querydist = { 8160: 0, 10000: 0, 20000: 0 };
     cache._set('phrase', 0, 1, [
         dataterm.encodeData({type:'range',min:1,max:100}),
         10009,

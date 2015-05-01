@@ -918,6 +918,11 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
             if (isDataTerm(phrase[i])) {
                 uint32_t min = std::floor((phrase[i]%POW2_28)/POW2_8);
                 uint32_t max = std::floor((phrase[i]%POW2_52)/POW2_28);
+
+                // Include carmen +/- 400 swing range
+                min = min < 400 ? 0 : min - 400;
+                max = max + 400;
+
                 for (auto const& pair : baton->querymask) {
                     uint32_t termnum = pair.first >> 4;
                     if (termnum >= min && termnum <= max) {
