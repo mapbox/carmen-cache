@@ -930,12 +930,13 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
                 // e.g.
                 //   phrase: [1-100] 15 st
                 //   query:  1 15 st
-                signed short matched_idx_dist = 1000;
+                unsigned short matched_idx_dist = 1000;
                 for (auto const& pair : baton->queryidx) {
                     uint32_t termnum = pair.first >> 4;
-                    if (termnum >= min && termnum <= max && std::abs(i-pair.second) < matched_idx_dist) {
+                    signed short idx_dist = i - pair.second;
+                    if (termnum >= min && termnum <= max && std::abs(idx_dist) < matched_idx_dist) {
                         matched = pair.first;
-                        matched_idx_dist = std::abs(i-pair.second);
+                        matched_idx_dist = std::abs(idx_dist);
                     }
                 }
             } else {
