@@ -115,6 +115,62 @@ tape('#phrasematchPhraseRelev (query: "100 a b", phrase: "[1-100] a b")', functi
     });
 });
 
+tape('#phrasematchPhraseRelev (query: "100 1 a b", phrase: "[1-100] 1 a b")', function(assert) {
+    var cache = new Cache('a', 0);
+    var phrases = [ 1 ];
+    var queryidx = { 1600: 0, 16: 1, 10000: 2, 20000: 3 };
+    var querymask = { 1600: 1 << 0, 16: 1 << 1, 10000: 1 << 2, 20000: 1 << 3 };
+    var querydist = { 1600: 0, 16: 0, 10000: 0, 20000: 0 };
+    cache._set('phrase', 0, 1, [
+        dataterm.encodeData({type:'range',min:1,max:100}),
+        16,
+        10009,
+        20006
+    ]);
+    cache.phrasematchPhraseRelev(4, phrases, queryidx, querymask, querydist, function(err, result) {
+        assert.ifError(err);
+        assert.deepEqual(result.result, [1]);
+        assert.deepEqual(new Relev(result.relevs['1']), {
+            id: 1,
+            idx: 0,
+            tmpid: 1,
+            reason: parseInt('1111', 2),
+            count: 4,
+            relev: 1,
+            check: true
+        });
+        assert.end();
+    });
+});
+
+tape('#phrasematchPhraseRelev (query: "1 a b 100", phrase: "1 a b [1-100]")', function(assert) {
+    var cache = new Cache('a', 0);
+    var phrases = [ 1 ];
+    var queryidx = { 1600: 3, 16: 0, 10000: 1, 20000: 2 };
+    var querymask = { 1600: 1 << 3, 16: 1 << 0, 10000: 1 << 1, 20000: 1 << 2 };
+    var querydist = { 1600: 0, 16: 0, 10000: 0, 20000: 0 };
+    cache._set('phrase', 0, 1, [
+        16,
+        10009,
+        20006,
+        dataterm.encodeData({type:'range',min:1,max:100}),
+    ]);
+    cache.phrasematchPhraseRelev(4, phrases, queryidx, querymask, querydist, function(err, result) {
+        assert.ifError(err);
+        assert.deepEqual(result.result, [1]);
+        assert.deepEqual(new Relev(result.relevs['1']), {
+            id: 1,
+            idx: 0,
+            tmpid: 1,
+            reason: parseInt('1111', 2),
+            count: 4,
+            relev: 1,
+            check: true
+        });
+        assert.end();
+    });
+});
+
 tape('#phrasematchPhraseRelev (query: "100 a", phrase: "[1-100] a b")', function(assert) {
     var cache = new Cache('a', 0);
     var phrases = [ 1 ];

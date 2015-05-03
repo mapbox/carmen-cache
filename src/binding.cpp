@@ -923,11 +923,19 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
                 min = min < 400 ? 0 : min - 400;
                 max = max + 400;
 
-                for (auto const& pair : baton->querymask) {
+                // Iterate through all query terms to see if any
+                // fall into dataterm range. If multiple terms fall
+                // into the dataterm range, choose the one that is
+                // closest in query term position to phrase term position.
+                // e.g.
+                //   phrase: [1-100] 15 st
+                //   query:  1 15 st
+                signed short matched_idx_dist = 1000;
+                for (auto const& pair : baton->queryidx) {
                     uint32_t termnum = pair.first >> 4;
-                    if (termnum >= min && termnum <= max) {
+                    if (termnum >= min && termnum <= max && std::abs(i-pair.second) < matched_idx_dist) {
                         matched = pair.first;
-                        break;
+                        matched_idx_dist = std::abs(i-pair.second);
                     }
                 }
             } else {
