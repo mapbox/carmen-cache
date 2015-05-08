@@ -5,9 +5,13 @@
   "url": "http://github.com/mapbox/carmen-cache",
   "author": "Mapbox (https://www.mapbox.com)",
   "license": "BSD",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/mapbox/carmen-cache.git"
+  },
   "dependencies": {
-    "nan": "1.4.1",
-    "node-pre-gyp": "0.5.x"
+    "nan": "~1.8.4",
+    "node-pre-gyp": "~0.6.7"
   },
   "bundledDependencies": [
     "node-pre-gyp"
@@ -26,8 +30,5 @@
     "host": "https://mapbox-node-binary.s3.amazonaws.com",
     "remote_path": "./{name}/v{version}",
     "package_name": "{node_abi}-{platform}-{arch}.tar.gz"
-  },
-  "engines": {
-    "node": "0.8.x || 0.10.x"
   }
 }
