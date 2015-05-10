@@ -124,40 +124,30 @@ test('setRelevance', function(t) {
     // a b a pattern
     // merrick rd merrick
     stack = [
-        Relev.encode({ id: 1, relev: 1, reason: 5, count: 1, idx: 1 }),
-        Relev.encode({ id: 2, relev: 1, reason: 7, count: 2, idx: 2 }), // merrick rd
+        Relev.encode({ id: 1, relev: 1, reason: 5, count: 1, idx: 0 }),
+        Relev.encode({ id: 1, relev: 1, reason: 7, count: 2, idx: 1 }), // merrick rd
     ];
-    t.deepEqual(setRelevance(2, stack, [0,1,2]), {
+    t.deepEqual(setRelevance(3, stack, [0,1]), {
         relevance: 1,
         sets: [ stack[0], stack[1] ]
-    }, 'elements from the same idx with different reasons are removed');
+    }, 'merrick rd merrick');
 
     stack = [
-        Relev.encode({ id: 31316076, idx: 17, tmpid: 1731316076, reason: 14, count: 2, relev: 1, check: true }),
-        Relev.encode({ id: 14563122, idx: 16, tmpid: 1614563122, reason: 14, count: 2, relev: 1, check: true }),
-        Relev.encode({ id: 20696639, idx: 4, tmpid: 420696639, reason: 1, count: 1, relev: 1, check: true })
+        Relev.encode({ id: 2064953, idx: 2, tmpid: 2202064953, reason: parseInt('111',2), count: 2, relev: 1, check: true }),
+        Relev.encode({ id: 18537894, idx: 1, tmpid: 2118537894, reason: parseInt('111',2), count: 2, relev: 1, check: true }),
+        Relev.encode({ id: 11566, idx: 0, tmpid: 1400011566, reason: parseInt('101',2), count: 1, relev: 1, check: true }),
     ];
-    t.deepEqual(setRelevance(4, stack, [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17]), {
-        relevance: 0.75,
-        sets: [ stack[0], stack[1] ]
-    }, 'elements with an early reason cannot seek backwards to match an earlier term');
-
-    stack = [
-        Relev.encode({ id: 2064953, idx: 2, tmpid: 2202064953, reason: 14, count: 2, relev: 1, check: true }),
-        Relev.encode({ id: 18537894, idx: 1, tmpid: 2118537894, reason: 14, count: 2, relev: 1, check: true }),
-        Relev.encode({ id: 11566, idx: 0, tmpid: 1400011566, reason: 10, count: 1, relev: 1, check: true }),
-    ];
-    t.deepEqual(setRelevance(4, stack, [0,1,1]), {
-        relevance: 0.75,
+    t.deepEqual(setRelevance(3, stack, [0,1,1]), {
+        relevance: 1.0,
         sets: stack.slice(0,3)
-    }, 'real: merrick rd merrick (with city)');
+    }, 'real:merric rd merrick (with city) - elements with an early reason cannot seek backwards to match an earlier term');
 
     stack = [
-        Relev.encode({ id: 2064953, idx: 2, tmpid: 2202064953, reason: 14, count: 2, relev: 1, check: true }),
-        Relev.encode({ id: 18537894, idx: 1, tmpid: 2118537894, reason: 14, count: 2, relev: 1, check: true }),
+        Relev.encode({ id: 2064953, idx: 2, tmpid: 2202064953, reason: parseInt('111',2), count: 2, relev: 1, check: true }),
+        Relev.encode({ id: 18537894, idx: 1, tmpid: 2118537894, reason: parseInt('111',2), count: 2, relev: 1, check: true }),
     ];
-    t.deepEqual(setRelevance(4, stack, [0,1,1]), {
-        relevance: 0.49,
+    t.deepEqual(setRelevance(3, stack, [0,1,1]), {
+        relevance: 0.6566666666666666,
         sets: stack.slice(0,2)
     }, 'real: merrick rd merrick (no city)');
 
