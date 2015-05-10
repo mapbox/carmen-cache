@@ -1386,7 +1386,7 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets, s
 
             // If this relevant criteria matched any terms in the query,
             // increment the total relevance score.
-            if (usage > 0) {
+            if (usage > 0 && count == 0) {
                 relevance += (set.relev * (usage / total));
                 if (lastgroup > -1) stacky = 1;
                 if (lastgroup >= 0) gappy += (std::abs(groups[set.idx] - lastgroup) - 1);

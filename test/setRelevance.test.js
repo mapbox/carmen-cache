@@ -151,5 +151,14 @@ test('setRelevance', function(t) {
         sets: stack.slice(0,2)
     }, 'real: merrick rd merrick (no city)');
 
+    stack = [
+        Relev.encode({ id: 1, idx: 1, tmpid: 2, reason: 1, count: 1, relev: 1, check: true }),
+        Relev.encode({ id: 1, idx: 0, tmpid: 1, reason: 7, count: 3, relev: 1, check: true }),
+    ];
+    t.deepEqual(setRelevance(3, stack, [0,1]), {
+        relevance: 0.99,
+        sets: stack.slice(1,2)
+    }, 'query: trinidad and tobago, stack: trinidad, trinidad and tobago');
+
     t.end();
 });
