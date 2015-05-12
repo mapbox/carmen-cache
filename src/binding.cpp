@@ -949,7 +949,7 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
             // Get total relev score of phrase.
             unsigned short weight = 0;
             if (i < baton->querylen) {
-                weight = std::floor((phrase[i] % 16)/4)+1;
+                weight = (phrase[i] % 16) + 1;
                 total += weight;
             }
 
@@ -985,6 +985,7 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
         // get relev back to float-land.
         relev = relev / total;
         relev = (relev > 0.99 ? 1 : relev); // - (chardist * 0.01);
+        relev = std::round(relev * 5) / 5;
 
         if (relev > max_relev) {
             max_relev = relev;

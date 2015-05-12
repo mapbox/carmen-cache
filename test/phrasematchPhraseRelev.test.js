@@ -245,7 +245,7 @@ tape('#phrasematchPhraseRelev (query: "510 a b", phrase: "[1-100] a b")', functi
             tmpid: 1,
             reason: parseInt('110', 2),
             count: 2,
-            relev: 0.8064516129032258,
+            relev: 1,
             check: true
         });
         assert.end();
