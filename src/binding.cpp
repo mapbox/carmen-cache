@@ -702,7 +702,7 @@ void _phrasematchDegens(uv_work_t* req) {
         std::vector<std::uint64_t> & degens = baton->results[idx];
         std::sort(degens.begin(), degens.end(), sortDegens);
         std::size_t degens_size = degens.size();
-        for (std::size_t i = 0; i < degens_size && i < 10; i++) {
+        for (std::size_t i = 0; i < degens_size && i < 30; i++) {
             uint64_t term = degens[i] >> 4 << 4;
             terms.emplace_back(term);
 
@@ -814,14 +814,17 @@ public:
 //reason = 12 bits
 //* 1 bit gap
 //id = 32 bits
+const uint64_t POW2_52 = std::pow(2,52);
 const uint64_t POW2_48 = std::pow(2,48);
 const uint64_t POW2_45 = std::pow(2,45);
 const uint64_t POW2_33 = std::pow(2,33);
 const uint64_t POW2_32 = std::pow(2,32);
+const uint64_t POW2_28 = std::pow(2,28);
 const uint64_t POW2_25 = std::pow(2,25);
 const uint64_t POW2_12 = std::pow(2,12);
 const uint64_t POW2_8 = std::pow(2,8);
 const uint64_t POW2_5 = std::pow(2,5);
+const uint64_t POW2_4 = std::pow(2,4);
 const uint64_t POW2_3 = std::pow(2,3);
 uint64_t phraseRelevToNumber(PhraseRelev const& pr) {
     uint64_t num;
@@ -856,6 +859,7 @@ struct phrasematchPhraseRelevBaton : carmen::noncopyable {
     uv_work_t request;
     Cache* cache;
     uint64_t shardlevel;
+    unsigned short querylen;
     std::string error;
     std::vector<PhraseRelev> relevantPhrases;
     std::vector<std::uint64_t> phrases;
@@ -864,6 +868,9 @@ struct phrasematchPhraseRelevBaton : carmen::noncopyable {
     std::map<std::uint64_t,std::uint64_t> querydist;
 };
 
+bool isDataTerm(uint64_t num) {
+    return num >= POW2_32;
+}
 bool sortPhraseRelev(PhraseRelev const& a, PhraseRelev const& b) {
     return a.id < b.id;
 }
@@ -889,13 +896,8 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
 
         unsigned short size = phrase.size();
 
-        // Get total relev score of phrase.
-        unsigned short total = 0;
-        for (unsigned short i = 0; i < size; i++) {
-            total += phrase[i] % 16;
-        }
-
         double relev = 0;
+        unsigned short total = 0;
         unsigned short count = 0;
         unsigned short reason = 0;
         unsigned short chardist = 0;
@@ -909,25 +911,58 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
         // - for the max relev also store the 'reason' -- the index of
         //   each query token that contributed to its relev.
         for (unsigned short i = 0; i < size; i++) {
-            uint64_t term = phrase[i] >> 4 << 4;
-
             std::map<std::uint64_t,std::uint64_t>::iterator it;
-            it = baton->querymask.find(term);
+            uint64_t term = phrase[i] >> 4 << 4;
+            uint64_t matched = 0;
 
-            // Short circuit
-            if (it == baton->querymask.end()) {
-                if (relev != 0) {
-                    break;
-                } else {
-                    continue;
+            if (isDataTerm(phrase[i])) {
+                uint32_t min = std::floor((phrase[i]%POW2_28)/POW2_8);
+                uint32_t max = std::floor((phrase[i]%POW2_52)/POW2_28);
+
+                // Include carmen +/- 400 swing range
+                min = min < 400 ? 0 : min - 400;
+                max = max + 400;
+
+                // Iterate through all query terms to see if any
+                // fall into dataterm range. If multiple terms fall
+                // into the dataterm range, choose the one that is
+                // closest in query term position to phrase term position.
+                // e.g.
+                //   phrase: [1-100] 15 st
+                //   query:  1 15 st
+                unsigned short matched_idx_dist = 1000;
+                for (auto const& pair : baton->queryidx) {
+                    uint32_t termnum = pair.first >> 4;
+                    signed short idx_dist = i - pair.second;
+                    if (termnum >= min && termnum <= max && std::abs(idx_dist) < matched_idx_dist) {
+                        matched = pair.first;
+                        matched_idx_dist = std::abs(idx_dist);
+                    }
+                }
+            } else {
+                it = baton->querymask.find(term);
+                if (it != baton->querymask.end()) {
+                    matched = term;
                 }
             }
 
-            it = baton->queryidx.find(term);
+            // Get total relev score of phrase.
+            unsigned short weight = 0;
+            if (i < baton->querylen) {
+                weight = (phrase[i] % 16) + 1;
+                total += weight;
+            }
+
+            // This is effectively a short circuit.
+            if (matched == 0) {
+                continue;
+            }
+
+            it = baton->queryidx.find(matched);
             unsigned short termidx = it->second;
-            it = baton->querymask.find(term);
+            it = baton->querymask.find(matched);
             unsigned short termmask = it->second;
-            it = baton->querydist.find(term);
+            it = baton->querydist.find(matched);
             unsigned short termdist = it->second;
 
             // Compare the current termmask against the previous
@@ -939,9 +974,8 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
             // 0000100010 << previous term mask << 1
             // 0000100000 << current term mask
             if (relev == 0 || (termmask & (lastmask << 1))) {
-                relev += phrase[i] % 16;
+                relev += weight;
                 reason = reason | termmask;
-                chardist += termdist;
                 lastidx = termidx;
                 lastmask = termmask;
                 count++;
@@ -950,7 +984,8 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
 
         // get relev back to float-land.
         relev = relev / total;
-        relev = (relev > 0.99 ? 1 : relev) - (chardist * 0.01);
+        relev = (relev > 0.99 ? 1 : relev); // - (chardist * 0.01);
+        relev = std::round(relev * 5) / 5;
 
         if (relev > max_relev) {
             max_relev = relev;
@@ -966,15 +1001,14 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
         // printf( "%f \n", relev);
         if (relev >= 0.5) {
             allPhrases.emplace_back(id,count,relev,reason);
-            if (relev > 0.75) {
-                relevantPhrases.emplace_back(id,count,relev,reason);
-            }
         }
     }
 
     // Reduces the relevance bar to 0.50 since all results have identical relevance values
-    if (min_relev == max_relev) {
-        relevantPhrases = std::move(allPhrases);
+    for (unsigned short i = 0; i < allPhrases.size(); i++) {
+        if (allPhrases[i].relev >= (max_relev - 0.25)) {
+            relevantPhrases.emplace_back(allPhrases[i].id,allPhrases[i].count,allPhrases[i].relev,allPhrases[i].reason);
+        }
     }
 
     std::sort(relevantPhrases.begin(), relevantPhrases.end(), sortPhraseRelev);
@@ -1010,35 +1044,40 @@ void phrasematchPhraseRelevAfter(uv_work_t* req) {
 NAN_METHOD(Cache::phrasematchPhraseRelev)
 {
     NanScope();
-    if (!args[0]->IsArray()) {
-        return NanThrowTypeError("first arg must be a results array");
+    if (!args[0]->IsNumber()) {
+        return NanThrowTypeError("first arg must be a queryLength number");
     }
-    if (!args[1]->IsObject()) {
-        return NanThrowTypeError("second arg must be a queryidx object");
+    if (!args[1]->IsArray()) {
+        return NanThrowTypeError("second arg must be a results array");
     }
     if (!args[2]->IsObject()) {
-        return NanThrowTypeError("third arg must be a querymask object");
+        return NanThrowTypeError("third arg must be a queryidx object");
     }
     if (!args[3]->IsObject()) {
-        return NanThrowTypeError("fourth arg must be a querydist object");
+        return NanThrowTypeError("fourth arg must be a querymask object");
     }
-    if (!args[4]->IsFunction()) {
-        return NanThrowTypeError("fifth arg must be a callback");
+    if (!args[4]->IsObject()) {
+        return NanThrowTypeError("fifth arg must be a querydist object");
+    }
+    if (!args[5]->IsFunction()) {
+        return NanThrowTypeError("sixth arg must be a callback");
     }
 
     uint64_t shardlevel = args.This()->Get(NanNew("shardlevel"))->NumberValue();
-    Cache::intarray phrases = arrayToVector(Local<Array>::Cast(args[0]));
-    std::map<std::uint64_t,std::uint64_t> queryidx = objectToMap(Local<Object>::Cast(args[1]));
-    std::map<std::uint64_t,std::uint64_t> querymask = objectToMap(Local<Object>::Cast(args[2]));
-    std::map<std::uint64_t,std::uint64_t> querydist = objectToMap(Local<Object>::Cast(args[3]));
+    unsigned short querylen = args[0]->NumberValue();
+    Cache::intarray phrases = arrayToVector(Local<Array>::Cast(args[1]));
+    std::map<std::uint64_t,std::uint64_t> queryidx = objectToMap(Local<Object>::Cast(args[2]));
+    std::map<std::uint64_t,std::uint64_t> querymask = objectToMap(Local<Object>::Cast(args[3]));
+    std::map<std::uint64_t,std::uint64_t> querydist = objectToMap(Local<Object>::Cast(args[4]));
     Cache* cache = node::ObjectWrap::Unwrap<Cache>(args.This());
 
     // callback
-    Local<Value> callback = args[4];
+    Local<Value> callback = args[5];
     phrasematchPhraseRelevBaton *baton = new phrasematchPhraseRelevBaton();
     baton->shardlevel = shardlevel;
     baton->cache = cache;
     baton->phrases = std::move(phrases);
+    baton->querylen = querylen;
     baton->queryidx = std::move(queryidx);
     baton->querymask = std::move(querymask);
     baton->querydist = std::move(querydist);
@@ -1281,6 +1320,7 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets, s
     for (unsigned short a = 0; a < sets_size; a++) {
         double relevance = 0;
         double gappy = 0;
+        double stacky = 0;
         unsigned short checkmask = 0;
         unsigned short querymask = 0;
         unsigned short tally = 0;
@@ -1347,8 +1387,9 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets, s
 
             // If this relevant criteria matched any terms in the query,
             // increment the total relevance score.
-            if (usage > 0) {
+            if (usage > 0 && count == 0) {
                 relevance += (set.relev * (usage / total));
+                if (lastgroup > -1) stacky = 1;
                 if (lastgroup >= 0) gappy += (std::abs(groups[set.idx] - lastgroup) - 1);
                 lastgroup = groups[set.idx];
                 lastreason = set.reason;
@@ -1357,9 +1398,12 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets, s
             }
         }
 
-        // Penalize relevance slightly based on whether query matches contained
-        // "gaps" in continuity between index levels.
-        relevance -= 0.01 * gappy;
+        // Bonus when multiple features have stacked: +0.01
+        relevance -= 0.01;
+        relevance += 0.01 * stacky;
+        // Penalize stacking bonus slightly based on whether stacking matches
+        // contained "gaps" in continuity between index levels.
+        relevance -= 0.001 * gappy;
         relevance = relevance > 0 ? relevance : 0;
 
         if (relevance > max_relevance) {
@@ -1553,7 +1597,7 @@ void _spatialMatch(uv_work_t* req) {
     double lastRelev = 0;
     std::vector<uint64_t> results;
     for (auto const& s : sorted) {
-        if (lastRelev == 0 || lastRelev - s.relev < 0.1) {
+        if (lastRelev == 0 || lastRelev - s.relev < 0.25) {
             lastRelev = s.relev;
             results.emplace_back(setRelevToNumber(s));
         }
