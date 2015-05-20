@@ -881,9 +881,13 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
     phrasematchPhraseRelevBaton *baton = static_cast<phrasematchPhraseRelevBaton *>(req->data);
 
     std::string type = "phrase";
-    double max_relev = 0;
-    double min_relev = 1;
-    std::vector<PhraseRelev> allPhrases;
+    unsigned max_relev = 0;
+    std::vector<PhraseRelev> phrases0;
+    std::vector<PhraseRelev> phrases1;
+    std::vector<PhraseRelev> phrases2;
+    std::vector<PhraseRelev> phrases3;
+    std::vector<PhraseRelev> phrases4;
+    std::vector<PhraseRelev> phrases5;
     std::vector<PhraseRelev> relevantPhrases;
     std::size_t phrases_size = baton->phrases.size();
     for (uint64_t a = 0; a < phrases_size; a++) {
@@ -900,8 +904,6 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
         unsigned short total = 0;
         unsigned short count = 0;
         unsigned short reason = 0;
-        unsigned short chardist = 0;
-        signed short lastidx = -1;
         signed short lastmask = -1;
 
         // relev each feature:
@@ -937,6 +939,9 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
                     if (termnum >= min && termnum <= max && std::abs(idx_dist) < matched_idx_dist) {
                         matched = pair.first;
                         matched_idx_dist = std::abs(idx_dist);
+                        // If matched idx dist is 0, there's no term
+                        // that can have a lower dist. Break early.
+                        if (!matched_idx_dist) break;
                     }
                 }
             } else {
@@ -953,17 +958,22 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
                 total += weight;
             }
 
-            // This is effectively a short circuit.
+            // Short circuit:
+            // - If max_relev has already been determined to be 5,
+            //   missing any term matches automatically disqualifies
+            //   a phrase from the result set.
+            // - Otherwise, the term will not contribute to the relev
+            //   but phrase scoring should continue.
             if (matched == 0) {
-                continue;
+                if (max_relev == 5) {
+                    break;
+                } else {
+                    continue;
+                }
             }
 
-            it = baton->queryidx.find(matched);
-            unsigned short termidx = it->second;
             it = baton->querymask.find(matched);
             unsigned short termmask = it->second;
-            it = baton->querydist.find(matched);
-            unsigned short termdist = it->second;
 
             // Compare the current termmask against the previous
             // termmask shifted by 1. Ensures that this term is
@@ -976,7 +986,6 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
             if (relev == 0 || (termmask & (lastmask << 1))) {
                 relev += weight;
                 reason = reason | termmask;
-                lastidx = termidx;
                 lastmask = termmask;
                 count++;
             }
@@ -984,31 +993,36 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
 
         // get relev back to float-land.
         relev = relev / total;
-        relev = (relev > 0.99 ? 1 : relev); // - (chardist * 0.01);
+        relev = (relev > 0.99 ? 1 : relev);
         relev = std::round(relev * 5) / 5;
+        unsigned relevint = std::round(relev * 5);
 
-        if (relev > max_relev) {
-            max_relev = relev;
-        }
-        if (relev < min_relev) {
-            min_relev = relev;
-        }
+        if (relevint > max_relev) max_relev = relevint;
 
         // relev represents a score based on comparative term weight
         // significance alone. If it passes this threshold check it is
         // adjusted based on degenerate term character distance (e.g.
         // degens of higher distance reduce relev score).
         // printf( "%f \n", relev);
-        if (relev >= 0.5) {
-            allPhrases.emplace_back(id,count,relev,reason);
+        if (relevint == max_relev) {
+            switch (relevint) {
+                case 5: phrases5.emplace_back(id,count,relev,reason); break;
+                case 4: phrases4.emplace_back(id,count,relev,reason); break;
+                case 3: phrases3.emplace_back(id,count,relev,reason); break;
+                case 2: phrases2.emplace_back(id,count,relev,reason); break;
+                case 1: phrases1.emplace_back(id,count,relev,reason); break;
+                case 0: phrases0.emplace_back(id,count,relev,reason); break;
+            }
         }
     }
 
-    // Reduces the relevance bar to 0.50 since all results have identical relevance values
-    for (unsigned short i = 0; i < allPhrases.size(); i++) {
-        if (allPhrases[i].relev >= (max_relev - 0.25)) {
-            relevantPhrases.emplace_back(allPhrases[i].id,allPhrases[i].count,allPhrases[i].relev,allPhrases[i].reason);
-        }
+    switch (max_relev) {
+        case 5: relevantPhrases = std::move(phrases5); break;
+        case 4: relevantPhrases = std::move(phrases4); break;
+        case 3: relevantPhrases = std::move(phrases3); break;
+        case 2: relevantPhrases = std::move(phrases2); break;
+        case 1: relevantPhrases = std::move(phrases1); break;
+        case 0: relevantPhrases = std::move(phrases0); break;
     }
 
     std::sort(relevantPhrases.begin(), relevantPhrases.end(), sortPhraseRelev);

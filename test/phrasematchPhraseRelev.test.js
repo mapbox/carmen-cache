@@ -24,7 +24,7 @@ tape('#phrasematchPhraseRelev', function(assert) {
     cache.phrasematchPhraseRelev(2, phrases, queryidx, querymask, querydist, function(err, result) {
         assert.ifError(err);
         assert.deepEqual(result, {
-            result: [ 1, 2 ],
+            result: [ 1 ],
             relevs: {
                 1: Relev.encode({
                     id: 1,
@@ -32,13 +32,6 @@ tape('#phrasematchPhraseRelev', function(assert) {
                     reason: parseInt('11',2),
                     count: 2,
                     relev: 1
-                }),
-                2: Relev.encode({
-                    id: 2,
-                    idx: 0,
-                    reason: parseInt('10',2),
-                    count: 1,
-                    relev: 0.7741935483870968
                 })
             }
         });
@@ -66,7 +59,7 @@ tape('#phrasematchPhraseRelev', function(assert) {
     cache.phrasematchPhraseRelev(2, phrases, queryidx, querymask, querydist, function(err, result) {
         assert.ifError(err);
         assert.deepEqual(result, {
-            result: [ 1, 2 ],
+            result: [ 1 ],
             relevs: {
                 1: Relev.encode({
                     id: 1,
@@ -74,13 +67,6 @@ tape('#phrasematchPhraseRelev', function(assert) {
                     reason: parseInt('11',2),
                     count: 2,
                     relev: 1
-                }),
-                2: Relev.encode({
-                    id: 2,
-                    idx: 0,
-                    reason: parseInt('10',2),
-                    count: 1,
-                    relev: 0.7741935483870968
                 })
             }
         });
