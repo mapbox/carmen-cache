@@ -1319,6 +1319,7 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets, s
     //          d
     for (unsigned short a = 0; a < sets_size; a++) {
         double relevance = 0;
+        double backy = 0;
         double gappy = 0;
         double stacky = 0;
         unsigned short checkmask = 0;
@@ -1350,9 +1351,8 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets, s
 
             unsigned short usage = 0;
             unsigned short count = set.count;
-            bool laststart_set = false;
 
-            for (unsigned j = laststart; j < queryLength; j++) {
+            for (unsigned j = 0; j < queryLength; j++) {
                 if (
                     // make sure this term has not already been counted for
                     // relevance. Uses a bitmask to mark positions counted.
@@ -1362,19 +1362,20 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets, s
                 ) {
                     ++usage;
                     ++tally;
+
                     // store the position of the first bit of the querymask
                     // for the current matching term. The next matching term
-                    // may not match parts prior to this in the query.
+                    // may match parts prior to this in the query, but adds
+                    // to the backy penalty.
                     //
                     // stack: a b c
                     // query: a b c === relev 1
                     //
                     // stack: a b c
-                    // query: c a b === relev 0.66 (once a has matched, don't seek backwards to match c)
-                    if (!laststart_set) {
-                        laststart = j;
-                        laststart_set = true;
-                    }
+                    // query: c a b === relev 0.99
+                    if (j < laststart) ++backy;
+                    laststart = j;
+
                     // 'check off' this term of the query so that it isn't
                     // double-counted against a different `sets` reason.
                     querymask += 1<<j;
@@ -1401,6 +1402,8 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets, s
         // Bonus when multiple features have stacked: +0.01
         relevance -= 0.01;
         relevance += 0.01 * stacky;
+        // Penalize stacks where flow is not ordered linearly.
+        relevance -= 0.01 * backy;
         // Penalize stacking bonus slightly based on whether stacking matches
         // contained "gaps" in continuity between index levels.
         relevance -= 0.001 * gappy;
