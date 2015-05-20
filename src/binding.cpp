@@ -1006,23 +1006,23 @@ void _phrasematchPhraseRelev(uv_work_t* req) {
         // printf( "%f \n", relev);
         if (relevint == max_relev) {
             switch (relevint) {
-                case 5: phrases5.emplace_back(id,count,relev,reason);
-                case 4: phrases4.emplace_back(id,count,relev,reason);
-                case 3: phrases3.emplace_back(id,count,relev,reason);
-                case 2: phrases2.emplace_back(id,count,relev,reason);
-                case 1: phrases1.emplace_back(id,count,relev,reason);
-                case 0: phrases0.emplace_back(id,count,relev,reason);
+                case 5: phrases5.emplace_back(id,count,relev,reason); break;
+                case 4: phrases4.emplace_back(id,count,relev,reason); break;
+                case 3: phrases3.emplace_back(id,count,relev,reason); break;
+                case 2: phrases2.emplace_back(id,count,relev,reason); break;
+                case 1: phrases1.emplace_back(id,count,relev,reason); break;
+                case 0: phrases0.emplace_back(id,count,relev,reason); break;
             }
         }
     }
 
     switch (max_relev) {
-        case 5: relevantPhrases = std::move(phrases5);
-        case 4: relevantPhrases = std::move(phrases4);
-        case 3: relevantPhrases = std::move(phrases3);
-        case 2: relevantPhrases = std::move(phrases2);
-        case 1: relevantPhrases = std::move(phrases1);
-        case 0: relevantPhrases = std::move(phrases0);
+        case 5: relevantPhrases = std::move(phrases5); break;
+        case 4: relevantPhrases = std::move(phrases4); break;
+        case 3: relevantPhrases = std::move(phrases3); break;
+        case 2: relevantPhrases = std::move(phrases2); break;
+        case 1: relevantPhrases = std::move(phrases1); break;
+        case 0: relevantPhrases = std::move(phrases0); break;
     }
 
     std::sort(relevantPhrases.begin(), relevantPhrases.end(), sortPhraseRelev);
