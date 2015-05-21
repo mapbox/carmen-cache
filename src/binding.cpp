@@ -1348,11 +1348,11 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets, s
                 continue;
             }
 
+            bool backy = false;
             unsigned short usage = 0;
             unsigned short count = set.count;
-            bool laststart_set = false;
 
-            for (unsigned j = laststart; j < queryLength; j++) {
+            for (unsigned j = 0; j < queryLength; j++) {
                 if (
                     // make sure this term has not already been counted for
                     // relevance. Uses a bitmask to mark positions counted.
@@ -1362,19 +1362,20 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets, s
                 ) {
                     ++usage;
                     ++tally;
+
                     // store the position of the first bit of the querymask
                     // for the current matching term. The next matching term
-                    // may not match parts prior to this in the query.
+                    // may match parts prior to this in the query, but adds
+                    // to the backy penalty.
                     //
                     // stack: a b c
                     // query: a b c === relev 1
                     //
                     // stack: a b c
-                    // query: c a b === relev 0.66 (once a has matched, don't seek backwards to match c)
-                    if (!laststart_set) {
-                        laststart = j;
-                        laststart_set = true;
-                    }
+                    // query: c a b === relev 0.99
+                    if (j < laststart) backy = true;
+                    laststart = j;
+
                     // 'check off' this term of the query so that it isn't
                     // double-counted against a different `sets` reason.
                     querymask += 1<<j;
@@ -1388,7 +1389,11 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets, s
             // If this relevant criteria matched any terms in the query,
             // increment the total relevance score.
             if (usage > 0 && count == 0) {
-                relevance += (set.relev * (usage / total));
+                if (backy) {
+                    relevance += (set.relev * (usage / total) * 0.5);
+                } else {
+                    relevance += (set.relev * (usage / total));
+                }
                 if (lastgroup > -1) stacky = 1;
                 if (lastgroup >= 0) gappy += (std::abs(groups[set.idx] - lastgroup) - 1);
                 lastgroup = groups[set.idx];
