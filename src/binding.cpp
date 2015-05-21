@@ -1319,7 +1319,6 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets, s
     //          d
     for (unsigned short a = 0; a < sets_size; a++) {
         double relevance = 0;
-        double backy = 0;
         double gappy = 0;
         double stacky = 0;
         unsigned short checkmask = 0;
@@ -1349,6 +1348,7 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets, s
                 continue;
             }
 
+            bool backy = false;
             unsigned short usage = 0;
             unsigned short count = set.count;
 
@@ -1373,7 +1373,7 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets, s
                     //
                     // stack: a b c
                     // query: c a b === relev 0.99
-                    if (j < laststart) ++backy;
+                    if (j < laststart) backy = true;
                     laststart = j;
 
                     // 'check off' this term of the query so that it isn't
@@ -1389,7 +1389,11 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets, s
             // If this relevant criteria matched any terms in the query,
             // increment the total relevance score.
             if (usage > 0 && count == 0) {
-                relevance += (set.relev * (usage / total));
+                if (backy) {
+                    relevance += (set.relev * (usage / total) * 0.5);
+                } else {
+                    relevance += (set.relev * (usage / total));
+                }
                 if (lastgroup > -1) stacky = 1;
                 if (lastgroup >= 0) gappy += (std::abs(groups[set.idx] - lastgroup) - 1);
                 lastgroup = groups[set.idx];
@@ -1402,8 +1406,6 @@ double _setRelevance(unsigned short queryLength, std::vector<SetRelev> & sets, s
         // Bonus when multiple features have stacked: +0.01
         relevance -= 0.01;
         relevance += 0.01 * stacky;
-        // Penalize stacks where flow is not ordered linearly.
-        relevance -= 0.01 * backy;
         // Penalize stacking bonus slightly based on whether stacking matches
         // contained "gaps" in continuity between index levels.
         relevance -= 0.001 * gappy;
