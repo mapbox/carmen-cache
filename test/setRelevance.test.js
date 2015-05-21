@@ -160,5 +160,14 @@ test('setRelevance', function(t) {
         sets: stack.slice(1,2)
     }, 'query: trinidad and tobago, stack: trinidad, trinidad and tobago');
 
+    stack = [
+        Relev.encode({ id: 1, idx: 1, tmpid: 1, reason: 2, count: 1, relev: 1, check: true }),
+        Relev.encode({ id: 1, idx: 0, tmpid: 2, reason: 1, count: 1, relev: 1, check: true }),
+    ];
+    t.deepEqual(setRelevance(2, stack, [0,1]), {
+        relevance: 0.75,
+        sets: stack.slice(0,2)
+    }, 'query: b a, stack: a b (backy penalty)');
+
     t.end();
 });
