@@ -58,10 +58,7 @@ public:
     static NAN_METHOD(_get);
     static NAN_METHOD(_set);
     static NAN_METHOD(unload);
-    static NAN_METHOD(phrasematchDegens);
-    static NAN_METHOD(phrasematchPhraseRelev);
     static NAN_METHOD(coalesceZooms);
-    static NAN_METHOD(setRelevance);
     static NAN_METHOD(spatialMatch);
     static void AsyncRun(uv_work_t* req);
     static void AfterRun(uv_work_t* req);
