@@ -177,6 +177,7 @@ void Cache::Initialize(Handle<Object> target) {
     NODE_SET_PROTOTYPE_METHOD(t, "unload", unload);
     NODE_SET_METHOD(t, "coalesceZooms", coalesceZooms);
     NODE_SET_METHOD(t, "spatialMatch", spatialMatch);
+    NODE_SET_METHOD(t, "coalesce", coalesce);
     target->Set(NanNew("Cache"),t->GetFunction());
     NanAssignPersistent(constructor, t);
 }
@@ -1337,6 +1338,125 @@ NAN_METHOD(Cache::spatialMatch) {
     baton->request.data = baton;
     NanAssignPersistent(baton->callback, callback.As<Function>());
     uv_queue_work(uv_default_loop(), &baton->request, _spatialMatch, (uv_after_work_cb)spatialMatchAfter);
+    NanReturnUndefined();
+}
+
+struct PhrasematchSubq {
+    carmen::Cache *cache;
+    uint64_t phrase;
+    unsigned short idx;
+    unsigned short zoom;
+    double weight;
+};
+
+struct Cover {
+    uint32_t x;
+    uint32_t y;
+    double relev;
+    unsigned short score;
+    uint32_t id;
+    uint32_t tmpid;
+    unsigned short idx;
+};
+
+struct CoalesceBaton : carmen::noncopyable {
+    uv_work_t request;
+    // params
+    std::map<uint64_t,carmen::Cache> caches;
+    std::vector<PhrasematchSubq> stack;
+    Cache::intarray centerzxy;
+    v8::Persistent<v8::Function> callback;
+    // return
+    std::map<uint64_t,Cover> sets;
+    std::vector<Cover> features;
+};
+
+void coalesceUV(uv_work_t* req) {
+    CoalesceBaton *baton = static_cast<CoalesceBaton *>(req->data);
+    std::vector<PhrasematchSubq> stack = std::move(baton->stack);
+
+    // Cache zoom levels to iterate over as coalesce occurs.
+    Cache::intarray zoom;
+    std::vector<bool> zoomUniq;
+    std::vector<Cache::intarray> zoomCache(22);
+    std::size_t l;
+    l = stack.size();
+    for (unsigned short i = 0; i < l; i++) {
+        if (zoomUniq[stack[l].zoom]) continue;
+        zoomUniq[stack[l].zoom] = true;
+        zoom.emplace_back(stack[l].zoom);
+    }
+    l = zoom.size();
+    for (unsigned short i = 0; i < l; i++) {
+        Cache::intarray sliced;
+        sliced.reserve(i);
+        for (unsigned short j = 0; j < i; j++) {
+            sliced.emplace_back(zoom[j]);
+        }
+        std::reverse(sliced.begin(), sliced.end());
+        zoomCache[zoom[i]] = sliced;
+    }
+}
+void coalesceAfter(uv_work_t* req) {
+    NanScope();
+    CoalesceBaton *baton = static_cast<CoalesceBaton *>(req->data);
+    std::map<uint64_t,Cover> const& sets = baton->sets;
+    std::vector<Cover> const& features = baton->features;
+
+    // sets to JS obj
+    // features to JS array
+    // Local<Value> argv[2] = { NanNull(), ret };
+    Local<Object> ret = NanNew<Object>();
+
+    Local<Value> argv[2] = { NanNull(), ret };
+    NanMakeCallback(NanGetCurrentContext()->Global(), NanNew(baton->callback), 2, argv);
+    NanDisposePersistent(baton->callback);
+    delete baton;
+}
+NAN_METHOD(Cache::coalesce) {
+    NanScope();
+
+    // PhrasematchStack (js => cpp)
+    if (!args[0]->IsArray()) {
+        return NanThrowTypeError("Arg 1 must be a PhrasematchSubq array");
+    }
+    CoalesceBaton *baton = new CoalesceBaton();
+    std::vector<PhrasematchSubq> stack;
+    const Local<Array> array = Local<Array>::Cast(args[0]);
+    for (uint64_t i = 0; i < array->Length(); i++) {
+        Local<Object> jsStack = Local<Object>::Cast(array->Get(i));
+        PhrasematchSubq subq;
+        subq.idx = jsStack->Get(NanNew("idx"))->NumberValue();
+        subq.zoom = jsStack->Get(NanNew("zoom"))->NumberValue();
+        subq.weight = jsStack->Get(NanNew("weight"))->NumberValue();
+        subq.phrase = jsStack->Get(NanNew("phrase"))->NumberValue();
+
+        // JS cache reference => cpp
+        Local<Object> cache = Local<Object>::Cast(jsStack->Get(NanNew("cache")));
+        subq.cache = node::ObjectWrap::Unwrap<Cache>(cache);
+
+        stack.push_back(subq);
+    }
+
+    // Options object (js => cpp)
+    if (!args[1]->IsObject()) {
+        return NanThrowTypeError("Arg 2 must be an options object");
+    }
+    const Local<Object> options = Local<Object>::Cast(args[1]);
+    if (options->Has(NanNew("centerzxy"))) {
+        baton->centerzxy = arrayToVector(Local<Array>::Cast(options->Get(NanNew("centerzxy"))));
+    }
+
+    // callback
+    if (!args[2]->IsFunction()) {
+        return NanThrowTypeError("Arg 3 must be a callback function");
+    }
+    Local<Value> callback = args[2];
+    NanAssignPersistent(baton->callback, callback.As<Function>());
+
+    // queue work
+    baton->request.data = baton;
+    uv_queue_work(uv_default_loop(), &baton->request, coalesceUV, (uv_after_work_cb)coalesceAfter);
     NanReturnUndefined();
 }
 

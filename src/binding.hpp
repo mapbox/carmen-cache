@@ -33,8 +33,8 @@ protected:
 };
 
 class Cache: public node::ObjectWrap {
-    ~Cache();
 public:
+    ~Cache();
     typedef uint64_t int_type;
     // lazy ref item
     typedef uint64_t offset_type;
@@ -61,6 +61,7 @@ public:
     static NAN_METHOD(unload);
     static NAN_METHOD(coalesceZooms);
     static NAN_METHOD(spatialMatch);
+    static NAN_METHOD(coalesce);
     static void AsyncRun(uv_work_t* req);
     static void AfterRun(uv_work_t* req);
     Cache(std::string const& id, unsigned shardlevel);
