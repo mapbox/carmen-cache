@@ -14,6 +14,7 @@ test('coalesce args', function(assert) {
                 idx: 0,
                 zoom: 0,
                 weight: 0.5,
+                shardlevel: 1,
                 phrase: 1
             },
             {
@@ -21,6 +22,7 @@ test('coalesce args', function(assert) {
                 idx: 1,
                 zoom: 1,
                 weight: 0.5,
+                shardlevel: 1,
                 phrase: 1
             },
         ]);
@@ -43,12 +45,14 @@ test('coalesce', function(assert) {
         idx: 0,
         zoom: 0,
         weight: 0.5,
+        shardlevel: 1,
         phrase: 1
     }, {
         cache: new Cache('b', 1),
         idx: 1,
         zoom: 1,
         weight: 0.5,
+        shardlevel: 1,
         phrase: 1
     }], {}, function(err, res) {
         assert.ifError(err);
