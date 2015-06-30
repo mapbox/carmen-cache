@@ -372,11 +372,15 @@ NAN_METHOD(Cache::_set)
             arrc.emplace(key_id,Cache::intarray());
         }
         Cache::intarray & vv = arrc[key_id];
-        if (itr2 != arrc.end()) {
-            vv.clear();
-        }
+
         unsigned array_size = data->Length();
-        vv.reserve(array_size);
+        if (args[4]->IsBoolean() && args[4]->BooleanValue()) {
+            vv.reserve(vv.size() + array_size);
+        } else {
+            if (itr2 != arrc.end()) vv.clear();
+            vv.reserve(array_size);
+        }
+
         for (unsigned i=0;i<array_size;++i) {
             vv.emplace_back(data->Get(i)->NumberValue());
         }

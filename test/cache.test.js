@@ -24,6 +24,18 @@ var fs = require('fs');
             assert.end();
         });
 
+        tape('#set', function(assert) {
+            var cache = new Cache('a', 1);
+            cache._set('term', 0, 5, [0,1,2]);
+            assert.deepEqual(cache._get('term', 0, 5), [0, 1, 2]);
+            cache._set('term', 0, 5, [3,4,5]);
+            assert.deepEqual(cache._get('term', 0, 5), [3, 4, 5]);
+            cache._set('term', 0, 5, [6,7,8], true);
+            assert.deepEqual(cache._get('term', 0, 5), [3, 4, 5, 6, 7, 8]);
+            assert.end();
+        });
+
+
         tape('#exists', function(assert) {
             var cache = new Cache('a', 1);
             assert.equal(cache._exists('term', 0, 5), false);
