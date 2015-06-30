@@ -57,6 +57,7 @@ public:
     static NAN_METHOD(list);
     static NAN_METHOD(_get);
     static NAN_METHOD(_set);
+    static NAN_METHOD(_exists);
     static NAN_METHOD(unload);
     static NAN_METHOD(coalesceZooms);
     static NAN_METHOD(spatialMatch);

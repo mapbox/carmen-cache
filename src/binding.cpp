@@ -117,6 +117,49 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string const
     }
 }
 
+bool __exists(Cache const* c, std::string const& type, std::string const& shard, uint64_t id) {
+    std::string key = type + "-" + shard;
+    Cache::memcache const& mem = c->cache_;
+    Cache::memcache::const_iterator itr = mem.find(key);
+    Cache::intarray array;
+    if (itr == mem.end()) {
+        Cache::lazycache const& lazy = c->lazy_;
+        Cache::lazycache::const_iterator litr = lazy.find(key);
+        if (litr == lazy.end()) {
+            return false;
+        }
+        Cache::message_cache const& messages = c->msg_;
+        Cache::message_cache::const_iterator mitr = messages.find(key);
+        if (mitr == messages.end()) {
+            throw std::runtime_error("misuse");
+        }
+        Cache::larraycache::const_iterator laitr = litr->second.find(id);
+        if (laitr == litr->second.end()) {
+            return false;
+        }
+        // NOTE: we cannot call array.reserve here since
+        // the total length is not known
+        unsigned start = (laitr->second & 0xffffffff);
+        unsigned len = (laitr->second >> 32);
+        std::string ref = mitr->second.substr(start,len);
+        protobuf::message buffer(ref.data(), ref.size());
+        while (buffer.next()) {
+            if (buffer.tag == 1) {
+                buffer.skip();
+            } else if (buffer.tag == 2) {
+                return true;
+            } else {
+                std::stringstream msg("");
+                msg << "cxx get: hit unknown protobuf type: '" << buffer.tag << "'";
+                throw std::runtime_error(msg.str());
+            }
+        }
+        return false;
+    } else {
+        Cache::arraycache::const_iterator aitr = itr->second.find(id);
+        return aitr != itr->second.end();
+    }
+}
 
 void Cache::Initialize(Handle<Object> target) {
     NanScope();
@@ -130,6 +173,7 @@ void Cache::Initialize(Handle<Object> target) {
     NODE_SET_PROTOTYPE_METHOD(t, "list", list);
     NODE_SET_PROTOTYPE_METHOD(t, "_set", _set);
     NODE_SET_PROTOTYPE_METHOD(t, "_get", _get);
+    NODE_SET_PROTOTYPE_METHOD(t, "_exists", _exists);
     NODE_SET_PROTOTYPE_METHOD(t, "unload", unload);
     NODE_SET_METHOD(t, "coalesceZooms", coalesceZooms);
     NODE_SET_METHOD(t, "spatialMatch", spatialMatch);
@@ -592,6 +636,33 @@ NAN_METHOD(Cache::_get)
         } else {
             NanReturnUndefined();
         }
+    } catch (std::exception const& ex) {
+        return NanThrowTypeError(ex.what());
+    }
+}
+
+NAN_METHOD(Cache::_exists)
+{
+    NanScope();
+    if (args.Length() < 3) {
+        return NanThrowTypeError("expected three args: type, shard, and id");
+    }
+    if (!args[0]->IsString()) {
+        return NanThrowTypeError("first arg must be a String");
+    }
+    if (!args[1]->IsNumber()) {
+        return NanThrowTypeError("second arg must be an Integer");
+    }
+    if (!args[2]->IsNumber()) {
+        return NanThrowTypeError("third arg must be an Integer");
+    }
+    try {
+        std::string type = *String::Utf8Value(args[0]->ToString());
+        std::string shard = *String::Utf8Value(args[1]->ToString());
+        uint64_t id = static_cast<uint64_t>(args[2]->IntegerValue());
+        Cache* c = node::ObjectWrap::Unwrap<Cache>(args.This());
+        bool exists = __exists(c, type, shard, id);
+        NanReturnValue(NanNew<Boolean>(exists));
     } catch (std::exception const& ex) {
         return NanThrowTypeError(ex.what());
     }

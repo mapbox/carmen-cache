@@ -24,6 +24,15 @@ var fs = require('fs');
             assert.end();
         });
 
+        tape('#exists', function(assert) {
+            var cache = new Cache('a', 1);
+            assert.equal(cache._exists('term', 0, 5), false);
+            cache._set('term', 0, 5, [0,1,2]);
+            assert.equal(cache._exists('term', 0, 5), true);
+            assert.equal(cache._exists('term', 0, 6), false);
+            assert.end();
+        });
+
         tape('#pack', function(assert) {
             var cache = new Cache('a', 1);
             cache._set('term', 0, 5, [0,1,2]);
