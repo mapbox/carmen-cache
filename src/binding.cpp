@@ -822,6 +822,89 @@ struct CoalesceBaton : carmen::noncopyable {
     std::vector<Context> features;
 };
 
+void coalesceFinalize(CoalesceBaton* baton, std::vector<Context> const& contexts) {
+    std::vector<Context> features;
+    if (contexts.size() > 0) {
+        // Coalesce stack, generate relevs.
+        double relevMax = contexts[0].relev;
+        unsigned short total = 0;
+        std::map<uint64_t,bool> sets;
+        std::map<uint64_t,bool>::iterator sit;
+
+        for (unsigned short i = 0; i < contexts.size(); i++) {
+            // Maximum allowance of coalesced features: 40.
+            if (total >= 40) break;
+
+            Context const& feature = contexts[i];
+
+            // Since `coalesced` is sorted by relev desc at first
+            // threshold miss we can break the loop.
+            if (relevMax - feature.relev >= 0.25) break;
+
+            // Only collect each feature once.
+            sit = sets.find(feature.coverList[0].tmpid);
+            if (sit != sets.end()) continue;
+
+            sets.emplace(feature.coverList[0].tmpid, true);
+            features.emplace_back(feature);
+            total++;
+        }
+    }
+
+    baton->features = std::move(features);
+}
+void coalesceSingle(uv_work_t* req) {
+    CoalesceBaton *baton = static_cast<CoalesceBaton *>(req->data);
+
+    std::vector<PhrasematchSubq> stack = std::move(baton->stack);
+    PhrasematchSubq const& subq = stack[0];
+    std::string type = "grid";
+    std::string shardId = shard(subq.shardlevel, subq.phrase);
+
+    Cache::intarray const& grids = __get(subq.cache, type, shardId, subq.phrase);
+    uint64_t z = subq.zoom;
+    unsigned short m = grids.size();
+    double relevMax = 0;
+    std::vector<Context> contexts;
+
+    for (unsigned j = 0; j < m; j++) {
+        Cover cover = numToCover(grids[j]);
+        cover.idx = subq.idx;
+        cover.tmpid = cover.idx * POW2_25 + cover.id;
+        cover.relev = cover.relev * subq.weight;
+
+        /*
+        JS: TODO port to cpp
+        // proximity specified -- calculate a distance per grid
+        // to the proximity location.
+        if (centerzxy) {
+            var proxzxy = proximity.pxy2zxy([z,grid.x,grid.y], centerzxy[0]);
+            grid.distance = Math.sqrt(
+                Math.pow(proxzxy[1] - centerzxy[1], 2) +
+                Math.pow(proxzxy[2] - centerzxy[2], 2)
+            );
+        }
+        */
+
+        if (relevMax - cover.relev < 0.25) {
+            if (cover.relev > relevMax) relevMax = cover.relev;
+            Context context;
+            context.coverList.emplace_back(cover);
+            context.relev = cover.relev - 0.01;
+            contexts.emplace_back(context);
+        }
+    }
+
+    std::sort(contexts.begin(), contexts.end(), contextSortByRelev);
+    /* JS
+    if (centerzxy) {
+        coalesced.sort(sortByRelevDistance);
+    } else {
+        coalesced.sort(sortByRelev);
+    }
+    */
+    coalesceFinalize(baton, contexts);
+}
 void coalesceUV(uv_work_t* req) {
     CoalesceBaton *baton = static_cast<CoalesceBaton *>(req->data);
     std::vector<PhrasematchSubq> stack = std::move(baton->stack);
@@ -862,12 +945,13 @@ void coalesceUV(uv_work_t* req) {
     std::map<uint64_t,bool>::iterator dit;
 
     size = stack.size();
+
     for (unsigned short i = 0; i < size; i++) {
         PhrasematchSubq const& subq = stack[i];
 
         std::string shardId = shard(subq.shardlevel, subq.phrase);
 
-        Cache::intarray grids = __get(subq.cache, type, shardId, subq.phrase);
+        Cache::intarray const& grids = __get(subq.cache, type, shardId, subq.phrase);
         uint64_t z = subq.zoom;
         auto const& zCache = zoomCache[z];
         std::size_t zCacheSize = zCache.size();
@@ -893,6 +977,13 @@ void coalesceUV(uv_work_t* req) {
                 );
             }
             */
+
+            if (size == 1) {
+                std::vector<Cover> coverList;
+                coverList.push_back(cover);
+                matched.push_back(coverList);
+                continue;
+            }
 
             cit = coalesced.find(zxy);
             if (cit == coalesced.end()) {
@@ -947,7 +1038,6 @@ void coalesceUV(uv_work_t* req) {
             contexts.emplace_back(context);
         }
     }
-
     std::sort(contexts.begin(), contexts.end(), contextSortByRelev);
     /* JS
     if (centerzxy) {
@@ -956,37 +1046,9 @@ void coalesceUV(uv_work_t* req) {
         coalesced.sort(sortByRelev);
     }
     */
-
-    std::vector<Context> features;
-    if (contexts.size() > 0) {
-        // Coalesce stack, generate relevs.
-        double relevMax = contexts[0].relev;
-        unsigned short total = 0;
-        std::map<uint64_t,bool> sets;
-        std::map<uint64_t,bool>::iterator sit;
-
-        for (unsigned short i = 0; i < contexts.size(); i++) {
-            // Maximum allowance of coalesced features: 40.
-            if (total >= 40) break;
-
-            Context const& feature = contexts[i];
-
-            // Since `coalesced` is sorted by relev desc at first
-            // threshold miss we can break the loop.
-            if (relevMax - feature.relev >= 0.25) break;
-
-            // Only collect each feature once.
-            sit = sets.find(feature.coverList[0].tmpid);
-            if (sit != sets.end()) continue;
-
-            sets.emplace(feature.coverList[0].tmpid, true);
-            features.emplace_back(feature);
-            total++;
-        }
-    }
-
-    baton->features = std::move(features);
+    coalesceFinalize(baton, contexts);
 }
+
 Local<Object> coverToObject(Cover const& cover) {
     Local<Object> object = NanNew<Object>();
     object->Set(NanNew("x"), NanNew<Number>(cover.x));
@@ -1067,7 +1129,12 @@ NAN_METHOD(Cache::coalesce) {
 
     // queue work
     baton->request.data = baton;
-    uv_queue_work(uv_default_loop(), &baton->request, coalesceUV, (uv_after_work_cb)coalesceAfter);
+    // optimization: for stacks of 1, use coalesceSingle
+    if (stack.size() == 1) {
+        uv_queue_work(uv_default_loop(), &baton->request, coalesceSingle, (uv_after_work_cb)coalesceAfter);
+    } else {
+        uv_queue_work(uv_default_loop(), &baton->request, coalesceUV, (uv_after_work_cb)coalesceAfter);
+    }
     NanReturnUndefined();
 }
 
