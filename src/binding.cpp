@@ -773,13 +773,14 @@ struct PhrasematchSubq {
 };
 
 struct Cover {
-    uint32_t x;
-    uint32_t y;
+    unsigned short x;
+    unsigned short y;
     double relev;
     unsigned short score;
     uint32_t id;
     uint32_t tmpid;
     unsigned short idx;
+    unsigned short distance;
 };
 
 struct Context {
@@ -789,8 +790,8 @@ struct Context {
 
 Cover numToCover(uint64_t num) {
     Cover cover;
-    uint32_t x = (num >> 39) % POW2_14;
-    uint32_t y = (num >> 25) % POW2_14;
+    unsigned short x = (num >> 39) % POW2_14;
+    unsigned short y = (num >> 25) % POW2_14;
     double relev = 0.4 + (0.2 * ((num >> 23) % POW2_2));
     unsigned short score = (num >> 20) % POW2_3;
     uint32_t id = num % POW2_20;
@@ -802,6 +803,46 @@ Cover numToCover(uint64_t num) {
     return cover;
 };
 
+Cache::intarray pxy2zxy(Cache::intarray pxy, uint64_t z) {
+    // Interval between parent and target zoom level
+    unsigned short zDist = z - pxy[0];
+    unsigned short zMult = zDist - 1;
+    if (zDist == 0) return pxy;
+    // Midpoint length @ z for a tile at parent zoom level
+    unsigned short pMid = std::pow(2,zDist) / 2;
+    Cache::intarray zxy;
+    zxy[0] = z;
+    zxy[1] = (pxy[1] * zMult) + pMid;
+    zxy[2] = (pxy[2] * zMult) + pMid;
+    return zxy;
+}
+
+bool gridSortByRelev(uint64_t a, uint64_t b) {
+    return (b % POW2_25) < (a % POW2_25);
+}
+
+bool coverSortByRelev(Cover const& a, Cover const& b) {
+    if (b.relev > a.relev) return false;
+    else if (b.relev < a.relev) return true;
+    else if (b.score > a.score) return false;
+    else if (b.score < a.score) return true;
+    else if (b.idx < a.idx) return false;
+    else if (b.idx > a.idx) return true;
+    return (b.id < a.id);
+}
+
+bool coverSortByRelevDistance(Cover const& a, Cover const& b) {
+    if (b.relev > a.relev) return false;
+    else if (b.relev < a.relev) return true;
+    else if (b.distance < a.distance) return false;
+    else if (b.distance > a.distance) return true;
+    else if (b.score > a.score) return false;
+    else if (b.score < a.score) return true;
+    else if (b.idx < a.idx) return false;
+    else if (b.idx > a.idx) return true;
+    return (b.id < a.id);
+}
+
 bool contextSortByRelev(Context const& a, Context const& b) {
     if (b.relev > a.relev) return false;
     else if (b.relev < a.relev) return true;
@@ -810,6 +851,22 @@ bool contextSortByRelev(Context const& a, Context const& b) {
     else if (b.coverList[0].idx < a.coverList[0].idx) return false;
     else if (b.coverList[0].idx > a.coverList[0].idx) return true;
     return (b.coverList[0].id < a.coverList[0].id);
+}
+
+bool contextSortByRelevDistance(Context const& a, Context const& b) {
+    if (b.relev > a.relev) return false;
+    else if (b.relev < a.relev) return true;
+    else if (b.coverList[0].distance < a.coverList[0].distance) return false;
+    else if (b.coverList[0].distance > a.coverList[0].distance) return true;
+    else if (b.coverList[0].score > a.coverList[0].score) return false;
+    else if (b.coverList[0].score < a.coverList[0].score) return true;
+    else if (b.coverList[0].idx < a.coverList[0].idx) return false;
+    else if (b.coverList[0].idx > a.coverList[0].idx) return true;
+    return (b.coverList[0].id < a.coverList[0].id);
+}
+
+unsigned short tileDist(unsigned short ax, unsigned short bx, unsigned short ay, unsigned short by) {
+    return (ax > bx ? ax - bx : bx - ax) + (ay > by ? ay - by : by - ay);
 }
 
 struct CoalesceBaton : carmen::noncopyable {
@@ -861,48 +918,52 @@ void coalesceSingle(uv_work_t* req) {
     std::string type = "grid";
     std::string shardId = shard(subq.shardlevel, subq.phrase);
 
-    Cache::intarray const& grids = __get(subq.cache, type, shardId, subq.phrase);
-    uint64_t z = subq.zoom;
-    unsigned short m = grids.size();
-    double relevMax = 0;
-    std::vector<Context> contexts;
+    // proximity (optional)
+    bool proximity = baton->centerzxy.size() > 0;
+    unsigned short cx;
+    unsigned short cy;
+    if (proximity) {
+        cx = baton->centerzxy[1];
+        cy = baton->centerzxy[2];
+    }
 
-    for (unsigned j = 0; j < m; j++) {
+    // sort grids by distance to proximity point
+    Cache::intarray const& grids = __get(subq.cache, type, shardId, subq.phrase);
+
+    unsigned long m = grids.size();
+    double relevMax = 0;
+    std::vector<Cover> covers;
+    covers.reserve(m);
+
+    for (unsigned long j = 0; j < m; j++) {
         Cover cover = numToCover(grids[j]);
         cover.idx = subq.idx;
         cover.tmpid = cover.idx * POW2_25 + cover.id;
         cover.relev = cover.relev * subq.weight;
+        cover.distance = proximity ? tileDist(cx, cover.x, cy, cover.y) : 0;
 
-        /*
-        JS: TODO port to cpp
-        // proximity specified -- calculate a distance per grid
-        // to the proximity location.
-        if (centerzxy) {
-            var proxzxy = proximity.pxy2zxy([z,grid.x,grid.y], centerzxy[0]);
-            grid.distance = Math.sqrt(
-                Math.pow(proxzxy[1] - centerzxy[1], 2) +
-                Math.pow(proxzxy[2] - centerzxy[2], 2)
-            );
-        }
-        */
+        // short circuit based on relevMax thres
+        if (relevMax - cover.relev >= 0.25) continue;
+        if (cover.relev > relevMax) relevMax = cover.relev;
 
-        if (relevMax - cover.relev < 0.25) {
-            if (cover.relev > relevMax) relevMax = cover.relev;
-            Context context;
-            context.coverList.emplace_back(cover);
-            context.relev = cover.relev - 0.01;
-            contexts.emplace_back(context);
-        }
+        covers.emplace_back(cover);
     }
 
-    std::sort(contexts.begin(), contexts.end(), contextSortByRelev);
-    /* JS
-    if (centerzxy) {
-        coalesced.sort(sortByRelevDistance);
+    if (proximity) {
+        std::sort(covers.begin(), covers.end(), coverSortByRelevDistance);
     } else {
-        coalesced.sort(sortByRelev);
+        std::sort(covers.begin(), covers.end(), coverSortByRelev);
     }
-    */
+
+    std::vector<Context> contexts;
+    m = covers.size() > 40 ? 40 : covers.size();
+    for (unsigned long j = 0; j < m; j++) {
+        Context context;
+        context.coverList.emplace_back(covers[j]);
+        context.relev = covers[j].relev;
+        contexts.emplace_back(context);
+    }
+
     coalesceFinalize(baton, contexts);
 }
 void coalesceUV(uv_work_t* req) {
@@ -955,9 +1016,9 @@ void coalesceUV(uv_work_t* req) {
         auto const& zCache = zoomCache[z];
         std::size_t zCacheSize = zCache.size();
 
-        unsigned short m = grids.size();
+        unsigned long m = grids.size();
 
-        for (unsigned j = 0; j < m; j++) {
+        for (unsigned long j = 0; j < m; j++) {
             Cover cover = numToCover(grids[j]);
             cover.idx = subq.idx;
             cover.tmpid = cover.idx * POW2_25 + cover.id;
@@ -1050,6 +1111,7 @@ Local<Object> coverToObject(Cover const& cover) {
     object->Set(NanNew("id"), NanNew<Number>(cover.id));
     object->Set(NanNew("idx"), NanNew<Number>(cover.idx));
     object->Set(NanNew("tmpid"), NanNew<Number>(cover.tmpid));
+    object->Set(NanNew("distance"), NanNew<Number>(cover.distance));
     return object;
 }
 Local<Array> contextToArray(Context const& context) {
