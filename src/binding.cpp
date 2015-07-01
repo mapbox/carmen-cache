@@ -803,17 +803,29 @@ Cover numToCover(uint64_t num) {
     return cover;
 };
 
-Cache::intarray pxy2zxy(Cache::intarray pxy, uint64_t z) {
+struct ZXY {
+    unsigned short z;
+    unsigned short x;
+    unsigned short y;
+};
+
+ZXY pxy2zxy(unsigned short z, unsigned short x, unsigned short y, unsigned short target_z) {
+    ZXY zxy;
+    zxy.z = target_z;
+
     // Interval between parent and target zoom level
-    unsigned short zDist = z - pxy[0];
+    unsigned short zDist = target_z - z;
     unsigned short zMult = zDist - 1;
-    if (zDist == 0) return pxy;
+    if (zDist == 0) {
+        zxy.x = x;
+        zxy.y = y;
+        return zxy;
+    }
+
     // Midpoint length @ z for a tile at parent zoom level
     unsigned short pMid = std::pow(2,zDist) / 2;
-    Cache::intarray zxy;
-    zxy[0] = z;
-    zxy[1] = (pxy[1] * zMult) + pMid;
-    zxy[2] = (pxy[2] * zMult) + pMid;
+    zxy.x = (x * zMult) + pMid;
+    zxy.y = (y * zMult) + pMid;
     return zxy;
 }
 
@@ -828,7 +840,7 @@ bool coverSortByRelev(Cover const& a, Cover const& b) {
     else if (b.score < a.score) return true;
     else if (b.idx < a.idx) return false;
     else if (b.idx > a.idx) return true;
-    return (b.id < a.id);
+    return (b.id > a.id);
 }
 
 bool coverSortByRelevDistance(Cover const& a, Cover const& b) {
@@ -840,7 +852,7 @@ bool coverSortByRelevDistance(Cover const& a, Cover const& b) {
     else if (b.score < a.score) return true;
     else if (b.idx < a.idx) return false;
     else if (b.idx > a.idx) return true;
-    return (b.id < a.id);
+    return (b.id > a.id);
 }
 
 bool contextSortByRelev(Context const& a, Context const& b) {
@@ -850,7 +862,7 @@ bool contextSortByRelev(Context const& a, Context const& b) {
     else if (b.coverList[0].score < a.coverList[0].score) return true;
     else if (b.coverList[0].idx < a.coverList[0].idx) return false;
     else if (b.coverList[0].idx > a.coverList[0].idx) return true;
-    return (b.coverList[0].id < a.coverList[0].id);
+    return (b.coverList[0].id > a.coverList[0].id);
 }
 
 bool contextSortByRelevDistance(Context const& a, Context const& b) {
@@ -862,7 +874,7 @@ bool contextSortByRelevDistance(Context const& a, Context const& b) {
     else if (b.coverList[0].score < a.coverList[0].score) return true;
     else if (b.coverList[0].idx < a.coverList[0].idx) return false;
     else if (b.coverList[0].idx > a.coverList[0].idx) return true;
-    return (b.coverList[0].id < a.coverList[0].id);
+    return (b.coverList[0].id > a.coverList[0].id);
 }
 
 unsigned short tileDist(unsigned short ax, unsigned short bx, unsigned short ay, unsigned short by) {
@@ -1006,13 +1018,25 @@ void coalesceUV(uv_work_t* req) {
 
     size = stack.size();
 
+    // proximity (optional)
+    bool proximity = baton->centerzxy.size() > 0;
+    unsigned short cz;
+    unsigned short cx;
+    unsigned short cy;
+    if (proximity) {
+        cz = baton->centerzxy[0];
+        cx = baton->centerzxy[1];
+        cy = baton->centerzxy[2];
+    }
+
     for (unsigned short i = 0; i < size; i++) {
         PhrasematchSubq const& subq = stack[i];
 
         std::string shardId = shard(subq.shardlevel, subq.phrase);
 
         Cache::intarray const& grids = __get(subq.cache, type, shardId, subq.phrase);
-        uint64_t z = subq.zoom;
+
+        unsigned short z = subq.zoom;
         auto const& zCache = zoomCache[z];
         std::size_t zCacheSize = zCache.size();
 
@@ -1023,20 +1047,14 @@ void coalesceUV(uv_work_t* req) {
             cover.idx = subq.idx;
             cover.tmpid = cover.idx * POW2_25 + cover.id;
             cover.relev = cover.relev * subq.weight;
-            uint64_t zxy = (z * POW2_28) + (cover.x * POW2_14) + (cover.y);
-
-            /*
-            JS: TODO port to cpp
-            // proximity specified -- calculate a distance per grid
-            // to the proximity location.
-            if (centerzxy) {
-                var proxzxy = proximity.pxy2zxy([z,grid.x,grid.y], centerzxy[0]);
-                grid.distance = Math.sqrt(
-                    Math.pow(proxzxy[1] - centerzxy[1], 2) +
-                    Math.pow(proxzxy[2] - centerzxy[2], 2)
-                );
+            if (proximity) {
+                ZXY dxy = pxy2zxy(z, cover.x, cover.y, cz);
+                cover.distance = tileDist(cx, dxy.x, cy, dxy.y);
+            } else {
+                cover.distance = 0;
             }
-            */
+
+            uint64_t zxy = (z * POW2_28) + (cover.x * POW2_14) + (cover.y);
 
             cit = coalesced.find(zxy);
             if (cit == coalesced.end()) {
@@ -1091,14 +1109,11 @@ void coalesceUV(uv_work_t* req) {
             contexts.emplace_back(context);
         }
     }
-    std::sort(contexts.begin(), contexts.end(), contextSortByRelev);
-    /* JS
-    if (centerzxy) {
-        coalesced.sort(sortByRelevDistance);
+    if (proximity) {
+        std::sort(contexts.begin(), contexts.end(), contextSortByRelevDistance);
     } else {
-        coalesced.sort(sortByRelev);
+        std::sort(contexts.begin(), contexts.end(), contextSortByRelev);
     }
-    */
     coalesceFinalize(baton, contexts);
 }
 
