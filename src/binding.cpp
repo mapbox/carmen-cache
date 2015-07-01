@@ -829,10 +829,6 @@ ZXY pxy2zxy(unsigned short z, unsigned short x, unsigned short y, unsigned short
     return zxy;
 }
 
-bool gridSortByRelev(uint64_t a, uint64_t b) {
-    return (b % POW2_25) < (a % POW2_25);
-}
-
 bool coverSortByRelev(Cover const& a, Cover const& b) {
     if (b.relev > a.relev) return false;
     else if (b.relev < a.relev) return true;
@@ -937,6 +933,9 @@ void coalesceSingle(uv_work_t* req) {
     if (proximity) {
         cx = baton->centerzxy[1];
         cy = baton->centerzxy[2];
+    } else {
+        cx = 0;
+        cy = 0;
     }
 
     // sort grids by distance to proximity point
@@ -978,7 +977,7 @@ void coalesceSingle(uv_work_t* req) {
 
     coalesceFinalize(baton, contexts);
 }
-void coalesceUV(uv_work_t* req) {
+void coalesceMulti(uv_work_t* req) {
     CoalesceBaton *baton = static_cast<CoalesceBaton *>(req->data);
     std::vector<PhrasematchSubq> stack = std::move(baton->stack);
 
@@ -1027,6 +1026,10 @@ void coalesceUV(uv_work_t* req) {
         cz = baton->centerzxy[0];
         cx = baton->centerzxy[1];
         cy = baton->centerzxy[2];
+    } else {
+        cz = 0;
+        cx = 0;
+        cy = 0;
     }
 
     for (unsigned short i = 0; i < size; i++) {
@@ -1202,7 +1205,7 @@ NAN_METHOD(Cache::coalesce) {
     if (stack.size() == 1) {
         uv_queue_work(uv_default_loop(), &baton->request, coalesceSingle, (uv_after_work_cb)coalesceAfter);
     } else {
-        uv_queue_work(uv_default_loop(), &baton->request, coalesceUV, (uv_after_work_cb)coalesceAfter);
+        uv_queue_work(uv_default_loop(), &baton->request, coalesceMulti, (uv_after_work_cb)coalesceAfter);
     }
     NanReturnUndefined();
 }
