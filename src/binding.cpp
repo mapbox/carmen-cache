@@ -937,7 +937,6 @@ void coalesceUV(uv_work_t* req) {
     // z5 inherits relev of overlapping tiles at z4.
     // @TODO assumes sources are in zoom ascending order.
     std::string type = "grid";
-    std::vector<std::vector<Cover>> matched;
     std::map<uint64_t,std::vector<Cover>> coalesced;
     std::map<uint64_t,std::vector<Cover>>::iterator cit;
     std::map<uint64_t,std::vector<Cover>>::iterator pit;
@@ -978,19 +977,11 @@ void coalesceUV(uv_work_t* req) {
             }
             */
 
-            if (size == 1) {
-                std::vector<Cover> coverList;
-                coverList.push_back(cover);
-                matched.push_back(coverList);
-                continue;
-            }
-
             cit = coalesced.find(zxy);
             if (cit == coalesced.end()) {
                 std::vector<Cover> coverList;
                 coverList.push_back(cover);
                 coalesced.emplace(zxy, coverList);
-                matched.push_back(coverList);
             } else {
                 cit->second.push_back(cover);
             }
@@ -1017,16 +1008,17 @@ void coalesceUV(uv_work_t* req) {
     }
 
     std::vector<Context> contexts;
-    for (unsigned short h = 0; h < matched.size(); h++) {
-        std::vector<Cover> const& coverList = matched[h];
-        for (unsigned short i = 0; i < coverList.size(); i++) {
+    for (auto const& matched : coalesced) {
+        std::vector<Cover> const& coverList = matched.second;
+        size_t coverSize = coverList.size();
+        for (unsigned short i = 0; i < coverSize; i++) {
             unsigned short lastidx = coverList[i].idx;
             double stacky = 0.0;
 
             Context context;
             context.coverList.emplace_back(coverList[i]);
             context.relev = coverList[i].relev;
-            for (unsigned short j = i+1; j < coverList.size(); j++) {
+            for (unsigned short j = i+1; j < coverSize; j++) {
                 if (coverList[j].idx == lastidx) continue;
                 stacky = 1.0;
                 lastidx = coverList[j].idx;
