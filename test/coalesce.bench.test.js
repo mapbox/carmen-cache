@@ -16,38 +16,52 @@ var test = require('tape');
         phrase: 3848571113
     }];
     test('coalesceSingle', function(assert) {
-        var remaining = runs;
         var time = +new Date;
-        for (var i = 0; i < runs; i++) coalesce(stacks, {}, function(err, res) {
-            var checks = true;
-            checks = checks && res.length === 13;
-            checks = checks && res[0][0].tmpid === 129900;
-            if (!checks) assert.fail('Failed checks');
-
-            if (!--remaining) {
+        function run(remaining) {
+            if (!remaining) {
                 var ops = (+new Date-time)/runs;
                 assert.equal(ops < 20, true, 'coalesceSingle @ ' + ops + 'ms');
                 assert.end();
+                return;
             }
-        });
+            coalesce(stacks, {}, function(err, res) {
+                var checks = true;
+                checks = checks && res.length === 13;
+                checks = checks && res[0][0].tmpid === 129900;
+                if (!checks) {
+                    assert.fail('Failed checks');
+                    assert.end();
+                } else {
+                    run(--remaining);
+                }
+            });
+        }
+        run(runs);
     });
     test('coalesceSingle proximity', function(assert) {
-        var remaining = runs;
         var time = +new Date;
-        for (var i = 0; i < runs; i++) coalesce(stacks, { centerzxy: [14,4893,6001] }, function(err, res) {
-            var checks = true;
-            checks = checks && res.length === 18;
-            checks = checks && res[0][0].x === 4893;
-            checks = checks && res[0][0].y === 6001;
-            checks = checks && res[0][0].tmpid === 446213;
-            if (!checks) assert.fail('Failed checks');
-
-            if (!--remaining) {
+        function run(remaining) {
+            if (!remaining) {
                 var ops = (+new Date-time)/runs;
                 assert.equal(ops < 20, true, 'coalesceSingle + proximity @ ' + ops + 'ms');
                 assert.end();
+                return;
             }
-        });
+            coalesce(stacks, { centerzxy: [14,4893,6001] }, function(err, res) {
+                var checks = true;
+                checks = checks && res.length === 18;
+                checks = checks && res[0][0].x === 4893;
+                checks = checks && res[0][0].y === 6001;
+                checks = checks && res[0][0].tmpid === 446213;
+                if (!checks) {
+                    assert.fail('Failed checks');
+                    assert.end();
+                } else {
+                    run(--remaining);
+                }
+            });
+        }
+        run(runs);
     });
 })();
 
@@ -73,40 +87,54 @@ var test = require('tape');
         phrase: 3848571113
     }];
     test('coalesceMulti', function(assert) {
-        var remaining = runs;
         var time = +new Date;
-        for (var i = 0; i < runs; i++) coalesce(stacks, {}, function(err, res) {
-            var checks = true;
-            checks = checks && res.length === 40;
-            checks = checks && res[0][0].tmpid === 33593999;
-            checks = checks && res[0][1].tmpid === 514584;
-            if (!checks) assert.fail('Failed checks');
-
-            if (!--remaining) {
+        function run(remaining) {
+            if (!remaining) {
                 var ops = (+new Date-time)/runs;
                 assert.equal(ops < 20, true, 'coalesceMulti @ ' + ops + 'ms');
                 assert.end();
+                return;
             }
-        });
+            coalesce(stacks, {}, function(err, res) {
+                var checks = true;
+                checks = checks && res.length === 40;
+                checks = checks && res[0][0].tmpid === 33593999;
+                checks = checks && res[0][1].tmpid === 514584;
+                if (!checks) {
+                    assert.fail('Failed checks');
+                    assert.end();
+                } else {
+                    run(--remaining);
+                }
+            });
+        }
+        run(runs);
     });
     test('coalesceMulti proximity', function(assert) {
-        var remaining = runs;
         var time = +new Date;
-        for (var i = 0; i < runs; i++) coalesce(stacks, { centerzxy: [14,4893,6001] }, function(err, res) {
-            var checks = true;
-            checks = checks && res.length === 40;
-            checks = checks && res[0][0].x === 4893;
-            checks = checks && res[0][0].y === 6001;
-            checks = checks && res[0][0].tmpid === 34000645;
-            checks = checks && res[0][1].tmpid === 5156;
-            if (!checks) assert.fail('Failed checks');
-
-            if (!--remaining) {
+        function run(remaining) {
+            if (!remaining) {
                 var ops = (+new Date-time)/runs;
                 assert.equal(ops < 20, true, 'coalesceMulti + proximity @ ' + ops + 'ms');
                 assert.end();
+                return;
             }
-        });
+            coalesce(stacks, { centerzxy: [14,4893,6001] }, function(err, res) {
+                var checks = true;
+                checks = checks && res.length === 40;
+                checks = checks && res[0][0].x === 4893;
+                checks = checks && res[0][0].y === 6001;
+                checks = checks && res[0][0].tmpid === 34000645;
+                checks = checks && res[0][1].tmpid === 5156;
+                if (!checks) {
+                    assert.fail('Failed checks');
+                    assert.end();
+                } else {
+                    run(--remaining);
+                }
+            });
+        }
+        run(runs);
     });
 })();
 
