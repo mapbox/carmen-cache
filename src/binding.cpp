@@ -1094,16 +1094,17 @@ void coalesceMulti(uv_work_t* req) {
         std::vector<Cover> const& coverList = matched.second;
         size_t coverSize = coverList.size();
         for (unsigned short i = 0; i < coverSize; i++) {
-            unsigned short lastidx = coverList[i].idx;
+            unsigned short used = 1 << coverList[i].idx;
             double stacky = 0.0;
 
             Context context;
             context.coverList.emplace_back(coverList[i]);
             context.relev = coverList[i].relev;
             for (unsigned short j = i+1; j < coverSize; j++) {
-                if (coverList[j].idx == lastidx) continue;
+                unsigned short mask = 1 << coverList[j].idx;
+                if (used & mask) continue;
                 stacky = 1.0;
-                lastidx = coverList[j].idx;
+                used = used | mask;
                 context.coverList.emplace_back(coverList[j]);
                 context.relev += coverList[j].relev;
             }
