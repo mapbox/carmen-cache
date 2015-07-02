@@ -1,15 +1,10 @@
 
 #include "binding.hpp"
-#include <node_version.h>
-#include <node_buffer.h>
 
 #include "pbf.hpp"
 
 #include <sstream>
 #include <cmath>
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic warning "-Wpadded"
 
 namespace carmen {
 
@@ -1219,7 +1214,5 @@ extern "C" {
 
 } // namespace carmen
 
-
-#pragma GCC diagnostic pop
 
 NODE_MODULE(carmen, carmen::start)
