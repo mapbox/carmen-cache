@@ -778,11 +778,11 @@ constexpr uint64_t POW2_2 = static_cast<uint64_t>(_pow(2.0,2));
 
 struct PhrasematchSubq {
     carmen::Cache *cache;
-    uint32_t phrase;
+    double weight;
     uint64_t shardlevel;
+    uint32_t phrase;
     unsigned short idx;
     unsigned short zoom;
-    double weight;
 };
 
 struct Cover {

@@ -20,6 +20,7 @@
 #include "index.pb.h"
 #include <sparsehash/sparse_hash_map>
 #pragma clang diagnostic pop
+#include <iostream>
 
 namespace carmen {
 
