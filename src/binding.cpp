@@ -122,7 +122,6 @@ bool __exists(Cache const* c, std::string const& type, std::string const& shard,
     std::string key = type + "-" + shard;
     Cache::memcache const& mem = c->cache_;
     Cache::memcache::const_iterator itr = mem.find(key);
-    Cache::intarray array;
     if (itr == mem.end()) {
         Cache::lazycache const& lazy = c->lazy_;
         Cache::lazycache::const_iterator litr = lazy.find(key);
