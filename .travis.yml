@@ -60,8 +60,8 @@ before_install:
 install:
  - if [[ ${COVERAGE} == true ]]; then
      PYTHONUSERBASE=$(pwd)/mason_packages/.link pip install --user cpp-coveralls;
-     export CXXFLAGS="--coverage ${CXXFLAGS}"
-     export LDFLAGS="--coverage ${LDFLAGS}"
+     export CXXFLAGS="--coverage ${CXXFLAGS}";
+     export LDFLAGS="--coverage ${LDFLAGS}";
    fi
  - npm install --build-from-source --clang=1
 
