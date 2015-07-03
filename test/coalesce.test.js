@@ -108,6 +108,46 @@ test('coalesce args', function(assert) {
 })();
 
 (function() {
+    var cache = new Cache('a', 0);
+    var grids = [];
+    var encoded1 = Grid.encode({
+        id: 1,
+        x: 1,
+        y: 1,
+        relev: 1,
+        score: 0
+    });
+    for (var i = 0; i < 80; i++) grids.push(encoded1);
+    grids.push(Grid.encode({
+        id: 2,
+        x: 1,
+        y: 1,
+        relev: 1,
+        score: 0
+    }));
+
+    cache._set('grid', 0, 1, grids);
+    test('coalesceSingle', function(assert) {
+        coalesce([{
+            cache: cache,
+            idx: 0,
+            zoom: 2,
+            weight: 1,
+            shardlevel: 0,
+            phrase: 1
+        }], {}, function(err, res) {
+            assert.ifError(err);
+            assert.equal(res.length, 2);
+            assert.deepEqual(res[0].relev, 1, '0.relev');
+            assert.deepEqual(res[0][0], { distance: 0, id: 1, idx: 0, relev: 1.0, score: 0, tmpid: 1, x: 1, y: 1 }, '0.0');
+            assert.deepEqual(res[1].relev, 1, '1.relev');
+            assert.deepEqual(res[1][0], { distance: 0, id: 2, idx: 0, relev: 1.0, score: 0, tmpid: 2, x: 1, y: 1 }, '0.0');
+            assert.end();
+        });
+    });
+})();
+
+(function() {
     var a = new Cache('a', 0);
     var b = new Cache('b', 0);
     a._set('grid', 0, 1, [
