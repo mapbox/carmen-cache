@@ -31,16 +31,16 @@
       ],
       'cflags_cc!': ['-fno-rtti', '-fno-exceptions'],
       'cflags_cc' : [
-          '<!@(pkg-config protobuf --cflags)',
-          '-std=c++11',
-          '-D_THREAD_SAFE',
-          '-Wno-sign-compare' # to avoid warning from wire_format_lite_inl.h
+            '<!@(pkg-config protobuf --cflags)',
+            '-std=c++11',
+            '-D_THREAD_SAFE',
+            '-Wno-sign-compare'
       ],
       'xcode_settings': {
         'OTHER_CPLUSPLUSFLAGS':[
             '<!@(pkg-config protobuf --cflags)',
             '-D_THREAD_SAFE',
-            '-Wno-sign-compare' # to avoid warning from wire_format_lite_inl.h
+            '-Wno-sign-compare'
         ],
         'GCC_ENABLE_CPP_RTTI': 'YES',
         'GCC_ENABLE_CPP_EXCEPTIONS': 'YES',
@@ -101,10 +101,12 @@
       'cflags_cc!': ['-fno-rtti', '-fno-exceptions'],
       'cflags_cc' : [
           '-std=c++11',
+          '-Wconversion'
       ],
       'xcode_settings': {
         'OTHER_CPLUSPLUSFLAGS':[
            '-Wshadow',
+           '-Wconversion'
         ],
         'GCC_ENABLE_CPP_RTTI': 'YES',
         'GCC_ENABLE_CPP_EXCEPTIONS': 'YES',
