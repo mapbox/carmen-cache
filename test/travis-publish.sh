@@ -3,11 +3,11 @@
 set -e
 
 # Inspect binary.
-# if [ $platform == "linux" ]; then
-#     ldd ./lib/carmen.node
-# else
-#     otool -L ./lib/carmen.node
-# fi
+if [ $platform == "linux" ]; then
+    ldd ./lib/carmen.node
+else
+    otool -L ./lib/carmen.node
+fi
 
 COMMIT_MESSAGE=$(git show -s --format=%B $TRAVIS_COMMIT | tr -d '\n')
 
