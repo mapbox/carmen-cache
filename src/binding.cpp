@@ -5,6 +5,7 @@
 
 #include <sstream>
 #include <cmath>
+#include <cassert>
 
 namespace carmen {
 
@@ -12,27 +13,32 @@ using namespace v8;
 
 Persistent<FunctionTemplate> Cache::constructor;
 
-std::string shard(uint64_t level, uint64_t id) {
+std::string shard(uint64_t level, uint32_t id) {
     if (level == 0) return "0";
-    unsigned int bits = 32 - (level * 4);
-    unsigned int shard_id = std::floor(id / std::pow(2, bits));
+    unsigned int bits = 32 - (static_cast<unsigned int>(level) * 4);
+    unsigned int shard_id = static_cast<unsigned int>(std::floor(id / std::pow(2, bits)));
     return std::to_string(shard_id);
 }
 
-Cache::intarray arrayToVector(Local<Array> const& array) {
-    Cache::intarray vector;
-    vector.reserve(array->Length());
-    for (uint64_t i = 0; i < array->Length(); i++) {
-        uint64_t num = array->Get(i)->NumberValue();
-        vector.emplace_back(num);
+std::vector<unsigned short> arrayToVector(Local<Array> const& array) {
+    std::vector<unsigned short> cpp_array;
+    cpp_array.reserve(array->Length());
+    for (uint32_t i = 0; i < array->Length(); i++) {
+        int64_t js_value = array->Get(i)->IntegerValue();
+        if (js_value < 0 || js_value >= std::numeric_limits<unsigned short>::max()) {
+            std::stringstream s;
+            s << "value in array too large (cannot fit '" << js_value << "' in unsigned short)";
+            throw std::runtime_error(s.str());
+        }
+        cpp_array.emplace_back(static_cast<unsigned short>(js_value));
     }
-    return vector;
+    return cpp_array;
 }
 
 Local<Array> vectorToArray(Cache::intarray const& vector) {
     std::size_t size = vector.size();
     Local<Array> array = NanNew<Array>(static_cast<int>(size));
-    for (uint64_t i = 0; i < size; i++) {
+    for (uint32_t i = 0; i < size; i++) {
         array->Set(i, NanNew<Number>(vector[i]));
     }
     return array;
@@ -51,14 +57,14 @@ std::map<std::uint64_t,std::uint64_t> objectToMap(Local<Object> const& object) {
     const Local<Array> keys = object->GetPropertyNames();
     const uint32_t length = keys->Length();
     for (uint32_t i = 0; i < length; i++) {
-        uint64_t key = keys->Get(i)->NumberValue();
-        uint64_t value = object->Get(key)->NumberValue();
+        uint32_t key = static_cast<uint32_t>(keys->Get(i)->IntegerValue());
+        uint64_t value = static_cast<uint64_t>(object->Get(key)->NumberValue());
         map.emplace(key, value);
     }
     return map;
 }
 
-Cache::intarray __get(Cache const* c, std::string const& type, std::string const& shard, uint64_t id) {
+Cache::intarray __get(Cache const* c, std::string const& type, std::string const& shard, uint32_t id) {
     std::string key = type + "-" + shard;
     Cache::memcache const& mem = c->cache_;
     Cache::memcache::const_iterator itr = mem.find(key);
@@ -112,7 +118,7 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string const
     }
 }
 
-bool __exists(Cache const* c, std::string const& type, std::string const& shard, uint64_t id) {
+bool __exists(Cache const* c, std::string const& type, std::string const& shard, uint32_t id) {
     std::string key = type + "-" + shard;
     Cache::memcache const& mem = c->cache_;
     Cache::memcache::const_iterator itr = mem.find(key);
@@ -255,7 +261,7 @@ NAN_METHOD(Cache::pack)
         int size = message.ByteSize();
         if (size > 0)
         {
-            std::size_t usize = static_cast<std::size_t>(size);
+            uint32_t usize = static_cast<uint32_t>(size);
             Local<Object> buf = NanNewBufferHandle(usize);
             if (message.SerializeToArray(node::Buffer::Data(buf),size))
             {
@@ -376,7 +382,7 @@ NAN_METHOD(Cache::_set)
         }
 
         for (unsigned i=0;i<array_size;++i) {
-            vv.emplace_back(data->Get(i)->NumberValue());
+            vv.emplace_back(static_cast<uint64_t>(data->Get(i)->NumberValue()));
         }
     } catch (std::exception const& ex) {
         return NanThrowTypeError(ex.what());
@@ -621,14 +627,21 @@ NAN_METHOD(Cache::_get)
         return NanThrowTypeError("second arg must be an Integer");
     }
     if (!args[2]->IsNumber()) {
-        return NanThrowTypeError("third arg must be an Integer");
+        return NanThrowTypeError("third arg must be a positive Integer");
     }
     try {
         std::string type = *String::Utf8Value(args[0]->ToString());
         std::string shard = *String::Utf8Value(args[1]->ToString());
-        uint64_t id = static_cast<uint64_t>(args[2]->IntegerValue());
+        int64_t id = args[2]->IntegerValue();
+        if (id < 0) {
+            return NanThrowTypeError("third arg must be a positive Integer");
+        }
+        if (id > std::numeric_limits<uint32_t>::max()) {
+            return NanThrowTypeError("third arg must be a positive Integer that fits within 32 bits");
+        }
+        uint32_t id2 = static_cast<uint32_t>(id);
         Cache* c = node::ObjectWrap::Unwrap<Cache>(args.This());
-        Cache::intarray vector = __get(c, type, shard, id);
+        Cache::intarray vector = __get(c, type, shard, id2);
         if (!vector.empty()) {
             NanReturnValue(vectorToArray(vector));
         } else {
@@ -657,7 +670,7 @@ NAN_METHOD(Cache::_exists)
     try {
         std::string type = *String::Utf8Value(args[0]->ToString());
         std::string shard = *String::Utf8Value(args[1]->ToString());
-        uint64_t id = static_cast<uint64_t>(args[2]->IntegerValue());
+        uint32_t id = static_cast<uint32_t>(args[2]->IntegerValue());
         Cache* c = node::ObjectWrap::Unwrap<Cache>(args.This());
         bool exists = __exists(c, type, shard, id);
         NanReturnValue(NanNew<Boolean>(exists));
@@ -742,25 +755,25 @@ NAN_METHOD(Cache::New)
 //reason = 12 bits
 //* 1 bit gap
 //id = 32 bits
-const uint64_t POW2_52 = std::pow(2,52);
-const uint64_t POW2_48 = std::pow(2,48);
-const uint64_t POW2_45 = std::pow(2,45);
-const uint64_t POW2_33 = std::pow(2,33);
-const uint64_t POW2_32 = std::pow(2,32);
-const uint64_t POW2_28 = std::pow(2,28);
-const uint64_t POW2_25 = std::pow(2,25);
-const uint64_t POW2_20 = std::pow(2,20);
-const uint64_t POW2_14 = std::pow(2,14);
-const uint64_t POW2_12 = std::pow(2,12);
-const uint64_t POW2_8 = std::pow(2,8);
-const uint64_t POW2_5 = std::pow(2,5);
-const uint64_t POW2_4 = std::pow(2,4);
-const uint64_t POW2_3 = std::pow(2,3);
-const uint64_t POW2_2 = std::pow(2,2);
+const uint64_t POW2_52 = static_cast<uint64_t>(std::pow(2,52));
+const uint64_t POW2_48 = static_cast<uint64_t>(std::pow(2,48));
+const uint64_t POW2_45 = static_cast<uint64_t>(std::pow(2,45));
+const uint64_t POW2_33 = static_cast<uint64_t>(std::pow(2,33));
+const uint64_t POW2_32 = static_cast<uint64_t>(std::pow(2,32));
+const uint64_t POW2_28 = static_cast<uint64_t>(std::pow(2,28));
+const uint64_t POW2_25 = static_cast<uint64_t>(std::pow(2,25));
+const uint64_t POW2_20 = static_cast<uint64_t>(std::pow(2,20));
+const uint64_t POW2_14 = static_cast<uint64_t>(std::pow(2,14));
+const uint64_t POW2_12 = static_cast<uint64_t>(std::pow(2,12));
+const uint64_t POW2_8 = static_cast<uint64_t>(std::pow(2,8));
+const uint64_t POW2_5 = static_cast<uint64_t>(std::pow(2,5));
+const uint64_t POW2_4 = static_cast<uint64_t>(std::pow(2,4));
+const uint64_t POW2_3 = static_cast<uint64_t>(std::pow(2,3));
+const uint64_t POW2_2 = static_cast<uint64_t>(std::pow(2,2));
 
 struct PhrasematchSubq {
     carmen::Cache *cache;
-    uint64_t phrase;
+    uint32_t phrase;
     uint64_t shardlevel;
     unsigned short idx;
     unsigned short zoom;
@@ -785,13 +798,19 @@ struct Context {
 
 Cover numToCover(uint64_t num) {
     Cover cover;
-    unsigned short x = (num >> 39) % POW2_14;
-    unsigned short y = (num >> 25) % POW2_14;
-    double relev = 0.4 + (0.2 * ((num >> 23) % POW2_2));
-    unsigned short score = (num >> 20) % POW2_3;
-    uint32_t id = num % POW2_20;
+    assert(((num >> 39) % POW2_14) <= static_cast<double>(std::numeric_limits<unsigned short>::max()));
+    assert(((num >> 39) % POW2_14) >= static_cast<double>(std::numeric_limits<unsigned short>::min()));
+    unsigned short x = static_cast<unsigned short>((num >> 39) % POW2_14);
+    assert(((num >> 25) % POW2_14) <= static_cast<double>(std::numeric_limits<unsigned short>::max()));
+    assert(((num >> 25) % POW2_14) >= static_cast<double>(std::numeric_limits<unsigned short>::min()));
+    unsigned short y = static_cast<unsigned short>((num >> 25) % POW2_14);
+    assert(((num >> 20) % POW2_3) <= static_cast<double>(std::numeric_limits<unsigned short>::max()));
+    assert(((num >> 20) % POW2_3) >= static_cast<double>(std::numeric_limits<unsigned short>::min()));
+    unsigned short score = static_cast<unsigned short>((num >> 20) % POW2_3);
+    uint32_t id = static_cast<uint32_t>(num % POW2_20);
     cover.x = x;
     cover.y = y;
+    double relev = 0.4 + (0.2 * ((num >> 23) % POW2_2));
     cover.relev = relev;
     cover.score = score;
     cover.id = id;
@@ -818,7 +837,10 @@ ZXY pxy2zxy(unsigned short z, unsigned short x, unsigned short y, unsigned short
     }
 
     // Midpoint length @ z for a tile at parent zoom level
-    unsigned short pMid = std::pow(2,zDist) / 2;
+    double pMid_d = std::pow(2,zDist) / 2.0;
+    assert(pMid_d <= static_cast<double>(std::numeric_limits<unsigned short>::max()));
+    assert(pMid_d >= static_cast<double>(std::numeric_limits<unsigned short>::min()));
+    unsigned short pMid = static_cast<unsigned short>(pMid_d);
     zxy.x = (x * zMult) + pMid;
     zxy.y = (y * zMult) + pMid;
     return zxy;
@@ -876,7 +898,7 @@ struct CoalesceBaton : carmen::noncopyable {
     uv_work_t request;
     // params
     std::vector<PhrasematchSubq> stack;
-    Cache::intarray centerzxy;
+    std::vector<unsigned short> centerzxy;
     v8::Persistent<v8::Function> callback;
     // return
     std::vector<Context> features;
@@ -922,7 +944,7 @@ void coalesceSingle(uv_work_t* req) {
     std::string shardId = shard(subq.shardlevel, subq.phrase);
 
     // proximity (optional)
-    bool proximity = baton->centerzxy.size() > 0;
+    bool proximity = !baton->centerzxy.empty();
     unsigned short cx;
     unsigned short cy;
     if (proximity) {
@@ -944,7 +966,7 @@ void coalesceSingle(uv_work_t* req) {
     for (unsigned long j = 0; j < m; j++) {
         Cover cover = numToCover(grids[j]);
         cover.idx = subq.idx;
-        cover.tmpid = cover.idx * POW2_25 + cover.id;
+        cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
         cover.relev = cover.relev * subq.weight;
         cover.distance = proximity ? tileDist(cx, cover.x, cy, cover.y) : 0;
 
@@ -1043,7 +1065,7 @@ void coalesceMulti(uv_work_t* req) {
         for (unsigned long j = 0; j < m; j++) {
             Cover cover = numToCover(grids[j]);
             cover.idx = subq.idx;
-            cover.tmpid = cover.idx * POW2_25 + cover.id;
+            cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
             cover.relev = cover.relev * subq.weight;
             if (proximity) {
                 ZXY dxy = pxy2zxy(z, cover.x, cover.y, cz);
@@ -1066,9 +1088,9 @@ void coalesceMulti(uv_work_t* req) {
             dit = done.find(zxy);
             if (dit == done.end()) {
                 for (unsigned a = 0; a < zCacheSize; a++) {
-                    unsigned p = zCache[a];
-                    unsigned s = 1 << (z-p);
-                    uint64_t pxy = (p * POW2_28) + (std::floor(cover.x/s) * POW2_14) + std::floor(cover.y/s);
+                    uint64_t p = zCache[a];
+                    double s = static_cast<double>(1 << (z-p));
+                    uint64_t pxy = static_cast<uint64_t>((p * POW2_28) + (std::floor(cover.x/s) * POW2_14) + std::floor(cover.y/s));
                     // Set a flag to ensure coalesce occurs only once per zxy.
                     pit = coalesced.find(pxy);
                     if (pit != coalesced.end()) {
@@ -1131,7 +1153,7 @@ Local<Object> coverToObject(Cover const& cover) {
 Local<Array> contextToArray(Context const& context) {
     std::size_t size = context.coverList.size();
     Local<Array> array = NanNew<Array>(static_cast<int>(size));
-    for (uint64_t i = 0; i < size; i++) {
+    for (uint32_t i = 0; i < size; i++) {
         array->Set(i, coverToObject(context.coverList[i]));
     }
     array->Set(NanNew("relev"), NanNew(context.relev));
@@ -1160,49 +1182,76 @@ NAN_METHOD(Cache::coalesce) {
         return NanThrowTypeError("Arg 1 must be a PhrasematchSubq array");
     }
     CoalesceBaton *baton = new CoalesceBaton();
-    std::vector<PhrasematchSubq> stack;
-    const Local<Array> array = Local<Array>::Cast(args[0]);
-    for (uint64_t i = 0; i < array->Length(); i++) {
-        Local<Object> jsStack = Local<Object>::Cast(array->Get(i));
-        PhrasematchSubq subq;
-        subq.idx = jsStack->Get(NanNew("idx"))->NumberValue();
-        subq.zoom = jsStack->Get(NanNew("zoom"))->NumberValue();
-        subq.weight = jsStack->Get(NanNew("weight"))->NumberValue();
-        subq.phrase = jsStack->Get(NanNew("phrase"))->NumberValue();
-        subq.shardlevel = jsStack->Get(NanNew("shardlevel"))->NumberValue();
 
-        // JS cache reference => cpp
-        Local<Object> cache = Local<Object>::Cast(jsStack->Get(NanNew("cache")));
-        subq.cache = node::ObjectWrap::Unwrap<Cache>(cache);
+    try {
+        std::vector<PhrasematchSubq> stack;
+        const Local<Array> array = Local<Array>::Cast(args[0]);
+        for (uint32_t i = 0; i < array->Length(); i++) {
+            Local<Object> jsStack = Local<Object>::Cast(array->Get(i));
+            PhrasematchSubq subq;
 
-        stack.push_back(subq);
-    }
-    baton->stack = stack;
+            int64_t _idx = jsStack->Get(NanNew("idx"))->IntegerValue();
+            if (_idx < 0 || _idx > std::numeric_limits<unsigned short>::max()) {
+                delete baton;
+                return NanThrowTypeError("encountered idx value too large to fit in unsigned short");
+            }
+            subq.idx = static_cast<unsigned short>(_idx);
 
-    // Options object (js => cpp)
-    if (!args[1]->IsObject()) {
-        return NanThrowTypeError("Arg 2 must be an options object");
-    }
-    const Local<Object> options = Local<Object>::Cast(args[1]);
-    if (options->Has(NanNew("centerzxy"))) {
-        baton->centerzxy = arrayToVector(Local<Array>::Cast(options->Get(NanNew("centerzxy"))));
+            int64_t _zoom = jsStack->Get(NanNew("zoom"))->IntegerValue();
+            if (_zoom < 0 || _zoom > std::numeric_limits<unsigned short>::max()) {
+                delete baton;
+                return NanThrowTypeError("encountered zoom value too large to fit in unsigned short");
+            }
+            subq.zoom = static_cast<unsigned short>(_zoom);
+
+            subq.weight = jsStack->Get(NanNew("weight"))->NumberValue();
+            int64_t _phrase = jsStack->Get(NanNew("phrase"))->IntegerValue();
+            if (_phrase < 0 || _phrase > std::numeric_limits<uint32_t>::max()) {
+                delete baton;
+                return NanThrowTypeError("encountered phrase value too large to fit in unsigned short");
+            }
+            subq.phrase = static_cast<uint32_t>(_phrase);
+            subq.shardlevel = static_cast<uint64_t>(jsStack->Get(NanNew("shardlevel"))->NumberValue());
+
+            // JS cache reference => cpp
+            Local<Object> cache = Local<Object>::Cast(jsStack->Get(NanNew("cache")));
+            subq.cache = node::ObjectWrap::Unwrap<Cache>(cache);
+
+            stack.push_back(subq);
+        }
+        baton->stack = stack;
+
+        // Options object (js => cpp)
+        if (!args[1]->IsObject()) {
+            delete baton;
+            return NanThrowTypeError("Arg 2 must be an options object");
+        }
+        const Local<Object> options = Local<Object>::Cast(args[1]);
+        if (options->Has(NanNew("centerzxy"))) {
+            baton->centerzxy = arrayToVector(Local<Array>::Cast(options->Get(NanNew("centerzxy"))));
+        }
+
+        // callback
+        if (!args[2]->IsFunction()) {
+            delete baton;
+            return NanThrowTypeError("Arg 3 must be a callback function");
+        }
+        Local<Value> callback = args[2];
+        NanAssignPersistent(baton->callback, callback.As<Function>());
+
+        // queue work
+        baton->request.data = baton;
+        // optimization: for stacks of 1, use coalesceSingle
+        if (stack.size() == 1) {
+            uv_queue_work(uv_default_loop(), &baton->request, coalesceSingle, (uv_after_work_cb)coalesceAfter);
+        } else {
+            uv_queue_work(uv_default_loop(), &baton->request, coalesceMulti, (uv_after_work_cb)coalesceAfter);
+        }
+    } catch (std::exception const& ex) {
+        delete baton;
+        return NanThrowTypeError(ex.what());
     }
 
-    // callback
-    if (!args[2]->IsFunction()) {
-        return NanThrowTypeError("Arg 3 must be a callback function");
-    }
-    Local<Value> callback = args[2];
-    NanAssignPersistent(baton->callback, callback.As<Function>());
-
-    // queue work
-    baton->request.data = baton;
-    // optimization: for stacks of 1, use coalesceSingle
-    if (stack.size() == 1) {
-        uv_queue_work(uv_default_loop(), &baton->request, coalesceSingle, (uv_after_work_cb)coalesceAfter);
-    } else {
-        uv_queue_work(uv_default_loop(), &baton->request, coalesceMulti, (uv_after_work_cb)coalesceAfter);
-    }
     NanReturnUndefined();
 }
 
