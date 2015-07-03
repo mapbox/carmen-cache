@@ -47,7 +47,7 @@ before_install:
  - export LDFLAGS="-L$(pwd)/mason_packages/.link/lib"
 
 install:
-- npm install --build-from-source
+- npm install --build-from-source --clang=1
 
 script:
 - npm test
