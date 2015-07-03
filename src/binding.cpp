@@ -905,7 +905,6 @@ struct CoalesceBaton : carmen::noncopyable {
 };
 
 void coalesceFinalize(CoalesceBaton* baton, std::vector<Context> const& contexts) {
-    std::vector<Context> features;
     if (contexts.size() > 0) {
         // Coalesce stack, generate relevs.
         double relevMax = contexts[0].relev;
@@ -928,12 +927,10 @@ void coalesceFinalize(CoalesceBaton* baton, std::vector<Context> const& contexts
             if (sit != sets.end()) continue;
 
             sets.emplace(feature.coverList[0].tmpid, true);
-            features.emplace_back(feature);
+            baton->features.emplace_back(feature);
             total++;
         }
     }
-
-    baton->features = std::move(features);
 }
 void coalesceSingle(uv_work_t* req) {
     CoalesceBaton *baton = static_cast<CoalesceBaton *>(req->data);
