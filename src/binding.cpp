@@ -13,14 +13,14 @@ using namespace v8;
 
 Persistent<FunctionTemplate> Cache::constructor;
 
-std::string shard(uint64_t level, uint32_t id) {
+inline std::string shard(uint64_t level, uint32_t id) {
     if (level == 0) return "0";
     unsigned int bits = 32 - (static_cast<unsigned int>(level) * 4);
     unsigned int shard_id = static_cast<unsigned int>(std::floor(id / std::pow(2, bits)));
     return std::to_string(shard_id);
 }
 
-std::vector<unsigned short> arrayToVector(Local<Array> const& array) {
+inline std::vector<unsigned short> arrayToVector(Local<Array> const& array) {
     std::vector<unsigned short> cpp_array;
     cpp_array.reserve(array->Length());
     for (uint32_t i = 0; i < array->Length(); i++) {
@@ -35,7 +35,7 @@ std::vector<unsigned short> arrayToVector(Local<Array> const& array) {
     return cpp_array;
 }
 
-Local<Array> vectorToArray(Cache::intarray const& vector) {
+inline Local<Array> vectorToArray(Cache::intarray const& vector) {
     std::size_t size = vector.size();
     Local<Array> array = NanNew<Array>(static_cast<int>(size));
     for (uint32_t i = 0; i < size; i++) {
@@ -44,7 +44,7 @@ Local<Array> vectorToArray(Cache::intarray const& vector) {
     return array;
 }
 
-Local<Object> mapToObject(std::map<std::uint64_t,std::uint64_t> const& map) {
+inline Local<Object> mapToObject(std::map<std::uint64_t,std::uint64_t> const& map) {
     Local<Object> object = NanNew<Object>();
     for (auto const& item : map) {
         object->Set(NanNew<Number>(item.first), NanNew<Number>(item.second));
@@ -52,7 +52,7 @@ Local<Object> mapToObject(std::map<std::uint64_t,std::uint64_t> const& map) {
     return object;
 }
 
-std::map<std::uint64_t,std::uint64_t> objectToMap(Local<Object> const& object) {
+inline std::map<std::uint64_t,std::uint64_t> objectToMap(Local<Object> const& object) {
     std::map<std::uint64_t,std::uint64_t> map;
     const Local<Array> keys = object->GetPropertyNames();
     const uint32_t length = keys->Length();
@@ -846,7 +846,7 @@ ZXY pxy2zxy(unsigned short z, unsigned short x, unsigned short y, unsigned short
     return zxy;
 }
 
-bool coverSortByRelev(Cover const& a, Cover const& b) {
+inline bool coverSortByRelev(Cover const& a, Cover const& b) noexcept {
     if (b.relev > a.relev) return false;
     else if (b.relev < a.relev) return true;
     else if (b.score > a.score) return false;
@@ -856,7 +856,7 @@ bool coverSortByRelev(Cover const& a, Cover const& b) {
     return (b.id > a.id);
 }
 
-bool coverSortByRelevDistance(Cover const& a, Cover const& b) {
+inline bool coverSortByRelevDistance(Cover const& a, Cover const& b) noexcept {
     if (b.relev > a.relev) return false;
     else if (b.relev < a.relev) return true;
     else if (b.distance < a.distance) return false;
@@ -868,7 +868,7 @@ bool coverSortByRelevDistance(Cover const& a, Cover const& b) {
     return (b.id > a.id);
 }
 
-bool contextSortByRelev(Context const& a, Context const& b) {
+inline bool contextSortByRelev(Context const& a, Context const& b) noexcept {
     if (b.relev > a.relev) return false;
     else if (b.relev < a.relev) return true;
     else if (b.coverList[0].score > a.coverList[0].score) return false;
@@ -878,7 +878,7 @@ bool contextSortByRelev(Context const& a, Context const& b) {
     return (b.coverList[0].id > a.coverList[0].id);
 }
 
-bool contextSortByRelevDistance(Context const& a, Context const& b) {
+inline bool contextSortByRelevDistance(Context const& a, Context const& b) noexcept {
     if (b.relev > a.relev) return false;
     else if (b.relev < a.relev) return true;
     else if (b.coverList[0].distance < a.coverList[0].distance) return false;
@@ -890,7 +890,7 @@ bool contextSortByRelevDistance(Context const& a, Context const& b) {
     return (b.coverList[0].id > a.coverList[0].id);
 }
 
-unsigned short tileDist(unsigned short ax, unsigned short bx, unsigned short ay, unsigned short by) {
+inline unsigned short tileDist(unsigned short ax, unsigned short bx, unsigned short ay, unsigned short by) noexcept {
     return (ax > bx ? ax - bx : bx - ax) + (ay > by ? ay - by : by - ay);
 }
 
@@ -992,6 +992,7 @@ void coalesceSingle(uv_work_t* req) {
 
     coalesceFinalize(baton, contexts);
 }
+
 void coalesceMulti(uv_work_t* req) {
     CoalesceBaton *baton = static_cast<CoalesceBaton *>(req->data);
     std::vector<PhrasematchSubq> const& stack = baton->stack;
