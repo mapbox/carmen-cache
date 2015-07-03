@@ -814,6 +814,13 @@ Cover numToCover(uint64_t num) {
     cover.relev = relev;
     cover.score = score;
     cover.id = id;
+
+    // These are not derived from decoding the input num but by
+    // external values after initialization.
+    cover.idx = 0;
+    cover.tmpid = 0;
+    cover.distance = 0;
+
     return cover;
 };
 
