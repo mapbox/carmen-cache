@@ -981,10 +981,21 @@ void coalesceSingle(uv_work_t* req) {
         std::sort(covers.begin(), covers.end(), coverSortByRelev);
     }
 
+    uint32_t lastid = 0;
+    unsigned short added = 0;
     std::vector<Context> contexts;
-    m = covers.size() > 40 ? 40 : covers.size();
+    m = covers.size();
     contexts.reserve(m);
     for (unsigned long j = 0; j < m; j++) {
+        // Stop at 40 contexts
+        if (added == 40) break;
+
+        // Attempt not to add the same feature but by diff cover twice
+        if (lastid == covers[j].id) continue;
+
+        lastid = covers[j].id;
+        added++;
+
         Context context;
         context.coverList.emplace_back(covers[j]);
         context.relev = covers[j].relev;
