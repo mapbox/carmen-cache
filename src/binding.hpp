@@ -63,11 +63,9 @@ public:
     static NAN_METHOD(coalesce);
     static void AsyncRun(uv_work_t* req);
     static void AfterRun(uv_work_t* req);
-    Cache(std::string const& id, unsigned shardlevel);
+    explicit Cache();
     void _ref() { Ref(); }
     void _unref() { Unref(); }
-    std::string id_;
-    unsigned shardlevel_;
     memcache cache_;
     lazycache lazy_;
     message_cache msg_;

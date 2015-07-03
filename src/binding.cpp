@@ -181,14 +181,11 @@ void Cache::Initialize(Handle<Object> target) {
     NanAssignPersistent(constructor, t);
 }
 
-Cache::Cache(std::string const& id, unsigned shardlevel)
+Cache::Cache()
   : ObjectWrap(),
-    id_(id),
-    shardlevel_(shardlevel),
     cache_(),
     lazy_(),
-    msg_()
-    { }
+    msg_() {}
 
 Cache::~Cache() { }
 
@@ -739,7 +736,7 @@ NAN_METHOD(Cache::New)
         }
         std::string id = *String::Utf8Value(args[0]->ToString());
         unsigned shardlevel = static_cast<unsigned>(args[1]->IntegerValue());
-        Cache* im = new Cache(id,shardlevel);
+        Cache* im = new Cache();
         im->Wrap(args.This());
         args.This()->Set(NanNew("id"),args[0]);
         args.This()->Set(NanNew("shardlevel"),args[1]);
