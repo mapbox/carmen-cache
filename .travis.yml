@@ -34,6 +34,10 @@ env:
    - secure: lmfuNtK0/ubV4ZZobgfeKY6DzG41ZciS4a00yCe29jHLxAg+EEmB/qpsW5d1//cC94OKsAySW08xp2uX5wBVvtryaaoiwU7fdKF9DOxHRHieGw/3+m8NNjELkd5hKMKiqDj7l4QPMchzBQR2PQkoG0UMCGUFe+RmzZ2/iCdGHXU=
 
 before_install:
+ - if [[ $(uname -s) == 'Linux' ]]; then
+     export CXX="clang++-3.5";
+     export CC="clang-3.5";
+   fi;
  - source ./test/install_node.sh ${NODE_VERSION}
  - export PATH=./node_modules/.bin/:$PATH
  - git clone --depth 1 https://github.com/mapbox/mason.git ./.mason
