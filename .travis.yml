@@ -1,39 +1,52 @@
 language: cpp
 
-os:
-  - linux
-  - osx
+sudo: false
 
-compiler:
-- gcc
-- clang
+addons:
+  apt:
+    sources:
+     - ubuntu-toolchain-r-test
+     - llvm-toolchain-precise-3.5
+    packages:
+     - clang-3.5
 
 matrix:
-  exclude:
+  include:
+     # Linux
+     - os: linux
+       compiler: clang
+       env: NODE_VERSION="0.12.2" # node abi 14
+     - os: linux
+       compiler: clang
+       env: NODE_VERSION="0.10.38" # node abi 11
+     # OS X
      - os: osx
-       compiler: gcc
+       compiler: clang
+       env: NODE_VERSION="0.12.2" # node abi 14
+     - os: osx
+       compiler: clang
+       env: NODE_VERSION="0.10.38" # node abi 11
 
 env:
-  matrix:
-  - NODE_NVM_VERSION="0.10.33"
-  - NODE_NVM_VERSION="0.11.14"
   global:
-  - secure: bLTdbWwf3v8X7yJlLLqPc9BRhFquwma4oYL9T2C38FXzSuqhXJZF+kNXjHd85E4lJNnuLXDjrPJLLkigd70J9Tclu2XQvy3cGzXI+EMsO6rDvQN24Eoi6uJ/qHhTrAoud526ouxO8qk9YYLjD6UWX1EOtqcEdwPMose8L1wsMZI=
-  - secure: lmfuNtK0/ubV4ZZobgfeKY6DzG41ZciS4a00yCe29jHLxAg+EEmB/qpsW5d1//cC94OKsAySW08xp2uX5wBVvtryaaoiwU7fdKF9DOxHRHieGw/3+m8NNjELkd5hKMKiqDj7l4QPMchzBQR2PQkoG0UMCGUFe+RmzZ2/iCdGHXU=
+   - JOBS: "8"
+   - secure: bLTdbWwf3v8X7yJlLLqPc9BRhFquwma4oYL9T2C38FXzSuqhXJZF+kNXjHd85E4lJNnuLXDjrPJLLkigd70J9Tclu2XQvy3cGzXI+EMsO6rDvQN24Eoi6uJ/qHhTrAoud526ouxO8qk9YYLjD6UWX1EOtqcEdwPMose8L1wsMZI=
+   - secure: lmfuNtK0/ubV4ZZobgfeKY6DzG41ZciS4a00yCe29jHLxAg+EEmB/qpsW5d1//cC94OKsAySW08xp2uX5wBVvtryaaoiwU7fdKF9DOxHRHieGw/3+m8NNjELkd5hKMKiqDj7l4QPMchzBQR2PQkoG0UMCGUFe+RmzZ2/iCdGHXU=
 
 before_install:
-- export platform=$(uname -s | sed "y/ABCDEFGHIJKLMNOPQRSTUVWXYZ/abcdefghijklmnopqrstuvwxyz/")
-- if [[ "$platform" == "linux" ]]; then sudo add-apt-repository --yes ppa:ubuntu-toolchain-r/test; sudo apt-get update; sudo apt-get install gcc-4.8 g++-4.8; export CXX=g++-4.8; fi
-- git clone https://github.com/creationix/nvm.git ../.nvm
-- source ../.nvm/nvm.sh
-- nvm install $NODE_NVM_VERSION
-- nvm use $NODE_NVM_VERSION
-- node --version
-- npm --version
-- sudo ./test/travis-protobuf.sh
+ - source ./test/install_node.sh ${NODE_VERSION}
+ - export PATH=./node_modules/.bin/:$PATH
+ - git clone --depth 1 https://github.com/mapbox/mason.git ./.mason
+ - export MASON_DIR=$(pwd)/.mason
+ - export PATH=$(pwd)/.mason:$(pwd)/mason_packages/.link/bin:$PATH
+ - ./.mason/mason install protobuf 2.6.1
+ - ./.mason/mason link protobuf 2.6.1
+ - export PKG_CONFIG_PATH=$(pwd)/mason_packages/.link/lib/pkgconfig/
+ - export CXXFLAGS="-I$(pwd)/mason_packages/.link/include"
+ - export LDFLAGS="-L$(pwd)/mason_packages/.link/lib"
 
 install:
-- npm install --build-from-source
+- npm install --build-from-source --clang=1
 
 script:
 - npm test
