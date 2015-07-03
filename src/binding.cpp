@@ -755,21 +755,26 @@ NAN_METHOD(Cache::New)
 //reason = 12 bits
 //* 1 bit gap
 //id = 32 bits
-const uint64_t POW2_52 = static_cast<uint64_t>(std::pow(2,52));
-const uint64_t POW2_48 = static_cast<uint64_t>(std::pow(2,48));
-const uint64_t POW2_45 = static_cast<uint64_t>(std::pow(2,45));
-const uint64_t POW2_33 = static_cast<uint64_t>(std::pow(2,33));
-const uint64_t POW2_32 = static_cast<uint64_t>(std::pow(2,32));
-const uint64_t POW2_28 = static_cast<uint64_t>(std::pow(2,28));
-const uint64_t POW2_25 = static_cast<uint64_t>(std::pow(2,25));
-const uint64_t POW2_20 = static_cast<uint64_t>(std::pow(2,20));
-const uint64_t POW2_14 = static_cast<uint64_t>(std::pow(2,14));
-const uint64_t POW2_12 = static_cast<uint64_t>(std::pow(2,12));
-const uint64_t POW2_8 = static_cast<uint64_t>(std::pow(2,8));
-const uint64_t POW2_5 = static_cast<uint64_t>(std::pow(2,5));
-const uint64_t POW2_4 = static_cast<uint64_t>(std::pow(2,4));
-const uint64_t POW2_3 = static_cast<uint64_t>(std::pow(2,3));
-const uint64_t POW2_2 = static_cast<uint64_t>(std::pow(2,2));
+constexpr double _pow(double x, int y)
+{
+    return y == 0 ? 1.0 : x * _pow(x, y-1);
+}
+
+constexpr uint64_t POW2_52 = static_cast<uint64_t>(_pow(2.0,52));
+constexpr uint64_t POW2_48 = static_cast<uint64_t>(_pow(2.0,48));
+constexpr uint64_t POW2_45 = static_cast<uint64_t>(_pow(2.0,45));
+constexpr uint64_t POW2_33 = static_cast<uint64_t>(_pow(2.0,33));
+constexpr uint64_t POW2_32 = static_cast<uint64_t>(_pow(2.0,32));
+constexpr uint64_t POW2_28 = static_cast<uint64_t>(_pow(2.0,28));
+constexpr uint64_t POW2_25 = static_cast<uint64_t>(_pow(2.0,25));
+constexpr uint64_t POW2_20 = static_cast<uint64_t>(_pow(2.0,20));
+constexpr uint64_t POW2_14 = static_cast<uint64_t>(_pow(2.0,14));
+constexpr uint64_t POW2_12 = static_cast<uint64_t>(_pow(2.0,12));
+constexpr uint64_t POW2_8 = static_cast<uint64_t>(_pow(2.0,8));
+constexpr uint64_t POW2_5 = static_cast<uint64_t>(_pow(2.0,5));
+constexpr uint64_t POW2_4 = static_cast<uint64_t>(_pow(2.0,4));
+constexpr uint64_t POW2_3 = static_cast<uint64_t>(_pow(2.0,3));
+constexpr uint64_t POW2_2 = static_cast<uint64_t>(_pow(2.0,2));
 
 struct PhrasematchSubq {
     carmen::Cache *cache;
