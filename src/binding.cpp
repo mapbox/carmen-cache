@@ -734,8 +734,6 @@ NAN_METHOD(Cache::New)
         if (!args[1]->IsNumber()) {
             return NanThrowTypeError("second argument 'shardlevel' must be a number");
         }
-        std::string id = *String::Utf8Value(args[0]->ToString());
-        unsigned shardlevel = static_cast<unsigned>(args[1]->IntegerValue());
         Cache* im = new Cache();
         im->Wrap(args.This());
         args.This()->Set(NanNew("id"),args[0]);
