@@ -938,7 +938,7 @@ void coalesceFinalize(CoalesceBaton* baton, std::vector<Context> const& contexts
 void coalesceSingle(uv_work_t* req) {
     CoalesceBaton *baton = static_cast<CoalesceBaton *>(req->data);
 
-    std::vector<PhrasematchSubq> stack = std::move(baton->stack);
+    std::vector<PhrasematchSubq> const& stack = baton->stack;
     PhrasematchSubq const& subq = stack[0];
     std::string type = "grid";
     std::string shardId = shard(subq.shardlevel, subq.phrase);
@@ -996,7 +996,7 @@ void coalesceSingle(uv_work_t* req) {
 }
 void coalesceMulti(uv_work_t* req) {
     CoalesceBaton *baton = static_cast<CoalesceBaton *>(req->data);
-    std::vector<PhrasematchSubq> stack = std::move(baton->stack);
+    std::vector<PhrasematchSubq> const& stack = baton->stack;
 
     size_t size;
 
