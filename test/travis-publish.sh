@@ -3,7 +3,7 @@
 set -e
 
 # Inspect binary.
-if [ $platform == "linux" ]; then
+if [ $(uname -s) == "Linux" ]; then
     ldd ./lib/carmen.node
 else
     otool -L ./lib/carmen.node
