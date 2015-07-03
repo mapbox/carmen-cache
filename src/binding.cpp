@@ -781,12 +781,12 @@ struct PhrasematchSubq {
 };
 
 struct Cover {
-    unsigned short x;
-    unsigned short y;
     double relev;
-    unsigned short score;
     uint32_t id;
     uint32_t tmpid;
+    unsigned short x;
+    unsigned short y;
+    unsigned short score;
     unsigned short idx;
     unsigned short distance;
 };
@@ -982,6 +982,7 @@ void coalesceSingle(uv_work_t* req) {
 
     std::vector<Context> contexts;
     m = covers.size() > 40 ? 40 : covers.size();
+    contexts.reserve(m);
     for (unsigned long j = 0; j < m; j++) {
         Context context;
         context.coverList.emplace_back(covers[j]);
