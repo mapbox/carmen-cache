@@ -20,7 +20,7 @@ var test = require('tape');
         function run(remaining) {
             if (!remaining) {
                 var ops = (+new Date-time)/runs;
-                assert.equal(ops < 20, true, 'coalesceSingle @ ' + ops + 'ms');
+                assert.equal(ops < 30, true, 'coalesceSingle @ ' + ops + 'ms');
                 assert.end();
                 return;
             }
@@ -43,7 +43,7 @@ var test = require('tape');
         function run(remaining) {
             if (!remaining) {
                 var ops = (+new Date-time)/runs;
-                assert.equal(ops < 20, true, 'coalesceSingle + proximity @ ' + ops + 'ms');
+                assert.equal(ops < 30, true, 'coalesceSingle + proximity @ ' + ops + 'ms');
                 assert.end();
                 return;
             }
@@ -91,7 +91,7 @@ var test = require('tape');
         function run(remaining) {
             if (!remaining) {
                 var ops = (+new Date-time)/runs;
-                assert.equal(ops < 40, true, 'coalesceMulti @ ' + ops + 'ms');
+                assert.equal(ops < 60, true, 'coalesceMulti @ ' + ops + 'ms');
                 assert.end();
                 return;
             }
@@ -115,7 +115,7 @@ var test = require('tape');
         function run(remaining) {
             if (!remaining) {
                 var ops = (+new Date-time)/runs;
-                assert.equal(ops < 40, true, 'coalesceMulti + proximity @ ' + ops + 'ms');
+                assert.equal(ops < 60, true, 'coalesceMulti + proximity @ ' + ops + 'ms');
                 assert.end();
                 return;
             }
