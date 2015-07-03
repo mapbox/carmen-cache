@@ -510,7 +510,6 @@ void Cache::AsyncLoad(uv_work_t* req) {
 void Cache::AfterLoad(uv_work_t* req) {
     NanScope();
     load_baton *closure = static_cast<load_baton *>(req->data);
-    TryCatch try_catch;
     if (!closure->error_name.empty()) {
         Local<Value> argv[1] = { Exception::Error(NanNew(closure->error_name.c_str())) };
         closure->cb.Call(1, argv);
@@ -522,10 +521,6 @@ void Cache::AfterLoad(uv_work_t* req) {
         closure->c->lazy_[closure->key] = std::move(closure->arrc);
         Local<Value> argv[1] = { NanNull() };
         closure->cb.Call(1, argv);
-    }
-    if (try_catch.HasCaught())
-    {
-        node::FatalException(try_catch);
     }
     delete closure;
 }
