@@ -879,141 +879,144 @@ bool uniqPhraseRelev(PhraseRelev const& a, PhraseRelev const& b) {
 }
 void _phrasematchPhraseRelev(uv_work_t* req) {
     phrasematchPhraseRelevBaton *baton = static_cast<phrasematchPhraseRelevBaton *>(req->data);
+    try {
+        std::string type = "phrase";
+        double max_relev = 0;
+        double min_relev = 1;
+        std::vector<PhraseRelev> allPhrases;
+        std::vector<PhraseRelev> relevantPhrases;
+        std::size_t phrases_size = baton->phrases.size();
+        for (uint64_t a = 0; a < phrases_size; a++) {
+            uint64_t id = baton->phrases[a];
+            Cache::intarray phrase = __get(baton->cache, "phrase", shard(baton->shardlevel, id), id);
+            if (phrase.empty()) {
+                baton->error = "Failed to get phrase";
+                return;
+            }
 
-    std::string type = "phrase";
-    double max_relev = 0;
-    double min_relev = 1;
-    std::vector<PhraseRelev> allPhrases;
-    std::vector<PhraseRelev> relevantPhrases;
-    std::size_t phrases_size = baton->phrases.size();
-    for (uint64_t a = 0; a < phrases_size; a++) {
-        uint64_t id = baton->phrases[a];
-        Cache::intarray phrase = __get(baton->cache, "phrase", shard(baton->shardlevel, id), id);
-        if (phrase.empty()) {
-            baton->error = "Failed to get phrase";
-            return;
-        }
+            unsigned short size = phrase.size();
 
-        unsigned short size = phrase.size();
+            double relev = 0;
+            unsigned short total = 0;
+            unsigned short count = 0;
+            unsigned short reason = 0;
+            unsigned short chardist = 0;
+            signed short lastidx = -1;
+            signed short lastmask = -1;
 
-        double relev = 0;
-        unsigned short total = 0;
-        unsigned short count = 0;
-        unsigned short reason = 0;
-        unsigned short chardist = 0;
-        signed short lastidx = -1;
-        signed short lastmask = -1;
+            // relev each feature:
+            // - across all feature synonyms, find the max relev of the sum
+            //   of each synonym's terms based on each term's frequency of
+            //   occurrence in the dataset.
+            // - for the max relev also store the 'reason' -- the index of
+            //   each query token that contributed to its relev.
+            for (unsigned short i = 0; i < size; i++) {
+                std::map<std::uint64_t,std::uint64_t>::iterator it;
+                uint64_t term = phrase[i] >> 4 << 4;
+                uint64_t matched = 0;
 
-        // relev each feature:
-        // - across all feature synonyms, find the max relev of the sum
-        //   of each synonym's terms based on each term's frequency of
-        //   occurrence in the dataset.
-        // - for the max relev also store the 'reason' -- the index of
-        //   each query token that contributed to its relev.
-        for (unsigned short i = 0; i < size; i++) {
-            std::map<std::uint64_t,std::uint64_t>::iterator it;
-            uint64_t term = phrase[i] >> 4 << 4;
-            uint64_t matched = 0;
+                if (isDataTerm(phrase[i])) {
+                    uint32_t min = std::floor((phrase[i]%POW2_28)/POW2_8);
+                    uint32_t max = std::floor((phrase[i]%POW2_52)/POW2_28);
 
-            if (isDataTerm(phrase[i])) {
-                uint32_t min = std::floor((phrase[i]%POW2_28)/POW2_8);
-                uint32_t max = std::floor((phrase[i]%POW2_52)/POW2_28);
+                    // Include carmen +/- 400 swing range
+                    min = min < 400 ? 0 : min - 400;
+                    max = max + 400;
 
-                // Include carmen +/- 400 swing range
-                min = min < 400 ? 0 : min - 400;
-                max = max + 400;
-
-                // Iterate through all query terms to see if any
-                // fall into dataterm range. If multiple terms fall
-                // into the dataterm range, choose the one that is
-                // closest in query term position to phrase term position.
-                // e.g.
-                //   phrase: [1-100] 15 st
-                //   query:  1 15 st
-                unsigned short matched_idx_dist = 1000;
-                for (auto const& pair : baton->queryidx) {
-                    uint32_t termnum = pair.first >> 4;
-                    signed short idx_dist = i - pair.second;
-                    if (termnum >= min && termnum <= max && std::abs(idx_dist) < matched_idx_dist) {
-                        matched = pair.first;
-                        matched_idx_dist = std::abs(idx_dist);
+                    // Iterate through all query terms to see if any
+                    // fall into dataterm range. If multiple terms fall
+                    // into the dataterm range, choose the one that is
+                    // closest in query term position to phrase term position.
+                    // e.g.
+                    //   phrase: [1-100] 15 st
+                    //   query:  1 15 st
+                    unsigned short matched_idx_dist = 1000;
+                    for (auto const& pair : baton->queryidx) {
+                        uint32_t termnum = pair.first >> 4;
+                        signed short idx_dist = i - pair.second;
+                        if (termnum >= min && termnum <= max && std::abs(idx_dist) < matched_idx_dist) {
+                            matched = pair.first;
+                            matched_idx_dist = std::abs(idx_dist);
+                        }
+                    }
+                } else {
+                    it = baton->querymask.find(term);
+                    if (it != baton->querymask.end()) {
+                        matched = term;
                     }
                 }
-            } else {
-                it = baton->querymask.find(term);
-                if (it != baton->querymask.end()) {
-                    matched = term;
+
+                // Get total relev score of phrase.
+                unsigned short weight = 0;
+                if (i < baton->querylen) {
+                    weight = (phrase[i] % 16) + 1;
+                    total += weight;
+                }
+
+                // This is effectively a short circuit.
+                if (matched == 0) {
+                    continue;
+                }
+
+                it = baton->queryidx.find(matched);
+                unsigned short termidx = it->second;
+                it = baton->querymask.find(matched);
+                unsigned short termmask = it->second;
+                it = baton->querydist.find(matched);
+                unsigned short termdist = it->second;
+
+                // Compare the current termmask against the previous
+                // termmask shifted by 1. Ensures that this term is
+                // contiguous in the query with the previously relevant
+                // term.
+                //
+                // 0000010001 << previous term mask
+                // 0000100010 << previous term mask << 1
+                // 0000100000 << current term mask
+                if (relev == 0 || (termmask & (lastmask << 1))) {
+                    relev += weight;
+                    reason = reason | termmask;
+                    lastidx = termidx;
+                    lastmask = termmask;
+                    count++;
                 }
             }
 
-            // Get total relev score of phrase.
-            unsigned short weight = 0;
-            if (i < baton->querylen) {
-                weight = (phrase[i] % 16) + 1;
-                total += weight;
+            // get relev back to float-land.
+            relev = relev / total;
+            relev = (relev > 0.99 ? 1 : relev); // - (chardist * 0.01);
+            relev = std::round(relev * 5) / 5;
+
+            if (relev > max_relev) {
+                max_relev = relev;
+            }
+            if (relev < min_relev) {
+                min_relev = relev;
             }
 
-            // This is effectively a short circuit.
-            if (matched == 0) {
-                continue;
-            }
-
-            it = baton->queryidx.find(matched);
-            unsigned short termidx = it->second;
-            it = baton->querymask.find(matched);
-            unsigned short termmask = it->second;
-            it = baton->querydist.find(matched);
-            unsigned short termdist = it->second;
-
-            // Compare the current termmask against the previous
-            // termmask shifted by 1. Ensures that this term is
-            // contiguous in the query with the previously relevant
-            // term.
-            //
-            // 0000010001 << previous term mask
-            // 0000100010 << previous term mask << 1
-            // 0000100000 << current term mask
-            if (relev == 0 || (termmask & (lastmask << 1))) {
-                relev += weight;
-                reason = reason | termmask;
-                lastidx = termidx;
-                lastmask = termmask;
-                count++;
+            // relev represents a score based on comparative term weight
+            // significance alone. If it passes this threshold check it is
+            // adjusted based on degenerate term character distance (e.g.
+            // degens of higher distance reduce relev score).
+            // printf( "%f \n", relev);
+            if (relev >= 0.5) {
+                allPhrases.emplace_back(id,count,relev,reason);
             }
         }
 
-        // get relev back to float-land.
-        relev = relev / total;
-        relev = (relev > 0.99 ? 1 : relev); // - (chardist * 0.01);
-        relev = std::round(relev * 5) / 5;
-
-        if (relev > max_relev) {
-            max_relev = relev;
-        }
-        if (relev < min_relev) {
-            min_relev = relev;
+        // Reduces the relevance bar to 0.50 since all results have identical relevance values
+        for (unsigned short i = 0; i < allPhrases.size(); i++) {
+            if (allPhrases[i].relev >= (max_relev - 0.25)) {
+                relevantPhrases.emplace_back(allPhrases[i].id,allPhrases[i].count,allPhrases[i].relev,allPhrases[i].reason);
+            }
         }
 
-        // relev represents a score based on comparative term weight
-        // significance alone. If it passes this threshold check it is
-        // adjusted based on degenerate term character distance (e.g.
-        // degens of higher distance reduce relev score).
-        // printf( "%f \n", relev);
-        if (relev >= 0.5) {
-            allPhrases.emplace_back(id,count,relev,reason);
-        }
+        std::sort(relevantPhrases.begin(), relevantPhrases.end(), sortPhraseRelev);
+        relevantPhrases.erase(std::unique(relevantPhrases.begin(), relevantPhrases.end(), uniqPhraseRelev), relevantPhrases.end());
+        baton->relevantPhrases = std::move(relevantPhrases);
+    } catch (std::exception const& ex) {
+        baton->error = ex.what();
     }
-
-    // Reduces the relevance bar to 0.50 since all results have identical relevance values
-    for (unsigned short i = 0; i < allPhrases.size(); i++) {
-        if (allPhrases[i].relev >= (max_relev - 0.25)) {
-            relevantPhrases.emplace_back(allPhrases[i].id,allPhrases[i].count,allPhrases[i].relev,allPhrases[i].reason);
-        }
-    }
-
-    std::sort(relevantPhrases.begin(), relevantPhrases.end(), sortPhraseRelev);
-    relevantPhrases.erase(std::unique(relevantPhrases.begin(), relevantPhrases.end(), uniqPhraseRelev), relevantPhrases.end());
-    baton->relevantPhrases = std::move(relevantPhrases);
 }
 void phrasematchPhraseRelevAfter(uv_work_t* req) {
     NanScope();
