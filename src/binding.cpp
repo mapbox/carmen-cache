@@ -782,6 +782,7 @@ struct Cover {
     unsigned short y;
     unsigned short score;
     unsigned short idx;
+    unsigned short subq;
     unsigned short distance;
 };
 
@@ -812,6 +813,7 @@ Cover numToCover(uint64_t num) {
     // These are not derived from decoding the input num but by
     // external values after initialization.
     cover.idx = 0;
+    cover.subq = 0;
     cover.tmpid = 0;
     cover.distance = 0;
 
@@ -1076,6 +1078,7 @@ void coalesceMulti(uv_work_t* req) {
         for (unsigned long j = 0; j < m; j++) {
             Cover cover = numToCover(grids[j]);
             cover.idx = subq.idx;
+            cover.subq = i;
             cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
             cover.relev = cover.relev * subq.weight;
             if (proximity) {
@@ -1122,14 +1125,14 @@ void coalesceMulti(uv_work_t* req) {
         std::vector<Cover> const& coverList = matched.second;
         size_t coverSize = coverList.size();
         for (unsigned short i = 0; i < coverSize; i++) {
-            unsigned short used = 1 << coverList[i].idx;
+            unsigned short used = 1 << coverList[i].subq;
             double stacky = 0.0;
 
             Context context;
             context.coverList.emplace_back(coverList[i]);
             context.relev = coverList[i].relev;
             for (unsigned short j = i+1; j < coverSize; j++) {
-                unsigned short mask = 1 << coverList[j].idx;
+                unsigned short mask = 1 << coverList[j].subq;
                 if (used & mask) continue;
                 stacky = 1.0;
                 used = used | mask;
