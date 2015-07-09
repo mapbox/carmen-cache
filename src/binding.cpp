@@ -145,8 +145,6 @@ bool __exists(Cache const* c, std::string const& type, std::string const& shard,
         protobuf::message buffer(ref.data(), ref.size());
         while (buffer.next()) {
             if (buffer.tag == 1) {
-                buffer.skip();
-            } else if (buffer.tag == 2) {
                 return true;
             } else {
                 std::stringstream msg("");
