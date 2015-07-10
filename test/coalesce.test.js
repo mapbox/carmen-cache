@@ -11,19 +11,17 @@ test('coalesce args', function(assert) {
     assert.throws(function() {
         coalesce([
             {
-                cache: new Cache('a', 1),
+                cache: new Cache('a'),
                 idx: 0,
                 zoom: 0,
                 weight: 0.5,
-                shardlevel: 1,
                 phrase: 1
             },
             {
-                cache: new Cache('b', 1),
+                cache: new Cache('b'),
                 idx: 1,
                 zoom: 1,
                 weight: 0.5,
-                shardlevel: 1,
                 phrase: 1
             },
         ]);
@@ -71,7 +69,6 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 2,
             weight: 1,
-            shardlevel: 0,
             phrase: 1
         }], {}, function(err, res) {
             assert.ifError(err);
@@ -90,7 +87,6 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 2,
             weight: 1,
-            shardlevel: 0,
             phrase: 1
         }], {
             centerzxy: [3,3,3]
@@ -133,7 +129,6 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 2,
             weight: 1,
-            shardlevel: 0,
             phrase: 1
         }], {}, function(err, res) {
             assert.ifError(err);
@@ -195,14 +190,12 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 1,
             weight: 0.5,
-            shardlevel: 0,
             phrase: 1
         }, {
             cache: b,
             idx: 1,
             zoom: 2,
             weight: 0.5,
-            shardlevel: 0,
             phrase: 1
         }], {}, function(err, res) {
             assert.ifError(err);
@@ -222,14 +215,12 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 1,
             weight: 0.5,
-            shardlevel: 0,
             phrase: 1
         }, {
             cache: b,
             idx: 1,
             zoom: 2,
             weight: 0.5,
-            shardlevel: 0,
             phrase: 1
         }], {
             centerzxy: [2,3,3]
@@ -290,14 +281,12 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 0,
             weight: 0.5,
-            shardlevel: 0,
             phrase: 1
         }, {
             cache: b,
             idx: 1,
             zoom: 1,
             weight: 0.5,
-            shardlevel: 0,
             phrase: 1
         }], {}, function(err, res) {
             assert.ifError(err);
@@ -346,14 +335,12 @@ test('coalesce args', function(assert) {
             idx: 25,
             zoom: 0,
             weight: 0.5,
-            shardlevel: 0,
             phrase: 1
         }, {
             cache: b,
             idx: 20,
             zoom: 0,
             weight: 0.5,
-            shardlevel: 0,
             phrase: 1
         }], {}, function(err, res) {
             assert.ifError(err);
