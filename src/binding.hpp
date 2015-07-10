@@ -36,15 +36,15 @@ protected:
 class Cache: public node::ObjectWrap {
 public:
     ~Cache();
-    typedef uint64_t int_type;
+    typedef uint32_t key_type;
+    typedef uint64_t value_type;
     // lazy ref item
-    typedef uint64_t offset_type;
-    typedef google::sparse_hash_map<int_type,offset_type> larraycache;
+    typedef google::sparse_hash_map<uint32_t,value_type> larraycache;
     typedef std::map<std::string,larraycache> lazycache;
     typedef std::map<std::string,std::string> message_cache;
     // fully cached item
-    typedef std::vector<int_type> intarray;
-    typedef std::map<uint32_t,intarray> arraycache;
+    typedef std::vector<value_type> intarray;
+    typedef std::map<key_type,intarray> arraycache;
     typedef std::map<std::string,arraycache> memcache;
     static v8::Persistent<v8::FunctionTemplate> constructor;
     static void Initialize(v8::Handle<v8::Object> target);
