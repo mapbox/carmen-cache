@@ -5,14 +5,13 @@ var test = require('tape');
 
 (function() {
     var runs = 50;
-    var b = new Cache('b', 0);
-    b._set('grid', 0, 3848571113, require('./fixtures/coalesce-bench-single-3848571113.json'));
+    var b = new Cache('b');
+    b._set('grid', Math.floor(3848571113/65536), 3848571113, require('./fixtures/coalesce-bench-single-3848571113.json'));
     var stacks = [{
         cache: b,
         idx: 0,
         zoom: 14,
         weight: 1,
-        shardlevel: 0,
         phrase: 3848571113
     }];
     test('coalesceSingle', function(assert) {
@@ -69,21 +68,19 @@ var test = require('tape');
     var runs = 50;
     var a = new Cache('a', 0);
     var b = new Cache('b', 0);
-    a._set('grid', 0, 1965155344, require('./fixtures/coalesce-bench-multi-1965155344.json'));
-    b._set('grid', 0, 3848571113, require('./fixtures/coalesce-bench-multi-3848571113.json'));
+    a._set('grid', Math.floor(1965155344/65536), 1965155344, require('./fixtures/coalesce-bench-multi-1965155344.json'));
+    b._set('grid', Math.floor(3848571113/65536), 3848571113, require('./fixtures/coalesce-bench-multi-3848571113.json'));
     var stacks = [{
         cache: a,
         idx: 0,
         zoom: 12,
         weight: 0.25,
-        shardlevel: 0,
         phrase: 1965155344
     }, {
         cache: b,
         idx: 1,
         zoom: 14,
         weight: 0.75,
-        shardlevel: 0,
         phrase: 3848571113
     }];
     test('coalesceMulti', function(assert) {

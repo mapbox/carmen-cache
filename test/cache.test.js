@@ -73,7 +73,6 @@ var fs = require('fs');
         tape('#load', function(assert) {
             var cache = new Cache('a', 1);
             assert.equal('a', cache.id);
-            assert.equal(1, cache.shardlevel);
 
             assert.equal(undefined, cache._get('term', 0, 5));
             assert.deepEqual([], cache.list('term'));

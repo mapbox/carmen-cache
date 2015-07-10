@@ -145,8 +145,6 @@ bool __exists(Cache const* c, std::string const& type, std::string const& shard,
         protobuf::message buffer(ref.data(), ref.size());
         while (buffer.next()) {
             if (buffer.tag == 1) {
-                buffer.skip();
-            } else if (buffer.tag == 2) {
                 return true;
             } else {
                 std::stringstream msg("");
@@ -719,19 +717,15 @@ NAN_METHOD(Cache::New)
         return NanThrowTypeError("Cannot call constructor as function, you need to use 'new' keyword");
     }
     try {
-        if (args.Length() < 2) {
-            return NanThrowTypeError("expected 'id' and 'shardlevel' arguments");
+        if (args.Length() < 1) {
+            return NanThrowTypeError("expected 'id' argument");
         }
         if (!args[0]->IsString()) {
             return NanThrowTypeError("first argument 'id' must be a String");
         }
-        if (!args[1]->IsNumber()) {
-            return NanThrowTypeError("second argument 'shardlevel' must be a number");
-        }
         Cache* im = new Cache();
         im->Wrap(args.This());
         args.This()->Set(NanNew("id"),args[0]);
-        args.This()->Set(NanNew("shardlevel"),args[1]);
         NanReturnValue(args.This());
     } catch (std::exception const& ex) {
         return NanThrowTypeError(ex.what());
@@ -768,7 +762,6 @@ constexpr uint64_t POW2_2 = static_cast<uint64_t>(_pow(2.0,2));
 struct PhrasematchSubq {
     carmen::Cache *cache;
     double weight;
-    uint64_t shardlevel;
     uint32_t phrase;
     unsigned short idx;
     unsigned short zoom;
@@ -782,6 +775,7 @@ struct Cover {
     unsigned short y;
     unsigned short score;
     unsigned short idx;
+    unsigned short subq;
     unsigned short distance;
 };
 
@@ -812,6 +806,7 @@ Cover numToCover(uint64_t num) {
     // These are not derived from decoding the input num but by
     // external values after initialization.
     cover.idx = 0;
+    cover.subq = 0;
     cover.tmpid = 0;
     cover.distance = 0;
 
@@ -939,7 +934,7 @@ void coalesceSingle(uv_work_t* req) {
     std::vector<PhrasematchSubq> const& stack = baton->stack;
     PhrasematchSubq const& subq = stack[0];
     std::string type = "grid";
-    std::string shardId = shard(subq.shardlevel, subq.phrase);
+    std::string shardId = shard(4, subq.phrase);
 
     // proximity (optional)
     bool proximity = !baton->centerzxy.empty();
@@ -1063,7 +1058,7 @@ void coalesceMulti(uv_work_t* req) {
     for (unsigned short i = 0; i < size; i++) {
         PhrasematchSubq const& subq = stack[i];
 
-        std::string shardId = shard(subq.shardlevel, subq.phrase);
+        std::string shardId = shard(4, subq.phrase);
 
         Cache::intarray const& grids = __get(subq.cache, type, shardId, subq.phrase);
 
@@ -1076,6 +1071,7 @@ void coalesceMulti(uv_work_t* req) {
         for (unsigned long j = 0; j < m; j++) {
             Cover cover = numToCover(grids[j]);
             cover.idx = subq.idx;
+            cover.subq = i;
             cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
             cover.relev = cover.relev * subq.weight;
             if (proximity) {
@@ -1122,14 +1118,14 @@ void coalesceMulti(uv_work_t* req) {
         std::vector<Cover> const& coverList = matched.second;
         size_t coverSize = coverList.size();
         for (unsigned short i = 0; i < coverSize; i++) {
-            unsigned short used = 1 << coverList[i].idx;
+            unsigned short used = 1 << coverList[i].subq;
             double stacky = 0.0;
 
             Context context;
             context.coverList.emplace_back(coverList[i]);
             context.relev = coverList[i].relev;
             for (unsigned short j = i+1; j < coverSize; j++) {
-                unsigned short mask = 1 << coverList[j].idx;
+                unsigned short mask = 1 << coverList[j].subq;
                 if (used & mask) continue;
                 stacky = 1.0;
                 used = used | mask;
@@ -1222,7 +1218,6 @@ NAN_METHOD(Cache::coalesce) {
                 return NanThrowTypeError("encountered phrase value too large to fit in unsigned short");
             }
             subq.phrase = static_cast<uint32_t>(_phrase);
-            subq.shardlevel = static_cast<uint64_t>(jsStack->Get(NanNew("shardlevel"))->NumberValue());
 
             // JS cache reference => cpp
             Local<Object> cache = Local<Object>::Cast(jsStack->Get(NanNew("cache")));

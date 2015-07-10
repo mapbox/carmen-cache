@@ -11,19 +11,17 @@ test('coalesce args', function(assert) {
     assert.throws(function() {
         coalesce([
             {
-                cache: new Cache('a', 1),
+                cache: new Cache('a'),
                 idx: 0,
                 zoom: 0,
                 weight: 0.5,
-                shardlevel: 1,
                 phrase: 1
             },
             {
-                cache: new Cache('b', 1),
+                cache: new Cache('b'),
                 idx: 1,
                 zoom: 1,
                 weight: 0.5,
-                shardlevel: 1,
                 phrase: 1
             },
         ]);
@@ -71,7 +69,6 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 2,
             weight: 1,
-            shardlevel: 0,
             phrase: 1
         }], {}, function(err, res) {
             assert.ifError(err);
@@ -90,7 +87,6 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 2,
             weight: 1,
-            shardlevel: 0,
             phrase: 1
         }], {
             centerzxy: [3,3,3]
@@ -133,7 +129,6 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 2,
             weight: 1,
-            shardlevel: 0,
             phrase: 1
         }], {}, function(err, res) {
             assert.ifError(err);
@@ -195,14 +190,12 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 1,
             weight: 0.5,
-            shardlevel: 0,
             phrase: 1
         }, {
             cache: b,
             idx: 1,
             zoom: 2,
             weight: 0.5,
-            shardlevel: 0,
             phrase: 1
         }], {}, function(err, res) {
             assert.ifError(err);
@@ -222,14 +215,12 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 1,
             weight: 0.5,
-            shardlevel: 0,
             phrase: 1
         }, {
             cache: b,
             idx: 1,
             zoom: 2,
             weight: 0.5,
-            shardlevel: 0,
             phrase: 1
         }], {
             centerzxy: [2,3,3]
@@ -290,14 +281,12 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 0,
             weight: 0.5,
-            shardlevel: 0,
             phrase: 1
         }, {
             cache: b,
             idx: 1,
             zoom: 1,
             weight: 0.5,
-            shardlevel: 0,
             phrase: 1
         }], {}, function(err, res) {
             assert.ifError(err);
@@ -306,6 +295,58 @@ test('coalesce args', function(assert) {
             assert.deepEqual(res[0].map(function(f) { return f.id; }), [3,2], '0.relev = 1');
             assert.deepEqual(res[1].map(function(f) { return f.id; }), [4,2], '0.relev = 1');
             assert.deepEqual(res[2].map(function(f) { return f.id; }), [1,3], '0.relev = 1');
+            assert.end();
+        });
+    });
+})();
+
+// Multi sandwich scenario
+(function() {
+    var a = new Cache('a', 0);
+    var b = new Cache('b', 0);
+    a._set('grid', 0, 1, [
+        Grid.encode({
+            id: 3,
+            x: 0,
+            y: 0,
+            relev: 1,
+            score: 1
+        }),
+        Grid.encode({
+            id: 4,
+            x: 0,
+            y: 0,
+            relev: 1,
+            score: 1
+        })
+    ]);
+    b._set('grid', 0, 1, [
+        Grid.encode({
+            id: 1,
+            x: 0,
+            y: 0,
+            relev: 1,
+            score: 1
+        })
+    ]);
+    test('coalesceMulti sandwich', function(assert) {
+        coalesce([{
+            cache: a,
+            idx: 25,
+            zoom: 0,
+            weight: 0.5,
+            phrase: 1
+        }, {
+            cache: b,
+            idx: 20,
+            zoom: 0,
+            weight: 0.5,
+            phrase: 1
+        }], {}, function(err, res) {
+            assert.ifError(err);
+            assert.equal(res.length, 2, 'res length = 2');
+            assert.deepEqual(res[0].map(function(f) { return f.id; }), [3,1], '0.relev = 1');
+            assert.deepEqual(res[1].map(function(f) { return f.id; }), [4,1], '0.relev = 1');
             assert.end();
         });
     });
