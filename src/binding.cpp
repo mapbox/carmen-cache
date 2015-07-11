@@ -226,7 +226,7 @@ NAN_METHOD(Cache::pack)
                 }
                 for (auto const& item : litr->second) {
                     ::carmen::proto::object_item * new_item = message.add_items();
-                    new_item->set_key(static_cast<int64_t>(item.first));
+                    new_item->set_key(item.first);
                     unsigned start = (item.second & 0xffffffff);
                     unsigned len = (item.second >> 32);
                     std::string ref = mitr->second.substr(start,len);
@@ -400,7 +400,7 @@ void load_into_cache(Cache::larraycache & larrc,
                     //  - libstdc++ does not support std::map::emplace <-- does now with gcc 4.8, but...
                     //  - we are using google::sparshash now, which does not support emplace (yet?)
                     //  - larrc.emplace(buffer.varint(),Cache::string_ref_type(message.getData(),len)) was not faster on OS X
-                    Cache::offset_type offsets = (((Cache::offset_type)len << 32)) | (((Cache::offset_type)start) & 0xffffffff);
+                    Cache::value_type offsets = (((Cache::value_type)len << 32)) | (((Cache::value_type)start) & 0xffffffff);
                     larrc.insert(std::make_pair(key_id,offsets));
                 }
                 // it is safe to break immediately because tag 1 should come first
