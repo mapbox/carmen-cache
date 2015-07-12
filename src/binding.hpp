@@ -53,6 +53,7 @@ public:
     static void Initialize(v8::Handle<v8::Object> target);
     static NAN_METHOD(New);
     static NAN_METHOD(has);
+    static NAN_METHOD(hasDict);
     static NAN_METHOD(loadSync);
     static NAN_METHOD(loadAsDict);
     static NAN_METHOD(load);

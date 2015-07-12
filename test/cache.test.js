@@ -88,15 +88,29 @@ var fs = require('fs');
 
         tape('#dict', function(assert) {
             var cache = new Cache('a');
-            cache._set('term', 0, 5, [0,1,2]);
-            cache._set('term', 0, 21, [5,6]);
-            var pack = cache.pack('term', 0);
+            cache._set('term', 0, 5, []);
+            cache._set('term', 0, 21, []);
+            cache._set('term', 0, 899688358, []);
+            cache._set('term', 1, 4, []);
+            cache._set('term', 1, 91231, []);
+            cache._set('term', 1, 8, []);
 
             var loader = new Cache('b');
-            loader.loadAsDict(pack, 'term', 0);
+
+            assert.deepEqual(loader.hasDict('term', 0), false);
+            loader.loadAsDict(cache.pack('term', 0), 'term', 0);
+            assert.deepEqual(loader.hasDict('term', 0), true);
             assert.deepEqual(loader._dict('term', 0, 5), true);
             assert.deepEqual(loader._dict('term', 0, 21), true);
             assert.deepEqual(loader._dict('term', 0, 22), false);
+            assert.deepEqual(loader._dict('term', 0, 899688358), true);
+
+            assert.deepEqual(loader.hasDict('term', 1), false);
+            assert.deepEqual(loader._dict('term', 1, 4), false);
+            loader.loadAsDict(cache.pack('term', 1), 'term', 1);
+            assert.deepEqual(loader.hasDict('term', 1), true);
+            assert.deepEqual(loader._dict('term', 1, 4), true);
+
             assert.end();
         });
 

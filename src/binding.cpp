@@ -136,6 +136,7 @@ void Cache::Initialize(Handle<Object> target) {
     t->InstanceTemplate()->SetInternalFieldCount(1);
     t->SetClassName(NanNew("Cache"));
     NODE_SET_PROTOTYPE_METHOD(t, "has", has);
+    NODE_SET_PROTOTYPE_METHOD(t, "hasDict", hasDict);
     NODE_SET_PROTOTYPE_METHOD(t, "load", load);
     NODE_SET_PROTOTYPE_METHOD(t, "loadSync", loadSync);
     NODE_SET_PROTOTYPE_METHOD(t, "loadAsDict", loadAsDict);
@@ -364,7 +365,7 @@ void load_into_dict(Cache::ldictcache & ldict, const char * data, size_t size) {
             protobuf::message buffer(message.getData(), static_cast<std::size_t>(len));
             while (buffer.next()) {
                 if (buffer.tag == 1) {
-                    uint64_t key_id = buffer.varint();
+                    uint32_t key_id = buffer.varint();
                     ldict.insert(key_id);
                 }
                 break;
@@ -629,6 +630,35 @@ NAN_METHOD(Cache::has)
             if (messages.find(key) != messages.end()) {
                 NanReturnValue(NanTrue());
             }
+            NanReturnValue(NanFalse());
+        }
+    } catch (std::exception const& ex) {
+        return NanThrowTypeError(ex.what());
+    }
+}
+
+NAN_METHOD(Cache::hasDict)
+{
+    NanScope();
+    if (args.Length() < 2) {
+        return NanThrowTypeError("expected two args: 'type' and 'shard'");
+    }
+    if (!args[0]->IsString()) {
+        return NanThrowTypeError("first arg must be a String");
+    }
+    if (!args[1]->IsNumber()) {
+        return NanThrowTypeError("second arg must be an Integer");
+    }
+    try {
+        std::string type = *String::Utf8Value(args[0]->ToString());
+        std::string shard = *String::Utf8Value(args[1]->ToString());
+        std::string key = type + "-" + shard;
+        Cache* c = node::ObjectWrap::Unwrap<Cache>(args.This());
+        Cache::dictcache const& dict = c->dict_;
+        Cache::dictcache::const_iterator itr = dict.find(key);
+        if (itr != dict.end()) {
+            NanReturnValue(NanTrue());
+        } else {
             NanReturnValue(NanFalse());
         }
     } catch (std::exception const& ex) {
