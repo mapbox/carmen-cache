@@ -16,9 +16,10 @@ tape('setup', function(assert) {
 tape('bench load', function(assert) {
     var cache = new Cache('a');
     var time = +new Date;
-    for (var i = 0; i < 256; i++) cache.loadSync(data, 'stat', i);
+    // for (var i = 0; i < 256; i++) cache.loadSync(data, 'stat', i);
+    for (var i = 0; i < 256; i++) cache.loadAsDict(data, 'stat', i);
     time = (+new Date - time);
-    assert.equal(time < 80e3, true, 'load x256 took ' + time + 'ms');
+    assert.equal(time < 80e3, true, 'loadAsDict x256 took ' + time + 'ms');
     console.log(process.memoryUsage());
     assert.end();
 });

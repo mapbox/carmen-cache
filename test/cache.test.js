@@ -35,16 +35,6 @@ var fs = require('fs');
             assert.end();
         });
 
-
-        tape('#exists', function(assert) {
-            var cache = new Cache('a', 1);
-            assert.equal(cache._exists('term', 0, 5), false);
-            cache._set('term', 0, 5, [0,1,2]);
-            assert.equal(cache._exists('term', 0, 5), true);
-            assert.equal(cache._exists('term', 0, 6), false);
-            assert.end();
-        });
-
         tape('#pack', function(assert) {
             var cache = new Cache('a', 1);
             cache._set('term', 0, 5, [0,1,2]);
@@ -93,6 +83,20 @@ var fs = require('fs');
             assert.deepEqual([5,6], loader._get('term', 0, 21));
             assert.deepEqual([0], loader.list('term'), 'single shard');
             assert.deepEqual(['5', '21'], loader.list('term', 0), 'keys in shard');
+            assert.end();
+        });
+
+        tape('#dict', function(assert) {
+            var cache = new Cache('a');
+            cache._set('term', 0, 5, [0,1,2]);
+            cache._set('term', 0, 21, [5,6]);
+            var pack = cache.pack('term', 0);
+
+            var loader = new Cache('b');
+            loader.loadAsDict(pack, 'term', 0);
+            assert.deepEqual(loader._dict('term', 0, 5), true);
+            assert.deepEqual(loader._dict('term', 0, 21), true);
+            assert.deepEqual(loader._dict('term', 0, 22), false);
             assert.end();
         });
 

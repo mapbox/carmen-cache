@@ -19,6 +19,7 @@
 #include <vector>
 #include "index.pb.h"
 #include <sparsehash/sparse_hash_map>
+#include <sparsehash/sparse_hash_set>
 #pragma clang diagnostic pop
 #include <iostream>
 
@@ -40,17 +41,20 @@ public:
     typedef uint64_t value_type;
     // lazy ref item
     typedef google::sparse_hash_map<uint32_t,value_type> larraycache;
+    typedef google::sparse_hash_set<uint32_t> ldictcache;
     typedef std::map<std::string,larraycache> lazycache;
     typedef std::map<std::string,std::string> message_cache;
     // fully cached item
     typedef std::vector<value_type> intarray;
     typedef std::map<key_type,intarray> arraycache;
     typedef std::map<std::string,arraycache> memcache;
+    typedef std::map<std::string,ldictcache> dictcache;
     static v8::Persistent<v8::FunctionTemplate> constructor;
     static void Initialize(v8::Handle<v8::Object> target);
     static NAN_METHOD(New);
     static NAN_METHOD(has);
     static NAN_METHOD(loadSync);
+    static NAN_METHOD(loadAsDict);
     static NAN_METHOD(load);
     static void AsyncLoad(uv_work_t* req);
     static void AfterLoad(uv_work_t* req);
@@ -58,7 +62,7 @@ public:
     static NAN_METHOD(list);
     static NAN_METHOD(_get);
     static NAN_METHOD(_set);
-    static NAN_METHOD(_exists);
+    static NAN_METHOD(_dict);
     static NAN_METHOD(unload);
     static NAN_METHOD(coalesce);
     static void AsyncRun(uv_work_t* req);
@@ -67,6 +71,7 @@ public:
     void _ref() { Ref(); }
     void _unref() { Unref(); }
     memcache cache_;
+    dictcache dict_;
     lazycache lazy_;
     message_cache msg_;
 };
