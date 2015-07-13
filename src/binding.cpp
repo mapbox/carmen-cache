@@ -118,44 +118,15 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string const
     }
 }
 
-bool __exists(Cache const* c, std::string const& type, std::string const& shard, uint32_t id) {
+bool __dict(Cache const* c, std::string const& type, std::string const& shard, uint32_t id) {
     std::string key = type + "-" + shard;
-    Cache::memcache const& mem = c->cache_;
-    Cache::memcache::const_iterator itr = mem.find(key);
-    if (itr == mem.end()) {
-        Cache::lazycache const& lazy = c->lazy_;
-        Cache::lazycache::const_iterator litr = lazy.find(key);
-        if (litr == lazy.end()) {
-            return false;
-        }
-        Cache::message_cache const& messages = c->msg_;
-        Cache::message_cache::const_iterator mitr = messages.find(key);
-        if (mitr == messages.end()) {
-            throw std::runtime_error("misuse");
-        }
-        Cache::larraycache::const_iterator laitr = litr->second.find(id);
-        if (laitr == litr->second.end()) {
-            return false;
-        }
-        // NOTE: we cannot call array.reserve here since
-        // the total length is not known
-        unsigned start = (laitr->second & 0xffffffff);
-        unsigned len = (laitr->second >> 32);
-        std::string ref = mitr->second.substr(start,len);
-        protobuf::message buffer(ref.data(), ref.size());
-        while (buffer.next()) {
-            if (buffer.tag == 1) {
-                return true;
-            } else {
-                std::stringstream msg("");
-                msg << "cxx get: hit unknown protobuf type: '" << buffer.tag << "'";
-                throw std::runtime_error(msg.str());
-            }
-        }
+    Cache::dictcache const& dict = c->dict_;
+    Cache::dictcache::const_iterator itr = dict.find(key);
+    if (itr == dict.end()) {
         return false;
     } else {
-        Cache::arraycache::const_iterator aitr = itr->second.find(id);
-        return aitr != itr->second.end();
+        Cache::ldictcache::const_iterator ditr = itr->second.find(id);
+        return ditr != itr->second.end();
     }
 }
 
@@ -165,13 +136,15 @@ void Cache::Initialize(Handle<Object> target) {
     t->InstanceTemplate()->SetInternalFieldCount(1);
     t->SetClassName(NanNew("Cache"));
     NODE_SET_PROTOTYPE_METHOD(t, "has", has);
+    NODE_SET_PROTOTYPE_METHOD(t, "hasDict", hasDict);
     NODE_SET_PROTOTYPE_METHOD(t, "load", load);
     NODE_SET_PROTOTYPE_METHOD(t, "loadSync", loadSync);
+    NODE_SET_PROTOTYPE_METHOD(t, "loadAsDict", loadAsDict);
     NODE_SET_PROTOTYPE_METHOD(t, "pack", pack);
     NODE_SET_PROTOTYPE_METHOD(t, "list", list);
     NODE_SET_PROTOTYPE_METHOD(t, "_set", _set);
     NODE_SET_PROTOTYPE_METHOD(t, "_get", _get);
-    NODE_SET_PROTOTYPE_METHOD(t, "_exists", _exists);
+    NODE_SET_PROTOTYPE_METHOD(t, "_dict", _dict);
     NODE_SET_PROTOTYPE_METHOD(t, "unload", unload);
     NODE_SET_METHOD(t, "coalesce", coalesce);
     target->Set(NanNew("Cache"),t->GetFunction());
@@ -384,6 +357,28 @@ NAN_METHOD(Cache::_set)
     NanReturnUndefined();
 }
 
+void load_into_dict(Cache::ldictcache & ldict, const char * data, size_t size) {
+    protobuf::message message(data,size);
+    while (message.next()) {
+        if (message.tag == 1) {
+            uint64_t len = message.varint();
+            protobuf::message buffer(message.getData(), static_cast<std::size_t>(len));
+            while (buffer.next()) {
+                if (buffer.tag == 1) {
+                    uint32_t key_id = buffer.varint();
+                    ldict.insert(key_id);
+                }
+                break;
+            }
+            message.skipBytes(len);
+        } else {
+            std::stringstream msg("");
+            msg << "load: hit unknown protobuf type: '" << message.tag << "'";
+            throw std::runtime_error(msg.str());
+        }
+    }
+}
+
 void load_into_cache(Cache::larraycache & larrc,
                             const char * data,
                             size_t size) {
@@ -461,6 +456,45 @@ NAN_METHOD(Cache::loadSync)
             messages.emplace(key,std::string(node::Buffer::Data(obj),node::Buffer::Length(obj)));
         }
         load_into_cache(c->lazy_[key],node::Buffer::Data(obj),node::Buffer::Length(obj));
+    } catch (std::exception const& ex) {
+        return NanThrowTypeError(ex.what());
+    }
+    NanReturnUndefined();
+}
+
+NAN_METHOD(Cache::loadAsDict)
+{
+    NanScope();
+    if (args.Length() < 2) {
+        return NanThrowTypeError("expected at three args: 'buffer', 'type', and 'shard'");
+    }
+    if (!args[0]->IsObject()) {
+        return NanThrowTypeError("first argument must be a Buffer");
+    }
+    Local<Object> obj = args[0]->ToObject();
+    if (obj->IsNull() || obj->IsUndefined()) {
+        return NanThrowTypeError("a buffer expected for first argument");
+    }
+    if (!node::Buffer::HasInstance(obj)) {
+        return NanThrowTypeError("first argument must be a Buffer");
+    }
+    if (!args[1]->IsString()) {
+        return NanThrowTypeError("second arg 'type' must be a String");
+    }
+    if (!args[2]->IsNumber()) {
+        return NanThrowTypeError("third arg 'shard' must be an Integer");
+    }
+    try {
+        std::string type = *String::Utf8Value(args[1]->ToString());
+        std::string shard = *String::Utf8Value(args[2]->ToString());
+        std::string key = type + "-" + shard;
+        Cache* c = node::ObjectWrap::Unwrap<Cache>(args.This());
+        Cache::dictcache & dict = c->dict_;
+        Cache::dictcache::iterator ditr = dict.find(key);
+        if (ditr == dict.end()) {
+            c->dict_.emplace(key,Cache::ldictcache());
+        }
+        load_into_dict(c->dict_[key],node::Buffer::Data(obj),node::Buffer::Length(obj));
     } catch (std::exception const& ex) {
         return NanThrowTypeError(ex.what());
     }
@@ -603,6 +637,35 @@ NAN_METHOD(Cache::has)
     }
 }
 
+NAN_METHOD(Cache::hasDict)
+{
+    NanScope();
+    if (args.Length() < 2) {
+        return NanThrowTypeError("expected two args: 'type' and 'shard'");
+    }
+    if (!args[0]->IsString()) {
+        return NanThrowTypeError("first arg must be a String");
+    }
+    if (!args[1]->IsNumber()) {
+        return NanThrowTypeError("second arg must be an Integer");
+    }
+    try {
+        std::string type = *String::Utf8Value(args[0]->ToString());
+        std::string shard = *String::Utf8Value(args[1]->ToString());
+        std::string key = type + "-" + shard;
+        Cache* c = node::ObjectWrap::Unwrap<Cache>(args.This());
+        Cache::dictcache const& dict = c->dict_;
+        Cache::dictcache::const_iterator itr = dict.find(key);
+        if (itr != dict.end()) {
+            NanReturnValue(NanTrue());
+        } else {
+            NanReturnValue(NanFalse());
+        }
+    } catch (std::exception const& ex) {
+        return NanThrowTypeError(ex.what());
+    }
+}
+
 NAN_METHOD(Cache::_get)
 {
     NanScope();
@@ -641,7 +704,7 @@ NAN_METHOD(Cache::_get)
     }
 }
 
-NAN_METHOD(Cache::_exists)
+NAN_METHOD(Cache::_dict)
 {
     NanScope();
     if (args.Length() < 3) {
@@ -661,7 +724,7 @@ NAN_METHOD(Cache::_exists)
         std::string shard = *String::Utf8Value(args[1]->ToString());
         uint32_t id = static_cast<uint32_t>(args[2]->IntegerValue());
         Cache* c = node::ObjectWrap::Unwrap<Cache>(args.This());
-        bool exists = __exists(c, type, shard, id);
+        bool exists = __dict(c, type, shard, id);
         NanReturnValue(NanNew<Boolean>(exists));
     } catch (std::exception const& ex) {
         return NanThrowTypeError(ex.what());
