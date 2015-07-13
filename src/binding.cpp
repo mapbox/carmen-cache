@@ -20,17 +20,17 @@ inline std::string shard(uint64_t level, uint32_t id) {
     return std::to_string(shard_id);
 }
 
-inline std::vector<unsigned short> arrayToVector(Local<Array> const& array) {
-    std::vector<unsigned short> cpp_array;
+inline std::vector<unsigned> arrayToVector(Local<Array> const& array) {
+    std::vector<unsigned> cpp_array;
     cpp_array.reserve(array->Length());
     for (uint32_t i = 0; i < array->Length(); i++) {
         int64_t js_value = array->Get(i)->IntegerValue();
-        if (js_value < 0 || js_value >= std::numeric_limits<unsigned short>::max()) {
+        if (js_value < 0 || js_value >= std::numeric_limits<unsigned>::max()) {
             std::stringstream s;
-            s << "value in array too large (cannot fit '" << js_value << "' in unsigned short)";
+            s << "value in array too large (cannot fit '" << js_value << "' in unsigned)";
             throw std::runtime_error(s.str());
         }
-        cpp_array.emplace_back(static_cast<unsigned short>(js_value));
+        cpp_array.emplace_back(static_cast<unsigned>(js_value));
     }
     return cpp_array;
 }
@@ -353,7 +353,7 @@ void load_into_dict(Cache::ldictcache & ldict, const char * data, size_t size) {
             protobuf::message buffer(message.getData(), static_cast<std::size_t>(len));
             while (buffer.next()) {
                 if (buffer.tag == 1) {
-                    uint32_t key_id = buffer.varint();
+                    uint32_t key_id = static_cast<uint32_t>(buffer.varint());
                     ldict.insert(key_id);
                 }
                 break;
@@ -682,7 +682,7 @@ struct Cover {
     unsigned short score;
     unsigned short idx;
     unsigned short subq;
-    unsigned short distance;
+    unsigned distance;
 };
 
 struct Context {
@@ -704,7 +704,7 @@ Cover numToCover(uint64_t num) {
     uint32_t id = static_cast<uint32_t>(num % POW2_20);
     cover.x = x;
     cover.y = y;
-    double relev = 0.4 + (0.2 * ((num >> 23) % POW2_2));
+    double relev = 0.4 + (0.2 * static_cast<double>((num >> 23) % POW2_2));
     cover.relev = relev;
     cover.score = score;
     cover.id = id;
@@ -720,18 +720,18 @@ Cover numToCover(uint64_t num) {
 };
 
 struct ZXY {
-    unsigned short z;
-    unsigned short x;
-    unsigned short y;
+    unsigned z;
+    unsigned x;
+    unsigned y;
 };
 
-ZXY pxy2zxy(unsigned short z, unsigned short x, unsigned short y, unsigned short target_z) {
+ZXY pxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z) {
     ZXY zxy;
     zxy.z = target_z;
 
     // Interval between parent and target zoom level
-    unsigned short zDist = target_z - z;
-    unsigned short zMult = zDist - 1;
+    unsigned zDist = target_z - z;
+    unsigned zMult = zDist - 1;
     if (zDist == 0) {
         zxy.x = x;
         zxy.y = y;
@@ -739,10 +739,10 @@ ZXY pxy2zxy(unsigned short z, unsigned short x, unsigned short y, unsigned short
     }
 
     // Midpoint length @ z for a tile at parent zoom level
-    double pMid_d = std::pow(2,zDist) / 2.0;
-    assert(pMid_d <= static_cast<double>(std::numeric_limits<unsigned short>::max()));
-    assert(pMid_d >= static_cast<double>(std::numeric_limits<unsigned short>::min()));
-    unsigned short pMid = static_cast<unsigned short>(pMid_d);
+    unsigned pMid_d = static_cast<unsigned>(std::pow(2,zDist) / 2);
+    assert(pMid_d <= static_cast<double>(std::numeric_limits<unsigned>::max()));
+    assert(pMid_d >= static_cast<double>(std::numeric_limits<unsigned>::min()));
+    unsigned pMid = static_cast<unsigned>(pMid_d);
     zxy.x = (x * zMult) + pMid;
     zxy.y = (y * zMult) + pMid;
     return zxy;
@@ -792,7 +792,7 @@ inline bool contextSortByRelevDistance(Context const& a, Context const& b) noexc
     return (b.coverList[0].id > a.coverList[0].id);
 }
 
-inline unsigned short tileDist(unsigned short ax, unsigned short bx, unsigned short ay, unsigned short by) noexcept {
+inline unsigned tileDist(unsigned ax, unsigned bx, unsigned ay, unsigned by) noexcept {
     return (ax > bx ? ax - bx : bx - ax) + (ay > by ? ay - by : by - ay);
 }
 
@@ -800,7 +800,7 @@ struct CoalesceBaton : carmen::noncopyable {
     uv_work_t request;
     // params
     std::vector<PhrasematchSubq> stack;
-    std::vector<unsigned short> centerzxy;
+    std::vector<unsigned> centerzxy;
     v8::Persistent<v8::Function> callback;
     // return
     std::vector<Context> features;
@@ -844,8 +844,8 @@ void coalesceSingle(uv_work_t* req) {
 
     // proximity (optional)
     bool proximity = !baton->centerzxy.empty();
-    unsigned short cx;
-    unsigned short cy;
+    unsigned cx;
+    unsigned cy;
     if (proximity) {
         cx = baton->centerzxy[1];
         cy = baton->centerzxy[2];
@@ -948,9 +948,9 @@ void coalesceMulti(uv_work_t* req) {
 
     // proximity (optional)
     bool proximity = baton->centerzxy.size() > 0;
-    unsigned short cz;
-    unsigned short cx;
-    unsigned short cy;
+    unsigned cz;
+    unsigned cx;
+    unsigned cy;
     if (proximity) {
         cz = baton->centerzxy[0];
         cx = baton->centerzxy[1];
@@ -1003,7 +1003,9 @@ void coalesceMulti(uv_work_t* req) {
                 for (unsigned a = 0; a < zCacheSize; a++) {
                     uint64_t p = zCache[a];
                     double s = static_cast<double>(1 << (z-p));
-                    uint64_t pxy = static_cast<uint64_t>((p * POW2_28) + (std::floor(cover.x/s) * POW2_14) + std::floor(cover.y/s));
+                    uint64_t pxy = static_cast<uint64_t>(p * POW2_28) +
+                        static_cast<uint64_t>(std::floor(cover.x/s) * POW2_14) +
+                        static_cast<uint64_t>(std::floor(cover.y/s));
                     // Set a flag to ensure coalesce occurs only once per zxy.
                     pit = coalesced.find(pxy);
                     if (pit != coalesced.end()) {
@@ -1023,15 +1025,15 @@ void coalesceMulti(uv_work_t* req) {
     for (auto const& matched : coalesced) {
         std::vector<Cover> const& coverList = matched.second;
         size_t coverSize = coverList.size();
-        for (unsigned short i = 0; i < coverSize; i++) {
-            unsigned short used = 1 << coverList[i].subq;
+        for (unsigned i = 0; i < coverSize; i++) {
+            unsigned used = 1 << coverList[i].subq;
             double stacky = 0.0;
 
             Context context;
             context.coverList.emplace_back(coverList[i]);
             context.relev = coverList[i].relev;
-            for (unsigned short j = i+1; j < coverSize; j++) {
-                unsigned short mask = 1 << coverList[j].subq;
+            for (unsigned j = i+1; j < coverSize; j++) {
+                unsigned mask = 1 << coverList[j].subq;
                 if (used & mask) continue;
                 stacky = 1.0;
                 used = used | mask;
