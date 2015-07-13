@@ -21,7 +21,7 @@ tape('bench loadSync', function(assert) {
     time = (+new Date - time);
     mem = process.memoryUsage().rss - mem;
     assert.equal(time < 80e3, true, 'loadSync x256 took ' + time + 'ms');
-    assert.equal(mem < 1e9, true, 'loadSync rss + ' + mem + ' bytes');
+    assert.equal(mem < 2e9, true, 'loadSync rss + ' + mem + ' bytes');
     assert.end();
 });
 
