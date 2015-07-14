@@ -1184,18 +1184,42 @@ void coalesceMulti(uv_work_t* req) {
         size_t coverSize = coverList.size();
         for (unsigned i = 0; i < coverSize; i++) {
             unsigned used = 1 << coverList[i].subq;
+            unsigned lastMask = 0;
+            double lastRelev = 0.0;
             double stacky = 0.0;
+
+            unsigned coverPos = 0;
 
             Context context;
             context.coverList.emplace_back(coverList[i]);
             context.relev = coverList[i].relev;
             for (unsigned j = i+1; j < coverSize; j++) {
                 unsigned mask = 1 << coverList[j].subq;
-                if (used & mask) continue;
-                stacky = 1.0;
-                used = used | mask;
-                context.coverList.emplace_back(coverList[j]);
-                context.relev += coverList[j].relev;
+
+                // this cover is functionally identical with previous and
+                // is more relevant, replace the previous.
+                if (mask == lastMask && coverList[j].relev > lastRelev) {
+                    context.relev -= lastRelev;
+                    context.relev += coverList[j].relev;
+                    context.coverList[coverPos] = coverList[j];
+
+                    stacky = 1.0;
+                    used = used | mask;
+                    lastMask = mask;
+                    lastRelev = coverList[j].relev;
+                    coverPos++;
+                // this cover doesn't overlap with used mask.
+                } else if (!(used & mask)) {
+                    context.coverList.emplace_back(coverList[j]);
+                    context.relev += coverList[j].relev;
+
+                    stacky = 1.0;
+                    used = used | mask;
+                    lastMask = mask;
+                    lastRelev = coverList[j].relev;
+                    coverPos++;
+                }
+                // all other cases conflict with existing mask. skip.
             }
             context.relev -= 0.01;
             context.relev += 0.01 * stacky;
