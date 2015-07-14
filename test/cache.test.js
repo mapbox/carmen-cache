@@ -24,6 +24,17 @@ var fs = require('fs');
             assert.end();
         });
 
+        tape('#set', function(assert) {
+            var cache = new Cache('a', 1);
+            cache._set('term', 0, 5, [0,1,2]);
+            assert.deepEqual(cache._get('term', 0, 5), [0, 1, 2]);
+            cache._set('term', 0, 5, [3,4,5]);
+            assert.deepEqual(cache._get('term', 0, 5), [3, 4, 5]);
+            cache._set('term', 0, 5, [6,7,8], true);
+            assert.deepEqual(cache._get('term', 0, 5), [3, 4, 5, 6, 7, 8]);
+            assert.end();
+        });
+
         tape('#pack', function(assert) {
             var cache = new Cache('a', 1);
             cache._set('term', 0, 5, [0,1,2]);
@@ -52,7 +63,6 @@ var fs = require('fs');
         tape('#load', function(assert) {
             var cache = new Cache('a', 1);
             assert.equal('a', cache.id);
-            assert.equal(1, cache.shardlevel);
 
             assert.equal(undefined, cache._get('term', 0, 5));
             assert.deepEqual([], cache.list('term'));
@@ -73,6 +83,34 @@ var fs = require('fs');
             assert.deepEqual([5,6], loader._get('term', 0, 21));
             assert.deepEqual([0], loader.list('term'), 'single shard');
             assert.deepEqual(['5', '21'], loader.list('term', 0), 'keys in shard');
+            assert.end();
+        });
+
+        tape('#dict', function(assert) {
+            var cache = new Cache('a');
+            cache._set('term', 0, 5, []);
+            cache._set('term', 0, 21, []);
+            cache._set('term', 0, 899688358, []);
+            cache._set('term', 1, 4, []);
+            cache._set('term', 1, 91231, []);
+            cache._set('term', 1, 8, []);
+
+            var loader = new Cache('b');
+
+            assert.deepEqual(loader.hasDict('term', 0), false);
+            loader.loadAsDict(cache.pack('term', 0), 'term', 0);
+            assert.deepEqual(loader.hasDict('term', 0), true);
+            assert.deepEqual(loader._dict('term', 0, 5), true);
+            assert.deepEqual(loader._dict('term', 0, 21), true);
+            assert.deepEqual(loader._dict('term', 0, 22), false);
+            assert.deepEqual(loader._dict('term', 0, 899688358), true);
+
+            assert.deepEqual(loader.hasDict('term', 1), false);
+            assert.deepEqual(loader._dict('term', 1, 4), false);
+            loader.loadAsDict(cache.pack('term', 1), 'term', 1);
+            assert.deepEqual(loader.hasDict('term', 1), true);
+            assert.deepEqual(loader._dict('term', 1, 4), true);
+
             assert.end();
         });
 
