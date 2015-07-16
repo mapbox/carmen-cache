@@ -15,6 +15,8 @@ var test = require('tape');
         phrase: 3848571113
     }];
     test('coalesceSingle', function(assert) {
+        if (process.env.COVERAGE) return assert.end();
+
         var time = +new Date;
         function run(remaining) {
             if (!remaining) {
@@ -38,6 +40,8 @@ var test = require('tape');
         run(runs);
     });
     test('coalesceSingle proximity', function(assert) {
+        if (process.env.COVERAGE) return assert.end();
+
         var time = +new Date;
         function run(remaining) {
             if (!remaining) {
@@ -84,6 +88,8 @@ var test = require('tape');
         phrase: 3848571113
     }];
     test('coalesceMulti', function(assert) {
+        if (process.env.COVERAGE) return assert.end();
+
         var time = +new Date;
         function run(remaining) {
             if (!remaining) {
@@ -108,6 +114,8 @@ var test = require('tape');
         run(runs);
     });
     test('coalesceMulti proximity', function(assert) {
+        if (process.env.COVERAGE) return assert.end();
+
         var time = +new Date;
         function run(remaining) {
             if (!remaining) {
