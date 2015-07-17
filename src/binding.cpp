@@ -683,6 +683,7 @@ struct Cover {
     unsigned short idx;
     unsigned short subq;
     unsigned distance;
+    double scoredist;
 };
 
 struct Context {
@@ -751,20 +752,8 @@ ZXY pxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z) {
 inline bool coverSortByRelev(Cover const& a, Cover const& b) noexcept {
     if (b.relev > a.relev) return false;
     else if (b.relev < a.relev) return true;
-    else if (b.score > a.score) return false;
-    else if (b.score < a.score) return true;
-    else if (b.idx < a.idx) return false;
-    else if (b.idx > a.idx) return true;
-    return (b.id > a.id);
-}
-
-inline bool coverSortByRelevDistance(Cover const& a, Cover const& b) noexcept {
-    if (b.relev > a.relev) return false;
-    else if (b.relev < a.relev) return true;
-    else if (b.distance < a.distance) return false;
-    else if (b.distance > a.distance) return true;
-    else if (b.score > a.score) return false;
-    else if (b.score < a.score) return true;
+    else if (b.scoredist > a.scoredist) return false;
+    else if (b.scoredist < a.scoredist) return true;
     else if (b.idx < a.idx) return false;
     else if (b.idx > a.idx) return true;
     return (b.id > a.id);
@@ -773,20 +762,8 @@ inline bool coverSortByRelevDistance(Cover const& a, Cover const& b) noexcept {
 inline bool contextSortByRelev(Context const& a, Context const& b) noexcept {
     if (b.relev > a.relev) return false;
     else if (b.relev < a.relev) return true;
-    else if (b.coverList[0].score > a.coverList[0].score) return false;
-    else if (b.coverList[0].score < a.coverList[0].score) return true;
-    else if (b.coverList[0].idx < a.coverList[0].idx) return false;
-    else if (b.coverList[0].idx > a.coverList[0].idx) return true;
-    return (b.coverList[0].id > a.coverList[0].id);
-}
-
-inline bool contextSortByRelevDistance(Context const& a, Context const& b) noexcept {
-    if (b.relev > a.relev) return false;
-    else if (b.relev < a.relev) return true;
-    else if (b.coverList[0].distance < a.coverList[0].distance) return false;
-    else if (b.coverList[0].distance > a.coverList[0].distance) return true;
-    else if (b.coverList[0].score > a.coverList[0].score) return false;
-    else if (b.coverList[0].score < a.coverList[0].score) return true;
+    else if (b.coverList[0].scoredist > a.coverList[0].scoredist) return false;
+    else if (b.coverList[0].scoredist < a.coverList[0].scoredist) return true;
     else if (b.coverList[0].idx < a.coverList[0].idx) return false;
     else if (b.coverList[0].idx > a.coverList[0].idx) return true;
     return (b.coverList[0].id > a.coverList[0].id);
@@ -805,6 +782,20 @@ struct CoalesceBaton : carmen::noncopyable {
     // return
     std::vector<Context> features;
 };
+
+// 32 tiles is about 40 miles at z14.
+// Simulates 40 mile cutoff in carmen.
+double scoredist(unsigned zoom, double distance, double score) {
+    if (distance == 0.0) distance = 0.01;
+    double scoredist;
+    if (zoom >= 14) scoredist = 32.0 / distance;
+    if (zoom == 13) scoredist = 16.0 / distance;
+    if (zoom == 12) scoredist = 8.0 / distance;
+    if (zoom == 11) scoredist = 4.0 / distance;
+    if (zoom == 10) scoredist = 2.0 / distance;
+    if (zoom <= 9)  scoredist = 1.0 / distance;
+    return score > scoredist ? score : scoredist;
+}
 
 void coalesceFinalize(CoalesceBaton* baton, std::vector<Context> const& contexts) {
     if (contexts.size() > 0) {
@@ -844,12 +835,15 @@ void coalesceSingle(uv_work_t* req) {
 
     // proximity (optional)
     bool proximity = !baton->centerzxy.empty();
+    unsigned cz;
     unsigned cx;
     unsigned cy;
     if (proximity) {
+        cz = baton->centerzxy[0];
         cx = baton->centerzxy[1];
         cy = baton->centerzxy[2];
     } else {
+        cz = 0;
         cx = 0;
         cy = 0;
     }
@@ -868,6 +862,7 @@ void coalesceSingle(uv_work_t* req) {
         cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
         cover.relev = cover.relev * subq.weight;
         cover.distance = proximity ? tileDist(cx, cover.x, cy, cover.y) : 0;
+        cover.scoredist = proximity ? scoredist(cz, cover.distance, cover.score) : cover.score;
 
         // short circuit based on relevMax thres
         if (relevMax - cover.relev >= 0.25) continue;
@@ -876,11 +871,7 @@ void coalesceSingle(uv_work_t* req) {
         covers.emplace_back(cover);
     }
 
-    if (proximity) {
-        std::sort(covers.begin(), covers.end(), coverSortByRelevDistance);
-    } else {
-        std::sort(covers.begin(), covers.end(), coverSortByRelev);
-    }
+    std::sort(covers.begin(), covers.end(), coverSortByRelev);
 
     uint32_t lastid = 0;
     unsigned short added = 0;
@@ -983,8 +974,10 @@ void coalesceMulti(uv_work_t* req) {
             if (proximity) {
                 ZXY dxy = pxy2zxy(z, cover.x, cover.y, cz);
                 cover.distance = tileDist(cx, dxy.x, cy, dxy.y);
+                cover.scoredist = scoredist(cz, cover.distance, cover.score);
             } else {
                 cover.distance = 0;
+                cover.scoredist = cover.score;
             }
 
             uint64_t zxy = (z * POW2_28) + (cover.x * POW2_14) + (cover.y);
@@ -1027,29 +1020,49 @@ void coalesceMulti(uv_work_t* req) {
         size_t coverSize = coverList.size();
         for (unsigned i = 0; i < coverSize; i++) {
             unsigned used = 1 << coverList[i].subq;
+            unsigned lastMask = 0;
+            double lastRelev = 0.0;
             double stacky = 0.0;
+
+            unsigned coverPos = 0;
 
             Context context;
             context.coverList.emplace_back(coverList[i]);
             context.relev = coverList[i].relev;
             for (unsigned j = i+1; j < coverSize; j++) {
                 unsigned mask = 1 << coverList[j].subq;
-                if (used & mask) continue;
-                stacky = 1.0;
-                used = used | mask;
-                context.coverList.emplace_back(coverList[j]);
-                context.relev += coverList[j].relev;
+
+                // this cover is functionally identical with previous and
+                // is more relevant, replace the previous.
+                if (mask == lastMask && coverList[j].relev > lastRelev) {
+                    context.relev -= lastRelev;
+                    context.relev += coverList[j].relev;
+                    context.coverList[coverPos] = coverList[j];
+
+                    stacky = 1.0;
+                    used = used | mask;
+                    lastMask = mask;
+                    lastRelev = coverList[j].relev;
+                    coverPos++;
+                // this cover doesn't overlap with used mask.
+                } else if (!(used & mask)) {
+                    context.coverList.emplace_back(coverList[j]);
+                    context.relev += coverList[j].relev;
+
+                    stacky = 1.0;
+                    used = used | mask;
+                    lastMask = mask;
+                    lastRelev = coverList[j].relev;
+                    coverPos++;
+                }
+                // all other cases conflict with existing mask. skip.
             }
             context.relev -= 0.01;
             context.relev += 0.01 * stacky;
             contexts.emplace_back(context);
         }
     }
-    if (proximity) {
-        std::sort(contexts.begin(), contexts.end(), contextSortByRelevDistance);
-    } else {
-        std::sort(contexts.begin(), contexts.end(), contextSortByRelev);
-    }
+    std::sort(contexts.begin(), contexts.end(), contextSortByRelev);
     coalesceFinalize(baton, contexts);
 }
 
@@ -1063,6 +1076,7 @@ Local<Object> coverToObject(Cover const& cover) {
     object->Set(NanNew("idx"), NanNew<Number>(cover.idx));
     object->Set(NanNew("tmpid"), NanNew<Number>(cover.tmpid));
     object->Set(NanNew("distance"), NanNew<Number>(cover.distance));
+    object->Set(NanNew("scoredist"), NanNew<Number>(cover.scoredist));
     return object;
 }
 Local<Array> contextToArray(Context const& context) {
