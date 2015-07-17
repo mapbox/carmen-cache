@@ -73,11 +73,11 @@ test('coalesce args', function(assert) {
         }], {}, function(err, res) {
             assert.ifError(err);
             assert.deepEqual(res[0].relev, 1, '0.relev');
-            assert.deepEqual(res[0][0], { distance: 0, id: 1, idx: 0, relev: 1.0, score: 7, tmpid: 1, x: 1, y: 1 }, '0.0');
+            assert.deepEqual(res[0][0], { distance: 0, id: 1, idx: 0, relev: 1.0, score: 7, scoredist: 7, tmpid: 1, x: 1, y: 1 }, '0.0');
             assert.deepEqual(res[1].relev, 1, '1.relev');
-            assert.deepEqual(res[1][0], { distance: 0, id: 3, idx: 0, relev: 1.0, score: 1, tmpid: 3, x: 3, y: 3 }, '1.0');
+            assert.deepEqual(res[1][0], { distance: 0, id: 3, idx: 0, relev: 1.0, score: 1, scoredist: 1, tmpid: 3, x: 3, y: 3 }, '1.0');
             assert.deepEqual(res[2].relev, 0.8, '2.relev');
-            assert.deepEqual(res[2][0], { distance: 0, id: 2, idx: 0, relev: 0.8, score: 3, tmpid: 2, x: 2, y: 2 }, '2.0');
+            assert.deepEqual(res[2][0], { distance: 0, id: 2, idx: 0, relev: 0.8, score: 3, scoredist: 3, tmpid: 2, x: 2, y: 2 }, '2.0');
             assert.end();
         });
     });
@@ -93,11 +93,11 @@ test('coalesce args', function(assert) {
         }, function(err, res) {
             assert.ifError(err);
             assert.deepEqual(res[0].relev, 1, '0.relev');
-            assert.deepEqual(res[0][0], { distance: 0, id: 3, idx: 0, relev: 1.0, score: 1, tmpid: 3, x: 3, y: 3 }, '0.0');
+            assert.deepEqual(res[0][0], { distance: 0, id: 3, idx: 0, relev: 1.0, score: 1, scoredist: 100, tmpid: 3, x: 3, y: 3 }, '0.0');
             assert.deepEqual(res[1].relev, 1, '1.relev');
-            assert.deepEqual(res[1][0], { distance: 4, id: 1, idx: 0, relev: 1.0, score: 7, tmpid: 1, x: 1, y: 1 }, '1.0');
+            assert.deepEqual(res[1][0], { distance: 4, id: 1, idx: 0, relev: 1.0, score: 7, scoredist: 7, tmpid: 1, x: 1, y: 1 }, '1.0');
             assert.deepEqual(res[2].relev, 0.8, '2.relev');
-            assert.deepEqual(res[2][0], { distance: 2, id: 2, idx: 0, relev: 0.8, score: 3, tmpid: 2, x: 2, y: 2 }, '2.0');
+            assert.deepEqual(res[2][0], { distance: 2, id: 2, idx: 0, relev: 0.8, score: 3, scoredist: 3, tmpid: 2, x: 2, y: 2 }, '2.0');
             assert.end();
         });
     });
@@ -134,9 +134,9 @@ test('coalesce args', function(assert) {
             assert.ifError(err);
             assert.equal(res.length, 2);
             assert.deepEqual(res[0].relev, 1, '0.relev');
-            assert.deepEqual(res[0][0], { distance: 0, id: 1, idx: 0, relev: 1.0, score: 0, tmpid: 1, x: 1, y: 1 }, '0.0');
+            assert.deepEqual(res[0][0], { distance: 0, id: 1, idx: 0, relev: 1.0, score: 0, scoredist: 0, tmpid: 1, x: 1, y: 1 }, '0.0');
             assert.deepEqual(res[1].relev, 1, '1.relev');
-            assert.deepEqual(res[1][0], { distance: 0, id: 2, idx: 0, relev: 1.0, score: 0, tmpid: 2, x: 1, y: 1 }, '0.0');
+            assert.deepEqual(res[1][0], { distance: 0, id: 2, idx: 0, relev: 1.0, score: 0, scoredist: 0, tmpid: 2, x: 1, y: 1 }, '0.0');
             assert.end();
         });
     });
@@ -201,11 +201,11 @@ test('coalesce args', function(assert) {
             assert.ifError(err);
             // sorts by relev, score
             assert.deepEqual(res[0].relev, 1, '0.relev');
-            assert.deepEqual(res[0][0], { distance: 0, id: 2, idx: 1, relev: 0.5, score: 7, tmpid: 33554434, x: 2, y: 2 }, '0.0');
-            assert.deepEqual(res[0][1], { distance: 0, id: 1, idx: 0, relev: 0.5, score: 1, tmpid: 1, x: 1, y: 1 }, '0.1');
+            assert.deepEqual(res[0][0], { distance: 0, id: 2, idx: 1, relev: 0.5, score: 7, scoredist: 7, tmpid: 33554434, x: 2, y: 2 }, '0.0');
+            assert.deepEqual(res[0][1], { distance: 0, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 1, x: 1, y: 1 }, '0.1');
             assert.deepEqual(res[1].relev, 1, '1.relev');
-            assert.deepEqual(res[1][0], { distance: 0, id: 3, idx: 1, relev: 0.5, score: 1, tmpid: 33554435, x: 3, y: 3 }, '1.0');
-            assert.deepEqual(res[1][1], { distance: 0, id: 1, idx: 0, relev: 0.5, score: 1, tmpid: 1, x: 1, y: 1 }, '1.1');
+            assert.deepEqual(res[1][0], { distance: 0, id: 3, idx: 1, relev: 0.5, score: 1, scoredist: 1, tmpid: 33554435, x: 3, y: 3 }, '1.0');
+            assert.deepEqual(res[1][1], { distance: 0, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 1, x: 1, y: 1 }, '1.1');
             assert.end();
         });
     });
@@ -228,16 +228,145 @@ test('coalesce args', function(assert) {
             assert.ifError(err);
             // sorts by relev, score
             assert.deepEqual(res[0].relev, 1, '0.relev');
-            assert.deepEqual(res[0][0], { distance: 0, id: 3, idx: 1, relev: 0.5, score: 1, tmpid: 33554435, x: 3, y: 3 }, '0.0');
-            assert.deepEqual(res[0][1], { distance: 4, id: 1, idx: 0, relev: 0.5, score: 1, tmpid: 1, x: 1, y: 1 }, '0.1');
+            assert.deepEqual(res[0][0], { distance: 0, id: 3, idx: 1, relev: 0.5, score: 1, scoredist: 100, tmpid: 33554435, x: 3, y: 3 }, '0.0');
+            assert.deepEqual(res[0][1], { distance: 4, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 1, x: 1, y: 1 }, '0.1');
             assert.deepEqual(res[1].relev, 1, '1.relev');
-            assert.deepEqual(res[1][0], { distance: 2, id: 2, idx: 1, relev: 0.5, score: 7, tmpid: 33554434, x: 2, y: 2 }, '1.0');
-            assert.deepEqual(res[1][1], { distance: 4, id: 1, idx: 0, relev: 0.5, score: 1, tmpid: 1, x: 1, y: 1 }, '1.1');
+            assert.deepEqual(res[1][0], { distance: 2, id: 2, idx: 1, relev: 0.5, score: 7, scoredist: 7, tmpid: 33554434, x: 2, y: 2 }, '1.0');
+            assert.deepEqual(res[1][1], { distance: 4, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 1, x: 1, y: 1 }, '1.1');
             assert.end();
         });
     });
 })();
 
+(function() {
+    var a = new Cache('a', 0);
+    var b = new Cache('b', 0);
+    a._set('grid', 0, 1, [
+        Grid.encode({
+            id: 1,
+            x: 0,
+            y: 0,
+            relev: 1,
+            score: 1
+        }),
+    ]);
+    b._set('grid', 0, 1, [
+        Grid.encode({
+            id: 2,
+            x: 4800,
+            y: 6200,
+            relev: 1,
+            score: 7
+        }),
+        Grid.encode({
+            id: 3,
+            x: 4600,
+            y: 6200,
+            relev: 1,
+            score: 1
+        })
+    ]);
+    test('coalesce scoredist (close proximity)', function(assert) {
+        coalesce([{
+            cache: a,
+            idx: 0,
+            zoom: 0,
+            weight: 0.5,
+            phrase: 1
+        }, {
+            cache: b,
+            idx: 1,
+            zoom: 14,
+            weight: 0.5,
+            phrase: 1
+        }], {
+            centerzxy: [14,4601,6200]
+        }, function(err, res) {
+            assert.ifError(err);
+            assert.deepEqual(res[0][0].id, 3, 'matches feat 3');
+            assert.deepEqual(res[1][0].id, 2, 'matches feat 2');
+            assert.deepEqual(res[0][0].distance < res[1][0].distance, true, 'feat 3 is closer than feat2');
+            assert.end();
+        });
+    });
+    test('coalesce scoredist (far proximity)', function(assert) {
+        coalesce([{
+            cache: a,
+            idx: 0,
+            zoom: 0,
+            weight: 0.5,
+            phrase: 1
+        }, {
+            cache: b,
+            idx: 1,
+            zoom: 14,
+            weight: 0.5,
+            phrase: 1
+        }], {
+            centerzxy: [14,4605,6200]
+        }, function(err, res) {
+            assert.ifError(err);
+            assert.deepEqual(res[0][0].id, 2, 'matches feat 2 (higher score)');
+            assert.deepEqual(res[1][0].id, 3, 'matches feat 3');
+            assert.deepEqual(res[1][0].distance < res[0][0].distance, true, 'feat 3 is closer than feat2');
+            assert.end();
+        });
+    });
+})();
+
+(function() {
+    var a = new Cache('a', 0);
+    var b = new Cache('b', 0);
+    a._set('grid', 0, 1, [
+        Grid.encode({
+            id: 1,
+            x: 1,
+            y: 1,
+            relev: 0.8,
+            score: 1
+        }),
+        Grid.encode({
+            id: 2,
+            x: 1,
+            y: 1,
+            relev: 1,
+            score: 1
+        }),
+    ]);
+    b._set('grid', 0, 1, [
+        Grid.encode({
+            id: 3,
+            x: 2,
+            y: 2,
+            relev: 1,
+            score: 1
+        }),
+    ]);
+    test('coalesceMulti (higher relev wins)', function(assert) {
+        coalesce([{
+            cache: a,
+            idx: 0,
+            zoom: 1,
+            weight: 0.5,
+            phrase: 1
+        }, {
+            cache: b,
+            idx: 1,
+            zoom: 2,
+            weight: 0.5,
+            phrase: 1
+        }], {}, function(err, res) {
+            assert.ifError(err);
+            // sorts by relev, score
+            assert.deepEqual(res.length, 1, '1 result');
+            assert.deepEqual(res[0].relev, 1, '0.relev');
+            assert.deepEqual(res[0].length, 2, '0.length');
+            assert.deepEqual(res[0][0], { distance: 0, id: 3, idx: 1, relev: 0.5, score: 1, scoredist: 1, tmpid: 33554435, x: 2, y: 2 }, '0.0');
+            assert.deepEqual(res[0][1], { distance: 0, id: 2, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 2, x: 1, y: 1 }, '0.1');
+            assert.end();
+        });
+    });
+})();
 
 // Multi sandwich scenario
 (function() {

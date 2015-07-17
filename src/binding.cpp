@@ -20,17 +20,17 @@ inline std::string shard(uint64_t level, uint32_t id) {
     return std::to_string(shard_id);
 }
 
-inline std::vector<unsigned short> arrayToVector(Local<Array> const& array) {
-    std::vector<unsigned short> cpp_array;
+inline std::vector<unsigned> arrayToVector(Local<Array> const& array) {
+    std::vector<unsigned> cpp_array;
     cpp_array.reserve(array->Length());
     for (uint32_t i = 0; i < array->Length(); i++) {
         int64_t js_value = array->Get(i)->IntegerValue();
-        if (js_value < 0 || js_value >= std::numeric_limits<unsigned short>::max()) {
+        if (js_value < 0 || js_value >= std::numeric_limits<unsigned>::max()) {
             std::stringstream s;
-            s << "value in array too large (cannot fit '" << js_value << "' in unsigned short)";
+            s << "value in array too large (cannot fit '" << js_value << "' in unsigned)";
             throw std::runtime_error(s.str());
         }
-        cpp_array.emplace_back(static_cast<unsigned short>(js_value));
+        cpp_array.emplace_back(static_cast<unsigned>(js_value));
     }
     return cpp_array;
 }
@@ -70,44 +70,43 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string const
     Cache::memcache::const_iterator itr = mem.find(key);
     Cache::intarray array;
     if (itr == mem.end()) {
-        Cache::lazycache const& lazy = c->lazy_;
-        Cache::lazycache::const_iterator litr = lazy.find(key);
-        if (litr == lazy.end()) {
-            return array;
-        }
         Cache::message_cache const& messages = c->msg_;
         Cache::message_cache::const_iterator mitr = messages.find(key);
-        if (mitr == messages.end()) {
-            throw std::runtime_error("misuse");
-        }
-        Cache::larraycache::const_iterator laitr = litr->second.find(id);
-        if (laitr == litr->second.end()) {
-            return array;
-        } else {
-            // NOTE: we cannot call array.reserve here since
-            // the total length is not known
-            unsigned start = (laitr->second & 0xffffffff);
-            unsigned len = (laitr->second >> 32);
-            std::string ref = mitr->second.substr(start,len);
-            protobuf::message buffer(ref.data(), ref.size());
-            while (buffer.next()) {
-                if (buffer.tag == 1) {
-                    buffer.skip();
-                } else if (buffer.tag == 2) {
-                    uint64_t array_length = buffer.varint();
-                    protobuf::message pbfarray(buffer.getData(),static_cast<std::size_t>(array_length));
-                    while (pbfarray.next()) {
-                        array.emplace_back(pbfarray.value);
+        if (mitr == messages.end()) return array;
+
+        std::string ref = mitr->second;
+        protobuf::message message(ref.data(), ref.size());
+
+        while (message.next()) {
+            if (message.tag == 1) {
+                uint64_t len = message.varint();
+                protobuf::message buffer(message.getData(), static_cast<std::size_t>(len));
+                while (buffer.next()) {
+                    if (buffer.tag != 1) break;
+                    if (buffer.varint() != id) break;
+
+                    buffer.next();
+                    if (buffer.tag == 2) {
+                        uint64_t array_length = buffer.varint();
+                        protobuf::message pbfarray(buffer.getData(),static_cast<std::size_t>(array_length));
+                        while (pbfarray.next()) {
+                            array.emplace_back(pbfarray.value);
+                        }
+                        return array;
+                    } else {
+                        std::stringstream msg("");
+                        msg << "cxx get: hit unknown protobuf type: '" << buffer.tag << "'";
+                        throw std::runtime_error(msg.str());
                     }
-                    buffer.skipBytes(array_length);
-                } else {
-                    std::stringstream msg("");
-                    msg << "cxx get: hit unknown protobuf type: '" << buffer.tag << "'";
-                    throw std::runtime_error(msg.str());
                 }
+                message.skipBytes(len);
+            } else {
+                std::stringstream msg("");
+                msg << "load: hit unknown protobuf type: '" << message.tag << "'";
+                throw std::runtime_error(msg.str());
             }
-            return array;
         }
+        return array;
     } else {
         Cache::arraycache::const_iterator aitr = itr->second.find(id);
         if (aitr == itr->second.end()) {
@@ -137,7 +136,6 @@ void Cache::Initialize(Handle<Object> target) {
     t->SetClassName(NanNew("Cache"));
     NODE_SET_PROTOTYPE_METHOD(t, "has", has);
     NODE_SET_PROTOTYPE_METHOD(t, "hasDict", hasDict);
-    NODE_SET_PROTOTYPE_METHOD(t, "load", load);
     NODE_SET_PROTOTYPE_METHOD(t, "loadSync", loadSync);
     NODE_SET_PROTOTYPE_METHOD(t, "loadAsDict", loadAsDict);
     NODE_SET_PROTOTYPE_METHOD(t, "pack", pack);
@@ -154,7 +152,6 @@ void Cache::Initialize(Handle<Object> target) {
 Cache::Cache()
   : ObjectWrap(),
     cache_(),
-    lazy_(),
     msg_() {}
 
 Cache::~Cache() { }
@@ -188,54 +185,27 @@ NAN_METHOD(Cache::pack)
                     new_item->add_val(static_cast<int64_t>(vitem));
                 }
             }
-        } else {
-            Cache::lazycache const& lazy = c->lazy_;
-            Cache::message_cache const& messages = c->msg_;
-            Cache::lazycache::const_iterator litr = lazy.find(key);
-            if (litr != lazy.end()) {
-                Cache::message_cache::const_iterator mitr = messages.find(key);
-                if (mitr == messages.end()) {
-                    throw std::runtime_error("misuse");
-                }
-                for (auto const& item : litr->second) {
-                    ::carmen::proto::object_item * new_item = message.add_items();
-                    new_item->set_key(item.first);
-                    unsigned start = (item.second & 0xffffffff);
-                    unsigned len = (item.second >> 32);
-                    std::string ref = mitr->second.substr(start,len);
-                    protobuf::message buffer(ref.data(), ref.size());
-                    while (buffer.next()) {
-                        if (buffer.tag == 1) {
-                            buffer.skip();
-                        } else if (buffer.tag == 2) {
-                            uint64_t array_length = buffer.varint();
-                            protobuf::message pbfarray(buffer.getData(),static_cast<std::size_t>(array_length));
-                            while (pbfarray.next()) {
-                                new_item->add_val(static_cast<int64_t>(pbfarray.value));
-                            }
-                            buffer.skipBytes(array_length);
-                        } else {
-                            std::stringstream msg("");
-                            msg << "pack: hit unknown protobuf type: '" << buffer.tag << "'";
-                            throw std::runtime_error(msg.str());
-                        }
-                    }
+            int size = message.ByteSize();
+            if (size > 0) {
+                uint32_t usize = static_cast<uint32_t>(size);
+                Local<Object> buf = NanNewBufferHandle(usize);
+                if (message.SerializeToArray(node::Buffer::Data(buf),size))
+                {
+                    NanReturnValue(buf);
                 }
             } else {
-                return NanThrowTypeError("pack: cannot pack empty data");
-            }
-        }
-        int size = message.ByteSize();
-        if (size > 0)
-        {
-            uint32_t usize = static_cast<uint32_t>(size);
-            Local<Object> buf = NanNewBufferHandle(usize);
-            if (message.SerializeToArray(node::Buffer::Data(buf),size))
-            {
-                NanReturnValue(buf);
+                return NanThrowTypeError("pack: invalid message ByteSize encountered");
             }
         } else {
-            return NanThrowTypeError("pack: invalid message ByteSize encountered");
+            Cache::message_cache const& messages = c->msg_;
+            Cache::message_cache::const_iterator mitr = messages.find(key);
+            if (mitr == messages.end()) {
+                return NanThrowTypeError("pack: cannot pack empty data");
+            } else {
+                std::string ref = mitr->second;
+                Local<Object> buf = NanNewBufferHandle((char*)ref.data(), ref.size());
+                NanReturnValue(buf);
+            }
         }
     } catch (std::exception const& ex) {
         return NanThrowTypeError(ex.what());
@@ -256,7 +226,7 @@ NAN_METHOD(Cache::list)
         std::string type = *String::Utf8Value(args[0]->ToString());
         Cache* c = node::ObjectWrap::Unwrap<Cache>(args.This());
         Cache::memcache const& mem = c->cache_;
-        Cache::lazycache const& lazy = c->lazy_;
+        Cache::message_cache const& messages = c->msg_;
         Local<Array> ids = NanNew<Array>();
         if (args.Length() == 1) {
             unsigned idx = 0;
@@ -268,7 +238,7 @@ NAN_METHOD(Cache::list)
                     ids->Set(idx++,NanNew(NanNew(shard.c_str())->NumberValue()));
                 }
             }
-            for (auto const& item : lazy) {
+            for (auto const& item : messages) {
                 std::size_t item_size = item.first.size();
                 if (item_size > type_size && item.first.substr(0,type_size) == type) {
                     std::string shard = item.first.substr(type_size+1,item_size);
@@ -286,12 +256,30 @@ NAN_METHOD(Cache::list)
                     ids->Set(idx++,NanNew(item.first)->ToString());
                 }
             }
-            Cache::lazycache::const_iterator litr = lazy.find(key);
-            if (litr != lazy.end()) {
-                for (auto const& item : litr->second) {
-                    ids->Set(idx++,NanNew<Number>(item.first)->ToString());
+
+            // parse message for ids
+            Cache::message_cache const& messages = c->msg_;
+            Cache::message_cache::const_iterator mitr = messages.find(key);
+            if (mitr != messages.end()) {
+                std::string ref = mitr->second;
+                protobuf::message message(ref.data(), ref.size());
+                while (message.next()) {
+                    if (message.tag == 1) {
+                        uint64_t len = message.varint();
+                        protobuf::message buffer(message.getData(), static_cast<std::size_t>(len));
+                        while (buffer.next()) {
+                            if (buffer.tag != 1) break;
+                            ids->Set(idx++, NanNew<Number>(buffer.varint())->ToString());
+                        }
+                        message.skipBytes(len);
+                    } else {
+                        std::stringstream msg("");
+                        msg << "load: hit unknown protobuf type: '" << message.tag << "'";
+                        throw std::runtime_error(msg.str());
+                    }
                 }
             }
+
             NanReturnValue(ids);
         }
     } catch (std::exception const& ex) {
@@ -365,42 +353,9 @@ void load_into_dict(Cache::ldictcache & ldict, const char * data, size_t size) {
             protobuf::message buffer(message.getData(), static_cast<std::size_t>(len));
             while (buffer.next()) {
                 if (buffer.tag == 1) {
-                    uint32_t key_id = buffer.varint();
+                    uint32_t key_id = static_cast<uint32_t>(buffer.varint());
                     ldict.insert(key_id);
                 }
-                break;
-            }
-            message.skipBytes(len);
-        } else {
-            std::stringstream msg("");
-            msg << "load: hit unknown protobuf type: '" << message.tag << "'";
-            throw std::runtime_error(msg.str());
-        }
-    }
-}
-
-void load_into_cache(Cache::larraycache & larrc,
-                            const char * data,
-                            size_t size) {
-    protobuf::message message(data,size);
-    while (message.next()) {
-        if (message.tag == 1) {
-            uint64_t len = message.varint();
-            protobuf::message buffer(message.getData(), static_cast<std::size_t>(len));
-            while (buffer.next()) {
-                if (buffer.tag == 1) {
-                    uint64_t key_id = buffer.varint();
-                    size_t start = static_cast<size_t>(message.getData() - data);
-                    // insert here because:
-                    //  - libstdc++ does not support std::map::emplace <-- does now with gcc 4.8, but...
-                    //  - we are using google::sparshash now, which does not support emplace (yet?)
-                    //  - larrc.emplace(buffer.varint(),Cache::string_ref_type(message.getData(),len)) was not faster on OS X
-                    Cache::value_type offsets = (((Cache::value_type)len << 32)) | (((Cache::value_type)start) & 0xffffffff);
-                    larrc.insert(std::make_pair(key_id,offsets));
-                }
-                // it is safe to break immediately because tag 1 should come first
-                // it would also be safe to not use `while (buffer.next())` here, but we do it
-                // because I've not seen a performance cost (dane/osx) and being explicit is good
                 break;
             }
             message.skipBytes(len);
@@ -448,14 +403,11 @@ NAN_METHOD(Cache::loadSync)
         if (itr2 != mem.end()) {
             mem.erase(itr2);
         }
-        Cache::lazycache & lazy = c->lazy_;
-        Cache::lazycache::iterator litr = lazy.find(key);
         Cache::message_cache & messages = c->msg_;
-        if (litr == lazy.end()) {
-            c->lazy_.emplace(key,Cache::larraycache());
+        Cache::message_cache::iterator mitr = messages.find(key);
+        if (mitr == messages.end()) {
             messages.emplace(key,std::string(node::Buffer::Data(obj),node::Buffer::Length(obj)));
         }
-        load_into_cache(c->lazy_[key],node::Buffer::Data(obj),node::Buffer::Length(obj));
     } catch (std::exception const& ex) {
         return NanThrowTypeError(ex.what());
     }
@@ -499,109 +451,6 @@ NAN_METHOD(Cache::loadAsDict)
         return NanThrowTypeError(ex.what());
     }
     NanReturnUndefined();
-}
-
-struct load_baton : carmen::noncopyable {
-    uv_work_t request;
-    Cache * c;
-    NanCallback cb;
-    Cache::larraycache arrc;
-    std::string key;
-    std::string data;
-    std::string error_name;
-    load_baton(std::string const& _key,
-               const char * _data,
-               size_t size,
-               Local<Function> callbackHandle,
-               Cache * _c) :
-      c(_c),
-      cb(callbackHandle),
-      arrc(),
-      key(_key),
-      data(_data,size),
-      error_name() {
-        request.data = this;
-        c->_ref();
-      }
-    ~load_baton() {
-         c->_unref();
-    }
-};
-
-void Cache::AsyncLoad(uv_work_t* req) {
-    load_baton *closure = static_cast<load_baton *>(req->data);
-    try {
-        load_into_cache(closure->arrc,closure->data.data(),closure->data.size());
-    }
-    catch (std::exception const& ex)
-    {
-        closure->error_name = ex.what();
-    }
-}
-
-void Cache::AfterLoad(uv_work_t* req) {
-    NanScope();
-    load_baton *closure = static_cast<load_baton *>(req->data);
-    if (!closure->error_name.empty()) {
-        Local<Value> argv[1] = { Exception::Error(NanNew(closure->error_name.c_str())) };
-        closure->cb.Call(1, argv);
-    } else {
-        Cache::memcache::iterator itr2 = closure->c->cache_.find(closure->key);
-        if (itr2 != closure->c->cache_.end()) {
-            closure->c->cache_.erase(itr2);
-        }
-        closure->c->lazy_[closure->key] = std::move(closure->arrc);
-        Local<Value> argv[1] = { NanNull() };
-        closure->cb.Call(1, argv);
-    }
-    delete closure;
-}
-
-NAN_METHOD(Cache::load)
-{
-    NanScope();
-    Local<Value> callback = args[args.Length()-1];
-    if (!callback->IsFunction()) {
-        return loadSync(args);
-    }
-    if (args.Length() < 2) {
-        return NanThrowTypeError("expected at least three args: 'buffer', 'type', 'shard', and optionally a 'callback'");
-    }
-    if (!args[0]->IsObject()) {
-        return NanThrowTypeError("first argument must be a Buffer");
-    }
-    Local<Object> obj = args[0]->ToObject();
-    if (obj->IsNull() || obj->IsUndefined()) {
-        return NanThrowTypeError("a buffer expected for first argument");
-    }
-    if (!node::Buffer::HasInstance(obj)) {
-        return NanThrowTypeError("first argument must be a Buffer");
-    }
-    if (!args[1]->IsString()) {
-        return NanThrowTypeError("second arg 'type' must be a String");
-    }
-    if (!args[2]->IsNumber()) {
-        return NanThrowTypeError("third arg 'shard' must be an Integer");
-    }
-    try {
-        std::string type = *String::Utf8Value(args[1]->ToString());
-        std::string shard = *String::Utf8Value(args[2]->ToString());
-        std::string key = type + "-" + shard;
-        Cache* c = node::ObjectWrap::Unwrap<Cache>(args.This());
-        load_baton *closure = new load_baton(key,
-                                             node::Buffer::Data(obj),
-                                             node::Buffer::Length(obj),
-                                             args[3].As<Function>(),
-                                             c);
-        uv_queue_work(uv_default_loop(), &closure->request, AsyncLoad, (uv_after_work_cb)AfterLoad);
-        Cache::message_cache & messages = c->msg_;
-        if (messages.find(key) == messages.end()) {
-            messages.emplace(key,std::string(node::Buffer::Data(obj),node::Buffer::Length(obj)));
-        }
-        NanReturnUndefined();
-    } catch (std::exception const& ex) {
-        return NanThrowTypeError(ex.what());
-    }
 }
 
 NAN_METHOD(Cache::has)
@@ -755,12 +604,6 @@ NAN_METHOD(Cache::unload)
             hit = true;
             mem.erase(itr);
         }
-        Cache::lazycache & lazy = c->lazy_;
-        Cache::lazycache::iterator litr = lazy.find(key);
-        if (litr != lazy.end()) {
-            hit = true;
-            lazy.erase(litr);
-        }
         Cache::message_cache & messages = c->msg_;
         Cache::message_cache::iterator mitr = messages.find(key);
         if (mitr != messages.end()) {
@@ -839,7 +682,8 @@ struct Cover {
     unsigned short score;
     unsigned short idx;
     unsigned short subq;
-    unsigned short distance;
+    unsigned distance;
+    double scoredist;
 };
 
 struct Context {
@@ -861,7 +705,7 @@ Cover numToCover(uint64_t num) {
     uint32_t id = static_cast<uint32_t>(num % POW2_20);
     cover.x = x;
     cover.y = y;
-    double relev = 0.4 + (0.2 * ((num >> 23) % POW2_2));
+    double relev = 0.4 + (0.2 * static_cast<double>((num >> 23) % POW2_2));
     cover.relev = relev;
     cover.score = score;
     cover.id = id;
@@ -877,18 +721,18 @@ Cover numToCover(uint64_t num) {
 };
 
 struct ZXY {
-    unsigned short z;
-    unsigned short x;
-    unsigned short y;
+    unsigned z;
+    unsigned x;
+    unsigned y;
 };
 
-ZXY pxy2zxy(unsigned short z, unsigned short x, unsigned short y, unsigned short target_z) {
+ZXY pxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z) {
     ZXY zxy;
     zxy.z = target_z;
 
     // Interval between parent and target zoom level
-    unsigned short zDist = target_z - z;
-    unsigned short zMult = zDist - 1;
+    unsigned zDist = target_z - z;
+    unsigned zMult = zDist - 1;
     if (zDist == 0) {
         zxy.x = x;
         zxy.y = y;
@@ -896,10 +740,10 @@ ZXY pxy2zxy(unsigned short z, unsigned short x, unsigned short y, unsigned short
     }
 
     // Midpoint length @ z for a tile at parent zoom level
-    double pMid_d = std::pow(2,zDist) / 2.0;
-    assert(pMid_d <= static_cast<double>(std::numeric_limits<unsigned short>::max()));
-    assert(pMid_d >= static_cast<double>(std::numeric_limits<unsigned short>::min()));
-    unsigned short pMid = static_cast<unsigned short>(pMid_d);
+    unsigned pMid_d = static_cast<unsigned>(std::pow(2,zDist) / 2);
+    assert(pMid_d <= static_cast<double>(std::numeric_limits<unsigned>::max()));
+    assert(pMid_d >= static_cast<double>(std::numeric_limits<unsigned>::min()));
+    unsigned pMid = static_cast<unsigned>(pMid_d);
     zxy.x = (x * zMult) + pMid;
     zxy.y = (y * zMult) + pMid;
     return zxy;
@@ -908,20 +752,8 @@ ZXY pxy2zxy(unsigned short z, unsigned short x, unsigned short y, unsigned short
 inline bool coverSortByRelev(Cover const& a, Cover const& b) noexcept {
     if (b.relev > a.relev) return false;
     else if (b.relev < a.relev) return true;
-    else if (b.score > a.score) return false;
-    else if (b.score < a.score) return true;
-    else if (b.idx < a.idx) return false;
-    else if (b.idx > a.idx) return true;
-    return (b.id > a.id);
-}
-
-inline bool coverSortByRelevDistance(Cover const& a, Cover const& b) noexcept {
-    if (b.relev > a.relev) return false;
-    else if (b.relev < a.relev) return true;
-    else if (b.distance < a.distance) return false;
-    else if (b.distance > a.distance) return true;
-    else if (b.score > a.score) return false;
-    else if (b.score < a.score) return true;
+    else if (b.scoredist > a.scoredist) return false;
+    else if (b.scoredist < a.scoredist) return true;
     else if (b.idx < a.idx) return false;
     else if (b.idx > a.idx) return true;
     return (b.id > a.id);
@@ -930,26 +762,14 @@ inline bool coverSortByRelevDistance(Cover const& a, Cover const& b) noexcept {
 inline bool contextSortByRelev(Context const& a, Context const& b) noexcept {
     if (b.relev > a.relev) return false;
     else if (b.relev < a.relev) return true;
-    else if (b.coverList[0].score > a.coverList[0].score) return false;
-    else if (b.coverList[0].score < a.coverList[0].score) return true;
+    else if (b.coverList[0].scoredist > a.coverList[0].scoredist) return false;
+    else if (b.coverList[0].scoredist < a.coverList[0].scoredist) return true;
     else if (b.coverList[0].idx < a.coverList[0].idx) return false;
     else if (b.coverList[0].idx > a.coverList[0].idx) return true;
     return (b.coverList[0].id > a.coverList[0].id);
 }
 
-inline bool contextSortByRelevDistance(Context const& a, Context const& b) noexcept {
-    if (b.relev > a.relev) return false;
-    else if (b.relev < a.relev) return true;
-    else if (b.coverList[0].distance < a.coverList[0].distance) return false;
-    else if (b.coverList[0].distance > a.coverList[0].distance) return true;
-    else if (b.coverList[0].score > a.coverList[0].score) return false;
-    else if (b.coverList[0].score < a.coverList[0].score) return true;
-    else if (b.coverList[0].idx < a.coverList[0].idx) return false;
-    else if (b.coverList[0].idx > a.coverList[0].idx) return true;
-    return (b.coverList[0].id > a.coverList[0].id);
-}
-
-inline unsigned short tileDist(unsigned short ax, unsigned short bx, unsigned short ay, unsigned short by) noexcept {
+inline unsigned tileDist(unsigned ax, unsigned bx, unsigned ay, unsigned by) noexcept {
     return (ax > bx ? ax - bx : bx - ax) + (ay > by ? ay - by : by - ay);
 }
 
@@ -957,11 +777,25 @@ struct CoalesceBaton : carmen::noncopyable {
     uv_work_t request;
     // params
     std::vector<PhrasematchSubq> stack;
-    std::vector<unsigned short> centerzxy;
+    std::vector<unsigned> centerzxy;
     v8::Persistent<v8::Function> callback;
     // return
     std::vector<Context> features;
 };
+
+// 32 tiles is about 40 miles at z14.
+// Simulates 40 mile cutoff in carmen.
+double scoredist(unsigned zoom, double distance, double score) {
+    if (distance == 0.0) distance = 0.01;
+    double scoredist;
+    if (zoom >= 14) scoredist = 32.0 / distance;
+    if (zoom == 13) scoredist = 16.0 / distance;
+    if (zoom == 12) scoredist = 8.0 / distance;
+    if (zoom == 11) scoredist = 4.0 / distance;
+    if (zoom == 10) scoredist = 2.0 / distance;
+    if (zoom <= 9)  scoredist = 1.0 / distance;
+    return score > scoredist ? score : scoredist;
+}
 
 void coalesceFinalize(CoalesceBaton* baton, std::vector<Context> const& contexts) {
     if (contexts.size() > 0) {
@@ -1001,12 +835,15 @@ void coalesceSingle(uv_work_t* req) {
 
     // proximity (optional)
     bool proximity = !baton->centerzxy.empty();
-    unsigned short cx;
-    unsigned short cy;
+    unsigned cz;
+    unsigned cx;
+    unsigned cy;
     if (proximity) {
+        cz = baton->centerzxy[0];
         cx = baton->centerzxy[1];
         cy = baton->centerzxy[2];
     } else {
+        cz = 0;
         cx = 0;
         cy = 0;
     }
@@ -1025,6 +862,7 @@ void coalesceSingle(uv_work_t* req) {
         cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
         cover.relev = cover.relev * subq.weight;
         cover.distance = proximity ? tileDist(cx, cover.x, cy, cover.y) : 0;
+        cover.scoredist = proximity ? scoredist(cz, cover.distance, cover.score) : cover.score;
 
         // short circuit based on relevMax thres
         if (relevMax - cover.relev >= 0.25) continue;
@@ -1033,11 +871,7 @@ void coalesceSingle(uv_work_t* req) {
         covers.emplace_back(cover);
     }
 
-    if (proximity) {
-        std::sort(covers.begin(), covers.end(), coverSortByRelevDistance);
-    } else {
-        std::sort(covers.begin(), covers.end(), coverSortByRelev);
-    }
+    std::sort(covers.begin(), covers.end(), coverSortByRelev);
 
     uint32_t lastid = 0;
     unsigned short added = 0;
@@ -1105,9 +939,9 @@ void coalesceMulti(uv_work_t* req) {
 
     // proximity (optional)
     bool proximity = baton->centerzxy.size() > 0;
-    unsigned short cz;
-    unsigned short cx;
-    unsigned short cy;
+    unsigned cz;
+    unsigned cx;
+    unsigned cy;
     if (proximity) {
         cz = baton->centerzxy[0];
         cx = baton->centerzxy[1];
@@ -1140,8 +974,10 @@ void coalesceMulti(uv_work_t* req) {
             if (proximity) {
                 ZXY dxy = pxy2zxy(z, cover.x, cover.y, cz);
                 cover.distance = tileDist(cx, dxy.x, cy, dxy.y);
+                cover.scoredist = scoredist(cz, cover.distance, cover.score);
             } else {
                 cover.distance = 0;
+                cover.scoredist = cover.score;
             }
 
             uint64_t zxy = (z * POW2_28) + (cover.x * POW2_14) + (cover.y);
@@ -1160,7 +996,9 @@ void coalesceMulti(uv_work_t* req) {
                 for (unsigned a = 0; a < zCacheSize; a++) {
                     uint64_t p = zCache[a];
                     double s = static_cast<double>(1 << (z-p));
-                    uint64_t pxy = static_cast<uint64_t>((p * POW2_28) + (std::floor(cover.x/s) * POW2_14) + std::floor(cover.y/s));
+                    uint64_t pxy = static_cast<uint64_t>(p * POW2_28) +
+                        static_cast<uint64_t>(std::floor(cover.x/s) * POW2_14) +
+                        static_cast<uint64_t>(std::floor(cover.y/s));
                     // Set a flag to ensure coalesce occurs only once per zxy.
                     pit = coalesced.find(pxy);
                     if (pit != coalesced.end()) {
@@ -1180,31 +1018,51 @@ void coalesceMulti(uv_work_t* req) {
     for (auto const& matched : coalesced) {
         std::vector<Cover> const& coverList = matched.second;
         size_t coverSize = coverList.size();
-        for (unsigned short i = 0; i < coverSize; i++) {
-            unsigned short used = 1 << coverList[i].subq;
+        for (unsigned i = 0; i < coverSize; i++) {
+            unsigned used = 1 << coverList[i].subq;
+            unsigned lastMask = 0;
+            double lastRelev = 0.0;
             double stacky = 0.0;
+
+            unsigned coverPos = 0;
 
             Context context;
             context.coverList.emplace_back(coverList[i]);
             context.relev = coverList[i].relev;
-            for (unsigned short j = i+1; j < coverSize; j++) {
-                unsigned short mask = 1 << coverList[j].subq;
-                if (used & mask) continue;
-                stacky = 1.0;
-                used = used | mask;
-                context.coverList.emplace_back(coverList[j]);
-                context.relev += coverList[j].relev;
+            for (unsigned j = i+1; j < coverSize; j++) {
+                unsigned mask = 1 << coverList[j].subq;
+
+                // this cover is functionally identical with previous and
+                // is more relevant, replace the previous.
+                if (mask == lastMask && coverList[j].relev > lastRelev) {
+                    context.relev -= lastRelev;
+                    context.relev += coverList[j].relev;
+                    context.coverList[coverPos] = coverList[j];
+
+                    stacky = 1.0;
+                    used = used | mask;
+                    lastMask = mask;
+                    lastRelev = coverList[j].relev;
+                    coverPos++;
+                // this cover doesn't overlap with used mask.
+                } else if (!(used & mask)) {
+                    context.coverList.emplace_back(coverList[j]);
+                    context.relev += coverList[j].relev;
+
+                    stacky = 1.0;
+                    used = used | mask;
+                    lastMask = mask;
+                    lastRelev = coverList[j].relev;
+                    coverPos++;
+                }
+                // all other cases conflict with existing mask. skip.
             }
             context.relev -= 0.01;
             context.relev += 0.01 * stacky;
             contexts.emplace_back(context);
         }
     }
-    if (proximity) {
-        std::sort(contexts.begin(), contexts.end(), contextSortByRelevDistance);
-    } else {
-        std::sort(contexts.begin(), contexts.end(), contextSortByRelev);
-    }
+    std::sort(contexts.begin(), contexts.end(), contextSortByRelev);
     coalesceFinalize(baton, contexts);
 }
 
@@ -1218,6 +1076,7 @@ Local<Object> coverToObject(Cover const& cover) {
     object->Set(NanNew("idx"), NanNew<Number>(cover.idx));
     object->Set(NanNew("tmpid"), NanNew<Number>(cover.tmpid));
     object->Set(NanNew("distance"), NanNew<Number>(cover.distance));
+    object->Set(NanNew("scoredist"), NanNew<Number>(cover.scoredist));
     return object;
 }
 Local<Array> contextToArray(Context const& context) {

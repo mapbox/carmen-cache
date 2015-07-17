@@ -52,7 +52,7 @@ var fs = require('fs');
             }
             packer._set('term', 0, 5, array);
             var loader = new Cache('a', 1);
-            loader.load(packer.pack('term',0), 'term', 0);
+            loader.loadSync(packer.pack('term',0), 'term', 0);
             // grab data right back out
             assert.deepEqual(10008, loader.pack('term', 0).length);
             // try to grab data that does not exist
@@ -79,7 +79,7 @@ var fs = require('fs');
             // cache A serializes data, cache B loads serialized data.
             var pack = cache.pack('term', 0);
             var loader = new Cache('b', 1);
-            loader.load(pack, 'term', 0);
+            loader.loadSync(pack, 'term', 0);
             assert.deepEqual([5,6], loader._get('term', 0, 21));
             assert.deepEqual([0], loader.list('term'), 'single shard');
             assert.deepEqual(['5', '21'], loader.list('term', 0), 'keys in shard');
@@ -114,7 +114,7 @@ var fs = require('fs');
             assert.end();
         });
 
-        tape('#load (async)', function(assert) {
+        tape.skip('#load (async)', function(assert) {
             var cache = new Cache('a', 1);
             var array = [];
             for (var i=0;i<10000;++i) {
@@ -124,31 +124,31 @@ var fs = require('fs');
             var pack = cache.pack('term', 0);
             var loader = new Cache('b', 1);
             // multiple inserts to ensure we are thread safe
-            loader.load(pack, 'term', 0,function(err) {
+            loader.loadSync(pack, 'term', 0,function(err) {
                 assert.deepEqual(array, loader._get('term', 0, 0));
                 assert.deepEqual([0], loader.list('term'), 'single shard');
             });
-            loader.load(pack, 'term', 0,function(err) {
+            loader.loadSync(pack, 'term', 0,function(err) {
                 assert.deepEqual(array, loader._get('term', 0, 0));
                 assert.deepEqual([0], loader.list('term'), 'single shard');
             });
-            loader.load(pack, 'term', 0,function(err) {
+            loader.loadSync(pack, 'term', 0,function(err) {
                 assert.deepEqual(array, loader._get('term', 0, 0));
                 assert.deepEqual([0], loader.list('term'), 'single shard');
             });
-            loader.load(pack, 'term', 0,function(err) {
+            loader.loadSync(pack, 'term', 0,function(err) {
                 assert.deepEqual(array, loader._get('term', 0, 0));
                 assert.deepEqual([0], loader.list('term'), 'single shard');
             });
-            loader.load(pack, 'term', 0,function(err) {
+            loader.loadSync(pack, 'term', 0,function(err) {
                 assert.deepEqual(array, loader._get('term', 0, 0));
                 assert.deepEqual([0], loader.list('term'), 'single shard');
             });
-            loader.load(pack, 'term', 0,function(err) {
+            loader.loadSync(pack, 'term', 0,function(err) {
                 assert.deepEqual(array, loader._get('term', 0, 0));
                 assert.deepEqual([0], loader.list('term'), 'single shard');
             });
-            loader.load(pack, 'term', 0,function(err) {
+            loader.loadSync(pack, 'term', 0,function(err) {
                 assert.deepEqual(array, loader._get('term', 0, 0));
                 assert.deepEqual([0], loader.list('term'), 'single shard');
                 assert.end();
@@ -180,7 +180,7 @@ var fs = require('fs');
             cache._set('term', 0, 5, array);
             var pack = cache.pack('term', 0);
             var loader = new Cache('b', 1);
-            loader.load(pack, 'term', 0);
+            loader.loadSync(pack, 'term', 0);
             assert.deepEqual(array, loader._get('term', 0, 5));
             assert.deepEqual([0], loader.list('term'), 'single shard');
             assert.deepEqual(true, loader.has('term', 0));

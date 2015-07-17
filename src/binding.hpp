@@ -18,7 +18,6 @@
 #include <map>
 #include <vector>
 #include "index.pb.h"
-#include <sparsehash/sparse_hash_map>
 #include <sparsehash/sparse_hash_set>
 #pragma clang diagnostic pop
 #include <iostream>
@@ -39,10 +38,8 @@ public:
     ~Cache();
     typedef uint32_t key_type;
     typedef uint64_t value_type;
-    // lazy ref item
-    typedef google::sparse_hash_map<uint32_t,value_type> larraycache;
+    // pbf message cache
     typedef google::sparse_hash_set<uint32_t> ldictcache;
-    typedef std::map<std::string,larraycache> lazycache;
     typedef std::map<std::string,std::string> message_cache;
     // fully cached item
     typedef std::vector<value_type> intarray;
@@ -56,9 +53,6 @@ public:
     static NAN_METHOD(hasDict);
     static NAN_METHOD(loadSync);
     static NAN_METHOD(loadAsDict);
-    static NAN_METHOD(load);
-    static void AsyncLoad(uv_work_t* req);
-    static void AfterLoad(uv_work_t* req);
     static NAN_METHOD(pack);
     static NAN_METHOD(list);
     static NAN_METHOD(_get);
@@ -66,14 +60,11 @@ public:
     static NAN_METHOD(_dict);
     static NAN_METHOD(unload);
     static NAN_METHOD(coalesce);
-    static void AsyncRun(uv_work_t* req);
-    static void AfterRun(uv_work_t* req);
     explicit Cache();
     void _ref() { Ref(); }
     void _unref() { Unref(); }
     memcache cache_;
     dictcache dict_;
-    lazycache lazy_;
     message_cache msg_;
 };
 
