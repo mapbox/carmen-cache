@@ -89,8 +89,13 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string const
                     if (buffer.tag == 2) {
                         uint64_t array_length = buffer.varint();
                         protobuf::message pbfarray(buffer.getData(),static_cast<std::size_t>(array_length));
+
+                        // delta decode values.
+                        uint64_t lastval = 0;
                         while (pbfarray.next()) {
-                            array.emplace_back(pbfarray.value);
+                            uint64_t undelta = lastval + pbfarray.value;
+                            lastval = undelta;
+                            array.emplace_back(undelta);
                         }
                         return array;
                     } else {
@@ -180,9 +185,15 @@ NAN_METHOD(Cache::pack)
             for (auto const& item : itr->second) {
                 ::carmen::proto::object_item * new_item = message.add_items(); 
                 new_item->set_key(item.first);
-                Cache::intarray const & varr = item.second;
+                Cache::intarray varr = item.second;
+
+                // delta-encode values, sorted in ascending order.
+                std::sort(varr.begin(), varr.end());
+                uint64_t lastval = 0;
                 for (auto const& vitem : varr) {
-                    new_item->add_val(static_cast<int64_t>(vitem));
+                    uint64_t delta = vitem - lastval;
+                    lastval = vitem;
+                    new_item->add_val(static_cast<int64_t>(delta));
                 }
             }
             int size = message.ByteSize();
