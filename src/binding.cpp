@@ -660,19 +660,13 @@ constexpr double _pow(double x, int y)
     return y == 0 ? 1.0 : x * _pow(x, y-1);
 }
 
-constexpr uint64_t POW2_52 = static_cast<uint64_t>(_pow(2.0,52));
+constexpr uint64_t POW2_51 = static_cast<uint64_t>(_pow(2.0,51));
 constexpr uint64_t POW2_48 = static_cast<uint64_t>(_pow(2.0,48));
-constexpr uint64_t POW2_45 = static_cast<uint64_t>(_pow(2.0,45));
-constexpr uint64_t POW2_33 = static_cast<uint64_t>(_pow(2.0,33));
-constexpr uint64_t POW2_32 = static_cast<uint64_t>(_pow(2.0,32));
+constexpr uint64_t POW2_34 = static_cast<uint64_t>(_pow(2.0,34));
 constexpr uint64_t POW2_28 = static_cast<uint64_t>(_pow(2.0,28));
 constexpr uint64_t POW2_25 = static_cast<uint64_t>(_pow(2.0,25));
 constexpr uint64_t POW2_20 = static_cast<uint64_t>(_pow(2.0,20));
 constexpr uint64_t POW2_14 = static_cast<uint64_t>(_pow(2.0,14));
-constexpr uint64_t POW2_12 = static_cast<uint64_t>(_pow(2.0,12));
-constexpr uint64_t POW2_8 = static_cast<uint64_t>(_pow(2.0,8));
-constexpr uint64_t POW2_5 = static_cast<uint64_t>(_pow(2.0,5));
-constexpr uint64_t POW2_4 = static_cast<uint64_t>(_pow(2.0,4));
 constexpr uint64_t POW2_3 = static_cast<uint64_t>(_pow(2.0,3));
 constexpr uint64_t POW2_2 = static_cast<uint64_t>(_pow(2.0,2));
 
@@ -704,19 +698,19 @@ struct Context {
 
 Cover numToCover(uint64_t num) {
     Cover cover;
-    assert(((num >> 39) % POW2_14) <= static_cast<double>(std::numeric_limits<unsigned short>::max()));
-    assert(((num >> 39) % POW2_14) >= static_cast<double>(std::numeric_limits<unsigned short>::min()));
-    unsigned short x = static_cast<unsigned short>((num >> 39) % POW2_14);
-    assert(((num >> 25) % POW2_14) <= static_cast<double>(std::numeric_limits<unsigned short>::max()));
-    assert(((num >> 25) % POW2_14) >= static_cast<double>(std::numeric_limits<unsigned short>::min()));
-    unsigned short y = static_cast<unsigned short>((num >> 25) % POW2_14);
-    assert(((num >> 20) % POW2_3) <= static_cast<double>(std::numeric_limits<unsigned short>::max()));
-    assert(((num >> 20) % POW2_3) >= static_cast<double>(std::numeric_limits<unsigned short>::min()));
-    unsigned short score = static_cast<unsigned short>((num >> 20) % POW2_3);
+    assert(((num >> 34) % POW2_14) <= static_cast<double>(std::numeric_limits<unsigned short>::max()));
+    assert(((num >> 34) % POW2_14) >= static_cast<double>(std::numeric_limits<unsigned short>::min()));
+    unsigned short y = static_cast<unsigned short>((num >> 34) % POW2_14);
+    assert(((num >> 20) % POW2_14) <= static_cast<double>(std::numeric_limits<unsigned short>::max()));
+    assert(((num >> 20) % POW2_14) >= static_cast<double>(std::numeric_limits<unsigned short>::min()));
+    unsigned short x = static_cast<unsigned short>((num >> 20) % POW2_14);
+    assert(((num >> 48) % POW2_3) <= static_cast<double>(std::numeric_limits<unsigned short>::max()));
+    assert(((num >> 48) % POW2_3) >= static_cast<double>(std::numeric_limits<unsigned short>::min()));
+    unsigned short score = static_cast<unsigned short>((num >> 48) % POW2_3);
     uint32_t id = static_cast<uint32_t>(num % POW2_20);
     cover.x = x;
     cover.y = y;
-    double relev = 0.4 + (0.2 * static_cast<double>((num >> 23) % POW2_2));
+    double relev = 0.4 + (0.2 * static_cast<double>((num >> 51) % POW2_2));
     cover.relev = relev;
     cover.score = score;
     cover.id = id;
