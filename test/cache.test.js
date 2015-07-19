@@ -80,7 +80,7 @@ var fs = require('fs');
             var pack = cache.pack('term', 0);
             var loader = new Cache('b', 1);
             loader.loadSync(pack, 'term', 0);
-            assert.deepEqual([5,6], loader._get('term', 0, 21));
+            assert.deepEqual([6,5], loader._get('term', 0, 21));
             assert.deepEqual([0], loader.list('term'), 'single shard');
             assert.deepEqual(['5', '21'], loader.list('term', 0), 'keys in shard');
             assert.end();

@@ -93,9 +93,13 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string const
                         // delta decode values.
                         uint64_t lastval = 0;
                         while (pbfarray.next()) {
-                            uint64_t undelta = lastval + pbfarray.value;
-                            lastval = undelta;
-                            array.emplace_back(undelta);
+                            if (lastval == 0) {
+                                lastval = pbfarray.value;
+                                array.emplace_back(lastval);
+                            } else {
+                                lastval = lastval - pbfarray.value;
+                                array.emplace_back(lastval);
+                            }
                         }
                         return array;
                     } else {
@@ -187,13 +191,16 @@ NAN_METHOD(Cache::pack)
                 new_item->set_key(item.first);
                 Cache::intarray varr = item.second;
 
-                // delta-encode values, sorted in ascending order.
-                std::sort(varr.begin(), varr.end());
+                // delta-encode values, sorted in descending order.
+                std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
                 uint64_t lastval = 0;
                 for (auto const& vitem : varr) {
-                    uint64_t delta = vitem - lastval;
+                    if (lastval == 0) {
+                        new_item->add_val(static_cast<int64_t>(vitem));
+                    } else {
+                        new_item->add_val(static_cast<int64_t>(lastval - vitem));
+                    }
                     lastval = vitem;
-                    new_item->add_val(static_cast<int64_t>(delta));
                 }
             }
             int size = message.ByteSize();
