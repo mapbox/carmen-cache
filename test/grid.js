@@ -1,5 +1,8 @@
 // Caching shows a 6% perf bump
+var mp51 = Math.pow(2,51);
+var mp48 = Math.pow(2,48);
 var mp39 = Math.pow(2,39);
+var mp34 = Math.pow(2,34);
 var mp25 = Math.pow(2,25);
 var mp23 = Math.pow(2,23);
 var mp20 = Math.pow(2,20);
@@ -20,15 +23,15 @@ function encode(grid) {
 
     var relev = Math.max(0, Math.min(3, Math.round((grid.relev - 0.4) / 0.2)));
     var score = Math.max(0, Math.min(7, grid.score));
-    return (grid.x * mp39) + (grid.y * mp25) + (relev * mp23) + (score * mp20) + grid.id;
+    return (relev * mp51) + (score * mp48) + (grid.y * mp34) + (grid.x * mp20) + grid.id;
 }
 
 function decode(num) {
     return {
-        x: Math.floor(num / mp39),
-        y: Math.floor(num % mp39 / mp25),
-        relev: parseFloat((0.4 + (Math.floor(num % mp25 / mp23) * 0.2)).toFixed(1)),
-        score: Math.floor(num % mp23 / mp20),
+        relev: parseFloat((0.4 + (Math.floor(num / mp51) * 0.2)).toFixed(1)),
+        score: Math.floor(num % mp51 / mp48),
+        x: Math.floor(num % mp34 / mp20),
+        y: Math.floor(num % mp48 / mp34),
         id: Math.floor(num % mp20)
     };
 }

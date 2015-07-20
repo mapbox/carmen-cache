@@ -7,6 +7,7 @@ var test = require('tape');
     var runs = 50;
     var b = new Cache('b');
     b._set('grid', Math.floor(3848571113/65536), 3848571113, require('./fixtures/coalesce-bench-single-3848571113.json'));
+    console.log('# pack size', b.pack('grid', Math.floor(3848571113/65536), 3848571113).length);
     var stacks = [{
         cache: b,
         idx: 0,
