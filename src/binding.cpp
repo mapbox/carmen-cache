@@ -15,7 +15,7 @@ Persistent<FunctionTemplate> Cache::constructor;
 
 inline std::string shard(uint64_t level, uint64_t id) {
     if (level == 0) return "0";
-    unsigned int bits = 32 - (static_cast<unsigned int>(level) * 4);
+    unsigned int bits = 52 - (static_cast<unsigned int>(level) * 4);
     unsigned int shard_id = static_cast<unsigned int>(std::floor(id / std::pow(2, bits)));
     return std::to_string(shard_id);
 }

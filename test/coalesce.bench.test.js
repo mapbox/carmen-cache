@@ -2,12 +2,13 @@ var Cache = require('../index.js').Cache;
 var Grid = require('./grid.js');
 var coalesce = require('../index.js').Cache.coalesce;
 var test = require('tape');
+var mp36 = Math.pow(2,36);
 
 (function() {
     var runs = 50;
     var b = new Cache('b');
-    b._set('grid', Math.floor(3848571113/65536), 3848571113, require('./fixtures/coalesce-bench-single-3848571113.json'));
-    console.log('# pack size', b.pack('grid', Math.floor(3848571113/65536), 3848571113).length);
+    b._set('grid', Math.floor(3848571113/mp36), 3848571113, require('./fixtures/coalesce-bench-single-3848571113.json'));
+    console.log('# pack size', b.pack('grid', Math.floor(3848571113/mp36), 3848571113).length);
     var stacks = [{
         cache: b,
         idx: 0,
@@ -73,8 +74,8 @@ var test = require('tape');
     var runs = 50;
     var a = new Cache('a', 0);
     var b = new Cache('b', 0);
-    a._set('grid', Math.floor(1965155344/65536), 1965155344, require('./fixtures/coalesce-bench-multi-1965155344.json'));
-    b._set('grid', Math.floor(3848571113/65536), 3848571113, require('./fixtures/coalesce-bench-multi-3848571113.json'));
+    a._set('grid', Math.floor(1965155344/mp36), 1965155344, require('./fixtures/coalesce-bench-multi-1965155344.json'));
+    b._set('grid', Math.floor(3848571113/mp36), 3848571113, require('./fixtures/coalesce-bench-multi-3848571113.json'));
     var stacks = [{
         cache: a,
         idx: 0,
