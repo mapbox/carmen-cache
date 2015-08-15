@@ -67,7 +67,7 @@ inline std::map<std::uint64_t,std::uint64_t> objectToMap(Local<Object> const& ob
 inline std::string cacheGet(Cache const* c, std::string key) {
     Cache::message_cache const& messages = c->msg_;
     Cache::message_cache::const_iterator mitr = messages.find(key);
-    return mitr->second;
+    return mitr->second->second;
 }
 
 inline bool cacheHas(Cache const* c, std::string key) {
@@ -77,17 +77,25 @@ inline bool cacheHas(Cache const* c, std::string key) {
 }
 
 inline void cacheInsert(Cache * c, std::string key, std::string message) {
+    Cache::message_list &list = c->msglist_;
     Cache::message_cache &messages = c->msg_;
     Cache::message_cache::iterator mitr = messages.find(key);
     if (mitr == messages.end()) {
-        messages.emplace(key, message);
+        list.push_front(std::make_pair(key, message));
+        messages.emplace(key, list.begin());
+        if (list.size() > c->cachesize) {
+            messages.erase(list.back().first);
+            list.pop_back();
+        }
     }
 }
 
 inline bool cacheRemove(Cache * c, std::string key) {
+    Cache::message_list &list = c->msglist_;
     Cache::message_cache &messages = c->msg_;
     Cache::message_cache::iterator mitr = messages.find(key);
     if (mitr != messages.end()) {
+        list.erase(mitr->second);
         messages.erase(mitr);
         return true;
     } else {
@@ -666,6 +674,11 @@ NAN_METHOD(Cache::New)
             return NanThrowTypeError("first argument 'id' must be a String");
         }
         Cache* im = new Cache();
+
+        if (args[1]->IsNumber()) {
+            im->cachesize = static_cast<unsigned>(args[1]->NumberValue());
+        }
+
         im->Wrap(args.This());
         args.This()->Set(NanNew("id"),args[0]);
         NanReturnValue(args.This());
