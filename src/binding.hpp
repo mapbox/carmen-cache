@@ -71,7 +71,7 @@ public:
     dictcache dict_;
     message_cache msg_;
     message_list msglist_;
-    unsigned cachesize = 1024;
+    unsigned cachesize = 65536;
 };
 
 }
