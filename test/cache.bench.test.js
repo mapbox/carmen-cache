@@ -37,7 +37,7 @@ var cache = new Cache('a', 256);
             if (j === 1) {
                 assert.equal(mem < 2e9, true, 'loadSync rss + ' + mem + ' bytes');
             } else {
-                assert.equal(mem <= 1e6, true, 'loadSync rss + ' + mem + ' bytes');
+                assert.equal(mem <= 5e6, true, 'loadSync rss + ' + mem + ' bytes');
             }
             assert.end();
         }, 2000);
