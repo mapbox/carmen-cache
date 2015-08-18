@@ -64,24 +64,24 @@ inline std::map<std::uint64_t,std::uint64_t> objectToMap(Local<Object> const& ob
     return map;
 }
 
-inline std::string cacheGet(Cache const* c, std::string key) {
+inline std::string cacheGet(Cache const* c, std::string const& key) {
     Cache::message_cache const& messages = c->msg_;
     Cache::message_cache::const_iterator mitr = messages.find(key);
     return mitr->second->second;
 }
 
-inline bool cacheHas(Cache const* c, std::string key) {
+inline bool cacheHas(Cache const* c, std::string const& key) {
     Cache::message_cache const& messages = c->msg_;
     Cache::message_cache::const_iterator mitr = messages.find(key);
     return mitr != messages.end();
 }
 
-inline void cacheInsert(Cache * c, std::string key, std::string message) {
+inline void cacheInsert(Cache * c, std::string const& key, std::string const& message) {
     Cache::message_list &list = c->msglist_;
     Cache::message_cache &messages = c->msg_;
     Cache::message_cache::iterator mitr = messages.find(key);
     if (mitr == messages.end()) {
-        list.push_front(std::make_pair(key, message));
+        list.emplace_front(std::make_pair(key, message));
         messages.emplace(key, list.begin());
         if (list.size() > c->cachesize) {
             messages.erase(list.back().first);
@@ -90,7 +90,7 @@ inline void cacheInsert(Cache * c, std::string key, std::string message) {
     }
 }
 
-inline bool cacheRemove(Cache * c, std::string key) {
+inline bool cacheRemove(Cache * c, std::string const& key) {
     Cache::message_list &list = c->msglist_;
     Cache::message_cache &messages = c->msg_;
     Cache::message_cache::iterator mitr = messages.find(key);
