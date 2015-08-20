@@ -13,9 +13,9 @@ using namespace v8;
 
 Persistent<FunctionTemplate> Cache::constructor;
 
-inline std::string shard(uint64_t level, uint32_t id) {
+inline std::string shard(uint64_t level, uint64_t id) {
     if (level == 0) return "0";
-    unsigned int bits = 32 - (static_cast<unsigned int>(level) * 4);
+    unsigned int bits = 52 - (static_cast<unsigned int>(level) * 4);
     unsigned int shard_id = static_cast<unsigned int>(std::floor(id / std::pow(2, bits)));
     return std::to_string(shard_id);
 }
@@ -52,19 +52,7 @@ inline Local<Object> mapToObject(std::map<std::uint64_t,std::uint64_t> const& ma
     return object;
 }
 
-inline std::map<std::uint64_t,std::uint64_t> objectToMap(Local<Object> const& object) {
-    std::map<std::uint64_t,std::uint64_t> map;
-    const Local<Array> keys = object->GetPropertyNames();
-    const uint32_t length = keys->Length();
-    for (uint32_t i = 0; i < length; i++) {
-        uint32_t key = static_cast<uint32_t>(keys->Get(i)->IntegerValue());
-        uint64_t value = static_cast<uint64_t>(object->Get(key)->NumberValue());
-        map.emplace(key, value);
-    }
-    return map;
-}
-
-Cache::intarray __get(Cache const* c, std::string const& type, std::string const& shard, uint32_t id) {
+Cache::intarray __get(Cache const* c, std::string const& type, std::string const& shard, uint64_t id) {
     std::string key = type + "-" + shard;
     Cache::memcache const& mem = c->cache_;
     Cache::memcache::const_iterator itr = mem.find(key);
@@ -126,7 +114,7 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string const
     }
 }
 
-bool __dict(Cache const* c, std::string const& type, std::string const& shard, uint32_t id) {
+bool __dict(Cache const* c, std::string const& type, std::string const& shard, uint64_t id) {
     std::string key = type + "-" + shard;
     Cache::dictcache const& dict = c->dict_;
     Cache::dictcache::const_iterator itr = dict.find(key);
@@ -271,7 +259,7 @@ NAN_METHOD(Cache::list)
             unsigned idx = 0;
             if (itr != mem.end()) {
                 for (auto const& item : itr->second) {
-                    ids->Set(idx++,NanNew(item.first)->ToString());
+                    ids->Set(idx++,NanNew<Number>(item.first)->ToString());
                 }
             }
 
@@ -371,7 +359,7 @@ void load_into_dict(Cache::ldictcache & ldict, const char * data, size_t size) {
             protobuf::message buffer(message.getData(), static_cast<std::size_t>(len));
             while (buffer.next()) {
                 if (buffer.tag == 1) {
-                    uint32_t key_id = static_cast<uint32_t>(buffer.varint());
+                    uint64_t key_id = static_cast<uint64_t>(buffer.varint());
                     ldict.insert(key_id);
                 }
                 break;
@@ -555,10 +543,7 @@ NAN_METHOD(Cache::_get)
         if (id < 0) {
             return NanThrowTypeError("third arg must be a positive Integer");
         }
-        if (id > std::numeric_limits<uint32_t>::max()) {
-            return NanThrowTypeError("third arg must be a positive Integer that fits within 32 bits");
-        }
-        uint32_t id2 = static_cast<uint32_t>(id);
+        uint64_t id2 = static_cast<uint64_t>(id);
         Cache* c = node::ObjectWrap::Unwrap<Cache>(args.This());
         Cache::intarray vector = __get(c, type, shard, id2);
         if (!vector.empty()) {
@@ -589,7 +574,7 @@ NAN_METHOD(Cache::_dict)
     try {
         std::string type = *String::Utf8Value(args[0]->ToString());
         std::string shard = *String::Utf8Value(args[1]->ToString());
-        uint32_t id = static_cast<uint32_t>(args[2]->IntegerValue());
+        uint64_t id = static_cast<uint64_t>(args[2]->IntegerValue());
         Cache* c = node::ObjectWrap::Unwrap<Cache>(args.This());
         bool exists = __dict(c, type, shard, id);
         NanReturnValue(NanNew<Boolean>(exists));
@@ -680,7 +665,7 @@ constexpr uint64_t POW2_2 = static_cast<uint64_t>(_pow(2.0,2));
 struct PhrasematchSubq {
     carmen::Cache *cache;
     double weight;
-    uint32_t phrase;
+    uint64_t phrase;
     unsigned short idx;
     unsigned short zoom;
 };
@@ -1146,12 +1131,7 @@ NAN_METHOD(Cache::coalesce) {
             subq.zoom = static_cast<unsigned short>(_zoom);
 
             subq.weight = jsStack->Get(NanNew("weight"))->NumberValue();
-            int64_t _phrase = jsStack->Get(NanNew("phrase"))->IntegerValue();
-            if (_phrase < 0 || _phrase > std::numeric_limits<uint32_t>::max()) {
-                delete baton;
-                return NanThrowTypeError("encountered phrase value too large to fit in unsigned short");
-            }
-            subq.phrase = static_cast<uint32_t>(_phrase);
+            subq.phrase = jsStack->Get(NanNew("phrase"))->IntegerValue();
 
             // JS cache reference => cpp
             Local<Object> cache = Local<Object>::Cast(jsStack->Get(NanNew("cache")));

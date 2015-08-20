@@ -36,10 +36,10 @@ protected:
 class Cache: public node::ObjectWrap {
 public:
     ~Cache();
-    typedef uint32_t key_type;
+    typedef uint64_t key_type;
     typedef uint64_t value_type;
     // pbf message cache
-    typedef google::sparse_hash_set<uint32_t> ldictcache;
+    typedef google::sparse_hash_set<uint64_t> ldictcache;
     typedef std::map<std::string,std::string> message_cache;
     // fully cached item
     typedef std::vector<value_type> intarray;
