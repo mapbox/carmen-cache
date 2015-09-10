@@ -52,17 +52,54 @@ inline Local<Object> mapToObject(std::map<std::uint64_t,std::uint64_t> const& ma
     return object;
 }
 
+inline std::string cacheGet(Cache const* c, std::string const& key) {
+    Cache::message_cache const& messages = c->msg_;
+    Cache::message_cache::const_iterator mitr = messages.find(key);
+    return mitr->second->second;
+}
+
+inline bool cacheHas(Cache const* c, std::string const& key) {
+    Cache::message_cache const& messages = c->msg_;
+    Cache::message_cache::const_iterator mitr = messages.find(key);
+    return mitr != messages.end();
+}
+
+inline void cacheInsert(Cache * c, std::string const& key, std::string const& message) {
+    Cache::message_list &list = c->msglist_;
+    Cache::message_cache &messages = c->msg_;
+    Cache::message_cache::iterator mitr = messages.find(key);
+    if (mitr == messages.end()) {
+        list.emplace_front(std::make_pair(key, message));
+        messages.emplace(key, list.begin());
+        if (list.size() > c->cachesize) {
+            messages.erase(list.back().first);
+            list.pop_back();
+        }
+    }
+}
+
+inline bool cacheRemove(Cache * c, std::string const& key) {
+    Cache::message_list &list = c->msglist_;
+    Cache::message_cache &messages = c->msg_;
+    Cache::message_cache::iterator mitr = messages.find(key);
+    if (mitr != messages.end()) {
+        list.erase(mitr->second);
+        messages.erase(mitr);
+        return true;
+    } else {
+        return false;
+    }
+}
+
 Cache::intarray __get(Cache const* c, std::string const& type, std::string const& shard, uint64_t id) {
     std::string key = type + "-" + shard;
     Cache::memcache const& mem = c->cache_;
     Cache::memcache::const_iterator itr = mem.find(key);
     Cache::intarray array;
     if (itr == mem.end()) {
-        Cache::message_cache const& messages = c->msg_;
-        Cache::message_cache::const_iterator mitr = messages.find(key);
-        if (mitr == messages.end()) return array;
+        if (!cacheHas(c, key)) return array;
 
-        std::string ref = mitr->second;
+        std::string ref = cacheGet(c, key);
         protobuf::message message(ref.data(), ref.size());
 
         while (message.next()) {
@@ -203,12 +240,10 @@ NAN_METHOD(Cache::pack)
                 return NanThrowTypeError("pack: invalid message ByteSize encountered");
             }
         } else {
-            Cache::message_cache const& messages = c->msg_;
-            Cache::message_cache::const_iterator mitr = messages.find(key);
-            if (mitr == messages.end()) {
+            if (!cacheHas(c, key)) {
                 return NanThrowTypeError("pack: cannot pack empty data");
             } else {
-                std::string ref = mitr->second;
+                std::string ref = cacheGet(c, key);
                 Local<Object> buf = NanNewBufferHandle((char*)ref.data(), ref.size());
                 NanReturnValue(buf);
             }
@@ -264,10 +299,8 @@ NAN_METHOD(Cache::list)
             }
 
             // parse message for ids
-            Cache::message_cache const& messages = c->msg_;
-            Cache::message_cache::const_iterator mitr = messages.find(key);
-            if (mitr != messages.end()) {
-                std::string ref = mitr->second;
+            if (cacheHas(c, key)) {
+                std::string ref = cacheGet(c, key);
                 protobuf::message message(ref.data(), ref.size());
                 while (message.next()) {
                     if (message.tag == 1) {
@@ -409,10 +442,8 @@ NAN_METHOD(Cache::loadSync)
         if (itr2 != mem.end()) {
             mem.erase(itr2);
         }
-        Cache::message_cache & messages = c->msg_;
-        Cache::message_cache::iterator mitr = messages.find(key);
-        if (mitr == messages.end()) {
-            messages.emplace(key,std::string(node::Buffer::Data(obj),node::Buffer::Length(obj)));
+        if (!cacheHas(c, key)) {
+            cacheInsert(c, key, std::string(node::Buffer::Data(obj),node::Buffer::Length(obj)));
         }
     } catch (std::exception const& ex) {
         return NanThrowTypeError(ex.what());
@@ -481,11 +512,11 @@ NAN_METHOD(Cache::has)
         if (itr != mem.end()) {
             NanReturnValue(NanTrue());
         } else {
-            Cache::message_cache const& messages = c->msg_;
-            if (messages.find(key) != messages.end()) {
+            if (cacheHas(c, key)) {
                 NanReturnValue(NanTrue());
+            } else {
+                NanReturnValue(NanFalse());
             }
-            NanReturnValue(NanFalse());
         }
     } catch (std::exception const& ex) {
         return NanThrowTypeError(ex.what());
@@ -607,12 +638,7 @@ NAN_METHOD(Cache::unload)
             hit = true;
             mem.erase(itr);
         }
-        Cache::message_cache & messages = c->msg_;
-        Cache::message_cache::iterator mitr = messages.find(key);
-        if (mitr != messages.end()) {
-            hit = true;
-            messages.erase(mitr);
-        }
+        hit = hit || cacheRemove(c, key);
     } catch (std::exception const& ex) {
         return NanThrowTypeError(ex.what());
     }
@@ -633,6 +659,11 @@ NAN_METHOD(Cache::New)
             return NanThrowTypeError("first argument 'id' must be a String");
         }
         Cache* im = new Cache();
+
+        if (args[1]->IsNumber()) {
+            im->cachesize = static_cast<unsigned>(args[1]->NumberValue());
+        }
+
         im->Wrap(args.This());
         args.This()->Set(NanNew("id"),args[0]);
         NanReturnValue(args.This());

@@ -16,6 +16,7 @@
 #include <exception>
 #include <string>
 #include <map>
+#include <list>
 #include <vector>
 #include "index.pb.h"
 #include <sparsehash/sparse_hash_set>
@@ -40,7 +41,10 @@ public:
     typedef uint64_t value_type;
     // pbf message cache
     typedef google::sparse_hash_set<uint64_t> ldictcache;
-    typedef std::map<std::string,std::string> message_cache;
+    // list + map as simple LRU cache
+    typedef std::pair<std::string,std::string> message_pair;
+    typedef std::list<message_pair> message_list;
+    typedef std::map<std::string,message_list::iterator> message_cache;
     // fully cached item
     typedef std::vector<value_type> intarray;
     typedef std::map<key_type,intarray> arraycache;
@@ -66,6 +70,8 @@ public:
     memcache cache_;
     dictcache dict_;
     message_cache msg_;
+    message_list msglist_;
+    unsigned cachesize = 65536;
 };
 
 }
