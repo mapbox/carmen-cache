@@ -9,6 +9,9 @@
 
 namespace carmen {
 
+/* use only the 32 least significant bits (should it be most significant? does it matter?) */
+#define trunc_hash(id) static_cast<uint32_t>(id & 0xffffffff)
+
 using namespace v8;
 
 Persistent<FunctionTemplate> Cache::constructor;
@@ -158,7 +161,7 @@ bool __dict(Cache const* c, std::string const& type, std::string const& shard, u
     if (itr == dict.end()) {
         return false;
     } else {
-        Cache::ldictcache::const_iterator ditr = itr->second.find(id);
+        Cache::ldictcache::const_iterator ditr = itr->second.find(trunc_hash(id));
         return ditr != itr->second.end();
     }
 }
@@ -212,7 +215,7 @@ NAN_METHOD(Cache::pack)
         carmen::proto::object message;
         if (itr != mem.end()) {
             for (auto const& item : itr->second) {
-                ::carmen::proto::object_item * new_item = message.add_items(); 
+                ::carmen::proto::object_item * new_item = message.add_items();
                 new_item->set_key(item.first);
                 Cache::intarray varr = item.second;
 
@@ -393,7 +396,7 @@ void load_into_dict(Cache::ldictcache & ldict, const char * data, size_t size) {
             while (buffer.next()) {
                 if (buffer.tag == 1) {
                     uint64_t key_id = static_cast<uint64_t>(buffer.varint());
-                    ldict.insert(key_id);
+                    ldict.insert(trunc_hash(key_id));
                 }
                 break;
             }
