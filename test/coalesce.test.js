@@ -32,6 +32,22 @@ test('coalesce args', function(assert) {
     }, /Arg 3 must be a callback/, 'throws');
 
     assert.throws(function() {
+        coalesce([-1]);
+    }, /All items in array must be valid/, 'throws');
+
+    assert.throws(function() {
+        coalesce([undefined]);
+    }, /All items in array must be valid/, 'throws');
+
+    assert.throws(function() {
+        coalesce([{idx:-1}]);
+    }, /encountered idx value too large to fit/, 'throws');
+
+    assert.throws(function() {
+        coalesce([{zoom:-1}]);
+    }, /encountered zoom value too large to fit/, 'throws');
+
+    assert.throws(function() {
         coalesce([], { centerzxy:[-1,0,0] } );
     }, /value in array too large/, 'throws');
 
