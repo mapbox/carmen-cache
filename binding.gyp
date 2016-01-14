@@ -95,6 +95,7 @@
       "include_dirs" : [
           'src/',
           'deps/',
+          '/Users/dane/projects/protozero/include/',
           '<(SHARED_INTERMEDIATE_DIR)/',
           "<!(node -p -e \"require('path').dirname(require.resolve('nan'))\")"
       ],

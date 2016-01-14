@@ -7,6 +7,8 @@
 #include <cmath>
 #include <cassert>
 
+#include <protozero/pbf_writer.hpp>
+
 namespace carmen {
 
 /* use only the 32 least significant bits (should it be most significant? does it matter?) */
@@ -212,35 +214,33 @@ NAN_METHOD(Cache::pack)
         Cache* c = node::ObjectWrap::Unwrap<Cache>(args.This());
         Cache::memcache const& mem = c->cache_;
         Cache::memcache::const_iterator itr = mem.find(key);
-        carmen::proto::object message;
+        std::string message;
+        protozero::pbf_writer writer(message);
         if (itr != mem.end()) {
             for (auto const& item : itr->second) {
-                ::carmen::proto::object_item * new_item = message.add_items();
-                new_item->set_key(item.first);
+                protozero::pbf_writer item_writer(writer,1);
+                item_writer.add_uint64(1,item.first);
                 Cache::intarray varr = item.second;
-
                 // delta-encode values, sorted in descending order.
                 std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
+                Cache::intarray varr_delta;
+                varr_delta.reserve(varr.size());
                 uint64_t lastval = 0;
                 for (auto const& vitem : varr) {
                     if (lastval == 0) {
-                        new_item->add_val(static_cast<int64_t>(vitem));
+                        varr_delta.emplace_back(static_cast<int64_t>(vitem));
                     } else {
-                        new_item->add_val(static_cast<int64_t>(lastval - vitem));
+                        varr_delta.emplace_back(static_cast<int64_t>(lastval - vitem));
                     }
                     lastval = vitem;
                 }
+                item_writer.add_packed_uint64(2,std::begin(varr_delta), std::end(varr_delta));
             }
-            int size = message.ByteSize();
-            if (size > 0) {
-                uint32_t usize = static_cast<uint32_t>(size);
-                Local<Object> buf = NanNewBufferHandle(usize);
-                if (message.SerializeToArray(node::Buffer::Data(buf),size))
-                {
-                    NanReturnValue(buf);
-                }
-            } else {
+            if (message.empty()) {
                 return NanThrowTypeError("pack: invalid message ByteSize encountered");
+            } else {
+                Local<Object> buf = NanNewBufferHandle(message.data(), message.size());
+                NanReturnValue(buf);
             }
         } else {
             if (!cacheHas(c, key)) {
