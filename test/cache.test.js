@@ -61,6 +61,12 @@ tape('#pack', function(assert) {
 
     var loader = new Cache('a', 1);
 
+    // invalid args
+    assert.throws(function() { loader.pack() });
+    assert.throws(function() { loader.pack('term') });
+    assert.throws(function() { loader.pack(1) });
+    assert.throws(function() { loader.pack('term','foo') });
+
     // grab data right back out
     loader.loadSync(packer.pack('term',0), 'term', 0);
     assert.deepEqual(loader.pack('term', 0).length, 10008);
@@ -83,6 +89,10 @@ tape('#load', function(assert) {
 
     assert.equal(cache._get('term', 0, 5), undefined);
     assert.deepEqual(cache.list('term'), []);
+
+    // invalid args
+    assert.throws(function() { cache.list() });
+    assert.throws(function() { cache.list(1) });
 
     cache._set('term', 0, 5, [0,1,2]);
     assert.deepEqual(cache._get('term', 0, 5), [0,1,2]);
