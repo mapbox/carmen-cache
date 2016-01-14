@@ -32,6 +32,14 @@ test('coalesce args', function(assert) {
     }, /Arg 3 must be a callback/, 'throws');
 
     assert.throws(function() {
+        coalesce([], { centerzxy:[-1,0,0] } );
+    }, /value in array too large/, 'throws');
+
+    assert.throws(function() {
+        coalesce([], { centerzxy:[4294967296,0,0] } );
+    }, /value in array too large/, 'throws');
+
+    assert.throws(function() {
         coalesce([], { centerzxy:[0,0,0] }, 5 );
     }, /Arg 3 must be a callback/, 'throws');
 
