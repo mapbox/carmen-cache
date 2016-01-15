@@ -66,6 +66,18 @@ tape('#pack', function(assert) {
     assert.throws(function() { loader.pack('term') });
     assert.throws(function() { loader.pack(1) });
     assert.throws(function() { loader.pack('term','foo') });
+    assert.throws(function() { loader.loadSync() });
+    assert.throws(function() { loader.loadSync(1) });
+    assert.throws(function() { loader.loadSync(null) });
+    assert.throws(function() { loader.loadSync({}) });
+    assert.throws(function() { loader.loadSync(new Buffer('a'),1,'foo') });
+    assert.throws(function() { loader.loadSync(new Buffer('a'),'term','foo') });
+    assert.throws(function() { loader.loadAsDict() });
+    assert.throws(function() { loader.loadAsDict(1) });
+    assert.throws(function() { loader.loadAsDict(null) });
+    assert.throws(function() { loader.loadAsDict({}) });
+    assert.throws(function() { loader.loadAsDict(new Buffer('a'),1,'foo') });
+    assert.throws(function() { loader.loadAsDict(new Buffer('a'),'term','foo') });
 
     // grab data right back out
     loader.loadSync(packer.pack('term',0), 'term', 0);

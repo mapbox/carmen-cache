@@ -1147,7 +1147,16 @@ NAN_METHOD(Cache::coalesce) {
         std::vector<PhrasematchSubq> stack;
         const Local<Array> array = Local<Array>::Cast(args[0]);
         for (uint32_t i = 0; i < array->Length(); i++) {
-            Local<Object> jsStack = Local<Object>::Cast(array->Get(i));
+            Local<Value> val = array->Get(i);
+            if (!val->IsObject()) {
+                delete baton;
+                return NanThrowTypeError("All items in array must be valid PhrasematchSubq objects");
+            }
+            Local<Object> jsStack = val->ToObject();
+            if (jsStack->IsNull() || jsStack->IsUndefined()) {
+                delete baton;
+                return NanThrowTypeError("All items in array must be valid PhrasematchSubq objects");
+            }
             PhrasematchSubq subq;
 
             int64_t _idx = jsStack->Get(NanNew("idx"))->IntegerValue();
