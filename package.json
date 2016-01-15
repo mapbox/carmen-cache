@@ -10,7 +10,7 @@
     "url": "git://github.com/mapbox/carmen-cache.git"
   },
   "dependencies": {
-    "nan": "~1.8.4",
+    "nan": "~2.2.0",
     "node-pre-gyp": "~0.6.7"
   },
   "bundledDependencies": [
