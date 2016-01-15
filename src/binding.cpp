@@ -248,7 +248,7 @@ NAN_METHOD(Cache::pack)
                 return Nan::ThrowTypeError("pack: cannot pack empty data");
             } else {
                 std::string ref = cacheGet(c, key);
-                Local<Object> buf = Nan::NewBuffer((char*)ref.data(), ref.size()).ToLocalChecked();
+                Local<Object> buf = Nan::CopyBuffer((char*)ref.data(), ref.size()).ToLocalChecked();
                 info.GetReturnValue().Set(buf);
                 return;
             }
