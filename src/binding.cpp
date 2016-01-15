@@ -167,7 +167,7 @@ bool __dict(Cache const* c, std::string const& type, std::string const& shard, u
 }
 
 void Cache::Initialize(Handle<Object> target) {
-    Nan::HandleScope();
+    Nan::HandleScope scope;
     Local<FunctionTemplate> t = Nan::New<FunctionTemplate>(Cache::New);
     t->InstanceTemplate()->SetInternalFieldCount(1);
     t->SetClassName(Nan::New("Cache").ToLocalChecked());
@@ -195,7 +195,6 @@ Cache::~Cache() { }
 
 NAN_METHOD(Cache::pack)
 {
-    Nan::HandleScope();
     if (info.Length() < 1) {
         return Nan::ThrowTypeError("expected two info: 'type', 'shard'");
     }
@@ -262,7 +261,6 @@ NAN_METHOD(Cache::pack)
 
 NAN_METHOD(Cache::list)
 {
-    Nan::HandleScope();
     if (info.Length() < 1) {
         return Nan::ThrowTypeError("expected at least one arg: 'type' and optional a 'shard'");
     }
@@ -338,7 +336,6 @@ NAN_METHOD(Cache::list)
 
 NAN_METHOD(Cache::_set)
 {
-    Nan::HandleScope();
     if (info.Length() < 3) {
         return Nan::ThrowTypeError("expected four info: 'type', 'shard', 'id', 'data'");
     }
@@ -418,7 +415,6 @@ void load_into_dict(Cache::ldictcache & ldict, const char * data, size_t size) {
 
 NAN_METHOD(Cache::loadSync)
 {
-    Nan::HandleScope();
     if (info.Length() < 2) {
         return Nan::ThrowTypeError("expected at three info: 'buffer', 'type', and 'shard'");
     }
@@ -464,7 +460,6 @@ NAN_METHOD(Cache::loadSync)
 
 NAN_METHOD(Cache::loadAsDict)
 {
-    Nan::HandleScope();
     if (info.Length() < 2) {
         return Nan::ThrowTypeError("expected at three info: 'buffer', 'type', and 'shard'");
     }
@@ -504,7 +499,6 @@ NAN_METHOD(Cache::loadAsDict)
 
 NAN_METHOD(Cache::has)
 {
-    Nan::HandleScope();
     if (info.Length() < 2) {
         return Nan::ThrowTypeError("expected two info: 'type' and 'shard'");
     }
@@ -540,7 +534,6 @@ NAN_METHOD(Cache::has)
 
 NAN_METHOD(Cache::hasDict)
 {
-    Nan::HandleScope();
     if (info.Length() < 2) {
         return Nan::ThrowTypeError("expected two info: 'type' and 'shard'");
     }
@@ -571,7 +564,6 @@ NAN_METHOD(Cache::hasDict)
 
 NAN_METHOD(Cache::_get)
 {
-    Nan::HandleScope();
     if (info.Length() < 3) {
         return Nan::ThrowTypeError("expected three info: type, shard, and id");
     }
@@ -608,7 +600,6 @@ NAN_METHOD(Cache::_get)
 
 NAN_METHOD(Cache::_dict)
 {
-    Nan::HandleScope();
     if (info.Length() < 3) {
         return Nan::ThrowTypeError("expected three info: type, shard, and id");
     }
@@ -636,7 +627,6 @@ NAN_METHOD(Cache::_dict)
 
 NAN_METHOD(Cache::unload)
 {
-    Nan::HandleScope();
     if (info.Length() < 2) {
         return Nan::ThrowTypeError("expected at least two info: 'type' and 'shard'");
     }
@@ -668,7 +658,6 @@ NAN_METHOD(Cache::unload)
 
 NAN_METHOD(Cache::New)
 {
-    Nan::HandleScope();
     if (!info.IsConstructCall()) {
         return Nan::ThrowTypeError("Cannot call constructor as function, you need to use 'new' keyword");
     }
@@ -1140,7 +1129,7 @@ Local<Array> contextToArray(Context const& context) {
     return array;
 }
 void coalesceAfter(uv_work_t* req) {
-    Nan::HandleScope();
+    Nan::HandleScope scope;
     CoalesceBaton *baton = static_cast<CoalesceBaton *>(req->data);
     std::vector<Context> const& features = baton->features;
 
@@ -1155,8 +1144,6 @@ void coalesceAfter(uv_work_t* req) {
     delete baton;
 }
 NAN_METHOD(Cache::coalesce) {
-    Nan::HandleScope();
-
     // PhrasematchStack (js => cpp)
     if (!info[0]->IsArray()) {
         return Nan::ThrowTypeError("Arg 1 must be a PhrasematchSubq array");
