@@ -49,7 +49,7 @@ public:
     typedef std::map<key_type,intarray> arraycache;
     typedef std::map<std::string,arraycache> memcache;
     typedef std::map<std::string,ldictcache> dictcache;
-    static v8::Persistent<v8::FunctionTemplate> constructor;
+    static Nan::Persistent<v8::FunctionTemplate> constructor;
     static void Initialize(v8::Handle<v8::Object> target);
     static NAN_METHOD(New);
     static NAN_METHOD(has);
