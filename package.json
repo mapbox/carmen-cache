@@ -12,7 +12,7 @@
   "dependencies": {
     "nan": "~1.8.4",
     "node-pre-gyp": "~0.6.19",
-    "protozero": "https://github.com/mapbox/protozero/tarball/npm-publish"
+    "protozero": "~1.2.3"
   },
   "bundledDependencies": [
     "node-pre-gyp"
