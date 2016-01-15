@@ -48,14 +48,6 @@ before_install:
    fi;
  - source ./test/install_node.sh ${NODE_VERSION}
  - export PATH=./node_modules/.bin/:$PATH
- - git clone --depth 1 https://github.com/mapbox/mason.git ./.mason
- - export MASON_DIR=$(pwd)/.mason
- - export PATH=$(pwd)/.mason:$(pwd)/mason_packages/.link/bin:$PATH
- - ./.mason/mason install protobuf 2.6.1
- - ./.mason/mason link protobuf 2.6.1
- - export PKG_CONFIG_PATH=$(pwd)/mason_packages/.link/lib/pkgconfig/
- - export CXXFLAGS="-I$(pwd)/mason_packages/.link/include"
- - export LDFLAGS="-L$(pwd)/mason_packages/.link/lib"
 
 install:
  - if [[ ${COVERAGE} == true ]]; then
