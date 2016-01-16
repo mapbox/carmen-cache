@@ -74,8 +74,10 @@ install:
      PYTHONUSERBASE=$(pwd)/mason_packages/.link pip install --user cpp-coveralls;
      export CXXFLAGS="--coverage ${CXXFLAGS}";
      export LDFLAGS="--coverage ${LDFLAGS}";
+     npm install --build-from-source --clang=1 --debug;
+   else
+     npm install --build-from-source --clang=1;
    fi
- - npm install --build-from-source --clang=1
 
 script:
 - npm test
