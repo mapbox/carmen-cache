@@ -82,5 +82,5 @@ script:
   fi
 
 after_success:
-- if [[ ${COVERAGE} == true ]]; then cpp-coveralls --exclude node_modules --exclude tests --build-root build --gcov-options '\-lp' --exclude ./deps --exclude build/Release/obj/gen --exclude src/binding.hpp > /dev/null; fi;
+- if [[ ${COVERAGE} == true ]]; then ./.local/bin/cpp-coveralls --exclude node_modules --exclude tests --build-root build --gcov-options '\-lp' --exclude ./deps --exclude build/Release/obj/gen --exclude src/binding.hpp > /dev/null; fi;
 - if [[ ${COVERAGE} != true ]]; then ./test/travis-publish.sh; fi;
