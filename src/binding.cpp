@@ -1,11 +1,12 @@
 
 #include "binding.hpp"
 
-#include "pbf.hpp"
-
 #include <sstream>
 #include <cmath>
 #include <cassert>
+
+#include <protozero/pbf_writer.hpp>
+#include <protozero/pbf_reader.hpp>
 
 namespace carmen {
 
@@ -103,44 +104,27 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string const
         if (!cacheHas(c, key)) return array;
 
         std::string ref = cacheGet(c, key);
-        protobuf::message message(ref.data(), ref.size());
-
-        while (message.next()) {
-            if (message.tag == 1) {
-                uint64_t len = message.varint();
-                protobuf::message buffer(message.getData(), static_cast<std::size_t>(len));
-                while (buffer.next()) {
-                    if (buffer.tag != 1) break;
-                    if (buffer.varint() != id) break;
-
-                    buffer.next();
-                    if (buffer.tag == 2) {
-                        uint64_t array_length = buffer.varint();
-                        protobuf::message pbfarray(buffer.getData(),static_cast<std::size_t>(array_length));
-
-                        // delta decode values.
-                        uint64_t lastval = 0;
-                        while (pbfarray.next()) {
-                            if (lastval == 0) {
-                                lastval = pbfarray.value;
-                                array.emplace_back(lastval);
-                            } else {
-                                lastval = lastval - pbfarray.value;
-                                array.emplace_back(lastval);
-                            }
-                        }
-                        return array;
+        protozero::pbf_reader message(ref);
+        while (message.next(1)) {
+            protozero::pbf_reader item = message.get_message();
+            while (item.next()) {
+                if (item.tag() != 1) break;
+                uint64_t key_id = item.get_uint64();
+                if (key_id != id) break;
+                item.next();
+                auto vals = item.get_packed_uint64();
+                uint64_t lastval = 0;
+                // delta decode values.
+                for (auto it = vals.first; it != vals.second; ++it) {
+                    if (lastval == 0) {
+                        lastval = *it;
+                        array.emplace_back(lastval);
                     } else {
-                        std::stringstream msg("");
-                        msg << "cxx get: hit unknown protobuf type: '" << buffer.tag << "'";
-                        throw std::runtime_error(msg.str());
+                        lastval = lastval - *it;
+                        array.emplace_back(lastval);
                     }
                 }
-                message.skipBytes(len);
-            } else {
-                std::stringstream msg("");
-                msg << "load: hit unknown protobuf type: '" << message.tag << "'";
-                throw std::runtime_error(msg.str());
+                return array;
             }
         }
         return array;
@@ -211,36 +195,33 @@ NAN_METHOD(Cache::pack)
         Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
         Cache::memcache const& mem = c->cache_;
         Cache::memcache::const_iterator itr = mem.find(key);
-        carmen::proto::object message;
+        std::string message;
+        protozero::pbf_writer writer(message);
         if (itr != mem.end()) {
             for (auto const& item : itr->second) {
-                ::carmen::proto::object_item * new_item = message.add_items();
-                new_item->set_key(item.first);
+                protozero::pbf_writer item_writer(writer,1);
+                item_writer.add_uint64(1,item.first);
                 Cache::intarray varr = item.second;
-
                 // delta-encode values, sorted in descending order.
                 std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
+                Cache::intarray varr_delta;
+                varr_delta.reserve(varr.size());
                 uint64_t lastval = 0;
                 for (auto const& vitem : varr) {
                     if (lastval == 0) {
-                        new_item->add_val(static_cast<int64_t>(vitem));
+                        varr_delta.emplace_back(static_cast<int64_t>(vitem));
                     } else {
-                        new_item->add_val(static_cast<int64_t>(lastval - vitem));
+                        varr_delta.emplace_back(static_cast<int64_t>(lastval - vitem));
                     }
                     lastval = vitem;
                 }
+                item_writer.add_packed_uint64(2,std::begin(varr_delta), std::end(varr_delta));
             }
-            int size = message.ByteSize();
-            if (size > 0) {
-                uint32_t usize = static_cast<uint32_t>(size);
-                Local<Object> buf = Nan::NewBuffer(usize).ToLocalChecked();
-                if (message.SerializeToArray(node::Buffer::Data(buf),size))
-                {
-                    info.GetReturnValue().Set(buf);
-                    return;
-                }
-            } else {
+            if (message.empty()) {
                 return Nan::ThrowTypeError("pack: invalid message ByteSize encountered");
+            } else {
+                info.GetReturnValue().Set(Nan::CopyBuffer(message.data(), message.size()).ToLocalChecked());
+                return;
             }
         } else {
             if (!cacheHas(c, key)) {
@@ -306,20 +287,13 @@ NAN_METHOD(Cache::list)
             // parse message for ids
             if (cacheHas(c, key)) {
                 std::string ref = cacheGet(c, key);
-                protobuf::message message(ref.data(), ref.size());
-                while (message.next()) {
-                    if (message.tag == 1) {
-                        uint64_t len = message.varint();
-                        protobuf::message buffer(message.getData(), static_cast<std::size_t>(len));
-                        while (buffer.next()) {
-                            if (buffer.tag != 1) break;
-                            ids->Set(idx++, Nan::New<Number>(buffer.varint())->ToString());
-                        }
-                        message.skipBytes(len);
-                    } else {
-                        std::stringstream msg("");
-                        msg << "load: hit unknown protobuf type: '" << message.tag << "'";
-                        throw std::runtime_error(msg.str());
+
+                protozero::pbf_reader message(ref);
+                while (message.next(1)) {
+                    protozero::pbf_reader item = message.get_message();
+                    while (item.next(1)) {
+                        uint64_t key_id = item.get_uint64();
+                        ids->Set(idx++, Nan::New<Number>(key_id)->ToString());
                     }
                 }
             }
@@ -392,23 +366,13 @@ NAN_METHOD(Cache::_set)
 }
 
 void load_into_dict(Cache::ldictcache & ldict, const char * data, size_t size) {
-    protobuf::message message(data,size);
-    while (message.next()) {
-        if (message.tag == 1) {
-            uint64_t len = message.varint();
-            protobuf::message buffer(message.getData(), static_cast<std::size_t>(len));
-            while (buffer.next()) {
-                if (buffer.tag == 1) {
-                    uint64_t key_id = static_cast<uint64_t>(buffer.varint());
-                    ldict.insert(trunc_hash(key_id));
-                }
-                break;
-            }
-            message.skipBytes(len);
-        } else {
-            std::stringstream msg("");
-            msg << "load: hit unknown protobuf type: '" << message.tag << "'";
-            throw std::runtime_error(msg.str());
+    protozero::pbf_reader message(data,size);
+    while (message.next(1)) {
+        protozero::pbf_reader item = message.get_message();
+        while (item.next(1)) {
+            uint64_t key_id = item.get_uint64();
+            ldict.insert(trunc_hash(key_id));
+            break;
         }
     }
 }

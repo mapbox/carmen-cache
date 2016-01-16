@@ -18,7 +18,6 @@
 #include <map>
 #include <list>
 #include <vector>
-#include "index.pb.h"
 #include <sparsehash/sparse_hash_set>
 #pragma clang diagnostic pop
 #include <iostream>

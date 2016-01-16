@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "nan": "~2.2.0",
-    "node-pre-gyp": "~0.6.7"
+    "node-pre-gyp": "~0.6.19",
+    "protozero": "~1.2.3"
   },
   "bundledDependencies": [
     "node-pre-gyp"
