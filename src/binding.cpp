@@ -195,27 +195,42 @@ NAN_METHOD(Cache::pack)
         Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
         Cache::memcache const& mem = c->cache_;
         Cache::memcache::const_iterator itr = mem.find(key);
-        std::string message;
-        protozero::pbf_writer writer(message);
         if (itr != mem.end()) {
+            std::string message;
+            // Optimization idea: pre-pass on arrays to assemble guess about
+            // how long the final message will be in order to be able to call
+            // message.reserve(<length>)
+            protozero::pbf_writer writer(message);
             for (auto const& item : itr->second) {
                 protozero::pbf_writer item_writer(writer,1);
                 item_writer.add_uint64(1,item.first);
-                Cache::intarray varr = item.second;
-                // delta-encode values, sorted in descending order.
-                std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
-                Cache::intarray varr_delta;
-                varr_delta.reserve(varr.size());
-                uint64_t lastval = 0;
-                for (auto const& vitem : varr) {
-                    if (lastval == 0) {
-                        varr_delta.emplace_back(static_cast<int64_t>(vitem));
-                    } else {
-                        varr_delta.emplace_back(static_cast<int64_t>(lastval - vitem));
+                std::size_t array_size = item.second.size();
+                if (array_size > 0) {
+                    // make copy of intarray so we can sort without
+                    // modifying the original array
+                    Cache::intarray varr = item.second;
+                    // delta-encode values, sorted in descending order.
+                    std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
+                    Cache::intarray varr_delta;
+                    varr_delta.reserve(array_size);
+                    uint64_t lastval = 0;
+                    for (auto const& vitem : varr) {
+                        if (lastval == 0) {
+                            varr_delta.emplace_back(static_cast<int64_t>(vitem));
+                        } else {
+                            varr_delta.emplace_back(static_cast<int64_t>(lastval - vitem));
+                        }
+                        lastval = vitem;
                     }
-                    lastval = vitem;
+                    // Using new (in protozero 1.3.0) packed writing API
+                    // https://github.com/mapbox/protozero/commit/4e7e32ac5350ea6d3dcf78ff5e74faeee513a6e1
+                    {
+                        protozero::packed_field_uint64 field{item_writer, 2};
+                        for (auto d : varr_delta) {
+                            field.add_element(d);
+                        }
+                    }
                 }
-                item_writer.add_packed_uint64(2,std::begin(varr_delta), std::end(varr_delta));
             }
             if (message.empty()) {
                 return Nan::ThrowTypeError("pack: invalid message ByteSize encountered");
