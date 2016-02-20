@@ -961,7 +961,7 @@ void coalesceMulti(uv_work_t* req) {
 
         std::string shardId = shard(4, subq.phrase);
 
-        Cache::intarray const& grids = __get(subq.cache, type, shardId, subq.phrase);
+        Cache::intarray grids = __get(subq.cache, type, shardId, subq.phrase);
 
         unsigned short z = subq.zoom;
         auto const& zCache = zoomCache[z];
