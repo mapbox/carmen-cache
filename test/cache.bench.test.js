@@ -46,15 +46,3 @@ var cache = new Cache('a', 256);
 
 })();
 
-tape('bench loadAsDict', function(assert) {
-    var cache = new Cache('a');
-    var time = +new Date;
-    var mem = process.memoryUsage().rss;
-    for (var i = 0; i < 256; i++) cache.loadAsDict(data, 'stat', i);
-    time = (+new Date - time);
-    mem = process.memoryUsage().rss - mem;
-    assert.equal(time < 80e3, true, 'loadAsDict x256 took ' + time + 'ms');
-    assert.equal(mem < 1e9, true, 'loadAsDict rss + ' + mem + ' bytes');
-    assert.end();
-});
-
