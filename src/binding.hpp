@@ -68,7 +68,7 @@ public:
     dictcache dict_;
     message_cache msg_;
     message_list msglist_;
-    unsigned cachesize = 10000;
+    unsigned cachesize = 131072;
 };
 
 }
