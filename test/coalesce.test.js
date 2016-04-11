@@ -125,6 +125,25 @@ test('coalesce args', function(assert) {
             assert.end();
         });
     });
+
+    test('coalesceSingle bbox', function(assert) {
+        coalesce([{
+            cache: cache,
+            idx: 0,
+            zoom: 2,
+            weight: 1,
+            phrase: 1
+        }], {
+            bboxzxy: [2, 1, 1, 1, 1]
+        }, function(err, res) {
+            assert.ifError(err);
+            assert.deepEqual(res[0].relev, 1, '1.relev');
+            assert.deepEqual(res.length, 1);
+            assert.deepEqual(res[0][0], { id: 1, idx: 0, relev: 1.0, score: 7, scoredist: 7, tmpid: 1, x: 1, y: 1 }, '1.0');
+            assert.end();
+        });
+    });
+
 })();
 
 (function() {
