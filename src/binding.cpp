@@ -664,6 +664,7 @@ struct CoalesceBaton : carmen::noncopyable {
     // params
     std::vector<PhrasematchSubq> stack;
     std::vector<unsigned> centerzxy;
+    std::vector<unsigned> bboxzxy;
     Nan::Persistent<v8::Function> callback;
     // return
     std::vector<Context> features;
@@ -734,6 +735,26 @@ void coalesceSingle(uv_work_t* req) {
         cy = 0;
     }
 
+    bool bbox = !baton->bboxzxy.empty();
+    unsigned bboxz;
+    unsigned minx;
+    unsigned miny;
+    unsigned maxx;
+    unsigned maxy;
+    if (bbox) {
+        bboxz = baton->bboxzxy[0];
+        minx = baton->bboxzxy[1];
+        miny = baton->bboxzxy[2];
+        maxx = baton->bboxzxy[3];
+        maxy = baton->bboxzxy[4];
+    } else {
+        bboxz = 0;
+        minx = 0;
+        miny = 0;
+        maxx = 0;
+        maxy = 0;
+    }
+
     // sort grids by distance to proximity point
     Cache::intarray grids = __get(subq.cache, type, shardId, subq.phrase);
 
@@ -753,6 +774,10 @@ void coalesceSingle(uv_work_t* req) {
         // short circuit based on relevMax thres
         if (relevMax - cover.relev >= 0.25) continue;
         if (cover.relev > relevMax) relevMax = cover.relev;
+
+        if (bbox) {
+            if (cover.x < minx || cover.y < miny || cover.x > maxx || cover.y > maxy) continue;
+        }
 
         covers.emplace_back(cover);
     }
@@ -1045,6 +1070,10 @@ NAN_METHOD(Cache::coalesce) {
         const Local<Object> options = Local<Object>::Cast(info[1]);
         if (options->Has(Nan::New("centerzxy").ToLocalChecked())) {
             baton->centerzxy = arrayToVector(Local<Array>::Cast(options->Get(Nan::New("centerzxy").ToLocalChecked())));
+        }
+
+        if (options->Has(Nan::New("bboxzxy").ToLocalChecked())) {
+            baton->bboxzxy = arrayToVector(Local<Array>::Cast(options->Get(Nan::New("bboxzxy").ToLocalChecked())));
         }
 
         // callback
