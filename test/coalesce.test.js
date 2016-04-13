@@ -418,15 +418,15 @@ test('coalesce args', function(assert) {
     a._set('grid', 0, 1, [
         Grid.encode({
             id: 1,
-            x: 1,
-            y: 1,
+            x: 0,
+            y: 0,
             relev: 0.8,
             score: 1
         }),
         Grid.encode({
             id: 2,
-            x: 0,
-            y: 0,
+            x: 1,
+            y: 1,
             relev: 1,
             score: 1
         })
@@ -435,14 +435,14 @@ test('coalesce args', function(assert) {
         Grid.encode({
             id: 3,
             x: 3,
-            y: 3,
+            y: 0,
             relev: 1,
             score: 1
         }),
         Grid.encode({
             id: 4,
-            x: 4,
-            y: 4,
+            x: 0,
+            y: 3,
             relev: 1,
             score: 1
         })
@@ -461,10 +461,10 @@ test('coalesce args', function(assert) {
             weight: 0.5,
             phrase: 1
         }], {
-            bboxzxy: [1, 1, 1, 1, 1]
+            bboxzxy: [1, 0, 0, 1, 0]
         }, function(err, res) {
             assert.ifError(err);
-            assert.deepEqual(res.length, 3, '3 results');
+            assert.deepEqual(res.length, 2, '2 results: 1/0/0, 2/3/0');
             assert.end();
         });
     });
@@ -482,10 +482,10 @@ test('coalesce args', function(assert) {
             weight: 0.5,
             phrase: 1
         }], {
-            bboxzxy: [2, 3, 3, 3, 3]
+            bboxzxy: [2, 0, 0, 1, 3]
         }, function(err, res) {
             assert.ifError(err);
-            assert.deepEqual(res.length, 2, '2 results');
+            assert.deepEqual(res.length, 2, '2 results: 1/0/0, 2/0/3');
             assert.end();
         });
     });
