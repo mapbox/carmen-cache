@@ -635,6 +635,41 @@ ZXY pxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z) {
     return zxy;
 }
 
+ZXY bxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z) {
+    ZXY zxy;
+    zxy.z = target_z;
+
+    // Interval between parent and target zoom level
+    signed zDist = target_z - z;
+    if (zDist == 0) {
+        zxy.x = x;
+        zxy.y = y;
+        return zxy;
+    }
+
+    // zoom conversion multiplier
+    float mult = pow(2,zDist);
+
+    // zoom in
+    if (zDist > 0) {
+        zxy.x = x * mult;
+        zxy.y = y * mult;
+        return zxy;
+    }
+    // zoom out
+    else {
+        unsigned mod = pow(2,target_z);
+        unsigned xDiff = x % mod;
+        unsigned yDiff = y % mod;
+        unsigned newX = x - xDiff;
+        unsigned newY = y - yDiff;
+
+        zxy.x = newX * mult;
+        zxy.y = newY * mult;
+        return zxy;
+    }
+}
+
 inline bool coverSortByRelev(Cover const& a, Cover const& b) noexcept {
     if (b.relev > a.relev) return false;
     else if (b.relev < a.relev) return true;
@@ -735,6 +770,7 @@ void coalesceSingle(uv_work_t* req) {
         cy = 0;
     }
 
+    // bbox (optional)
     bool bbox = !baton->bboxzxy.empty();
     unsigned bboxz;
     unsigned minx;
@@ -863,6 +899,27 @@ void coalesceMulti(uv_work_t* req) {
         cy = 0;
     }
 
+    // bbox (optional)
+    bool bbox = !baton->bboxzxy.empty();
+    unsigned bboxz;
+    unsigned minx;
+    unsigned miny;
+    unsigned maxx;
+    unsigned maxy;
+    if (bbox) {
+        bboxz = baton->bboxzxy[0];
+        minx = baton->bboxzxy[1];
+        miny = baton->bboxzxy[2];
+        maxx = baton->bboxzxy[3];
+        maxy = baton->bboxzxy[4];
+    } else {
+        bboxz = 0;
+        minx = 0;
+        miny = 0;
+        maxx = 0;
+        maxy = 0;
+    }
+
     for (unsigned short i = 0; i < size; i++) {
         PhrasematchSubq const& subq = stack[i];
 
@@ -889,6 +946,11 @@ void coalesceMulti(uv_work_t* req) {
             } else {
                 cover.distance = 0;
                 cover.scoredist = cover.score;
+            }
+
+            if (bbox) {
+                ZXY bxy = bxy2zxy(z, cover.x, cover.y, bboxz);
+                if (bxy.x < minx || bxy.y < miny || bxy.x > maxx || bxy.y > maxy) continue;
             }
 
             uint64_t zxy = (z * POW2_28) + (cover.x * POW2_14) + (cover.y);
