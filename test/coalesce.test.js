@@ -15,14 +15,14 @@ test('coalesce args', function(assert) {
                 idx: 0,
                 zoom: 0,
                 weight: 0.5,
-                phrase: 1
+                phrases: [1]
             },
             {
                 cache: new Cache('b'),
                 idx: 1,
                 zoom: 1,
                 weight: 0.5,
-                phrase: 1
+                phrases: [1]
             },
         ]);
     }, /Arg 2 must be an options object/, 'throws');
@@ -52,7 +52,7 @@ test('coalesce args', function(assert) {
     }, /value in array too large/, 'throws');
 
     assert.throws(function() {
-        coalesce([], { centerzxy:[4294967296,0,0] } );
+        coalesce([], { centerzxy:[Math.pow(2,100),0,0] } );
     }, /value in array too large/, 'throws');
 
     assert.throws(function() {
@@ -93,7 +93,7 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 2,
             weight: 1,
-            phrase: 1
+            phrases: [1]
         }], {}, function(err, res) {
             assert.ifError(err);
             assert.deepEqual(res[0].relev, 1, '0.relev');
@@ -111,7 +111,7 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 2,
             weight: 1,
-            phrase: 1
+            phrases: [1]
         }], {
             centerzxy: [3,3,3]
         }, function(err, res) {
@@ -122,6 +122,61 @@ test('coalesce args', function(assert) {
             assert.deepEqual(res[1][0], { distance: 4, id: 1, idx: 0, relev: 1.0, score: 7, scoredist: 7, tmpid: 1, x: 1, y: 1 }, '1.0');
             assert.deepEqual(res[2].relev, 0.8, '2.relev');
             assert.deepEqual(res[2][0], { distance: 2, id: 2, idx: 0, relev: 0.8, score: 3, scoredist: 3, tmpid: 2, x: 2, y: 2 }, '2.0');
+            assert.end();
+        });
+    });
+})();
+
+// Cache several phrases across different shards and confirm that a `phrases` key loads all ids
+(function() {
+    var cache = new Cache('a', 4);
+    cache._set('grid', 0, 1, [
+        Grid.encode({
+            id: 1,
+            x: 1,
+            y: 1,
+            relev: 1,
+            score: 1
+        }),
+    ]);
+    cache._set('grid', 0, 2, [
+        Grid.encode({
+            id: 2,
+            x: 1,
+            y: 1,
+            relev: 1,
+            score: 1
+        }),
+    ]);
+    cache._set('grid', 1, Math.pow(2,36), [
+        Grid.encode({
+            id: 3,
+            x: 1,
+            y: 1,
+            relev: 1,
+            score: 1
+        }),
+    ]);
+    cache._set('grid', 2, Math.pow(2,36)*2, [
+        Grid.encode({
+            id: 4,
+            x: 1,
+            y: 1,
+            relev: 1,
+            score: 1
+        }),
+    ]);
+    test('coalesceSingle', function(assert) {
+        coalesce([{
+            cache: cache,
+            idx: 0,
+            zoom: 2,
+            weight: 1,
+            phrases: [1,2,Math.pow(2,36),Math.pow(2,36)*2]
+        }], {}, function(err, res) {
+            assert.ifError(err);
+            assert.equal(res.length, 4, 'loads all 4 covers');
+            assert.deepEqual(res.map(function(g) { return g[0].id }), [1,2,3,4], 'has cover IDs 1-4');
             assert.end();
         });
     });
@@ -153,7 +208,7 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 2,
             weight: 1,
-            phrase: 1
+            phrases: [1]
         }], {}, function(err, res) {
             assert.ifError(err);
             assert.equal(res.length, 2);
@@ -214,13 +269,13 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 1,
             weight: 0.5,
-            phrase: 1
+            phrases: [1]
         }, {
             cache: b,
             idx: 1,
             zoom: 2,
             weight: 0.5,
-            phrase: 1
+            phrases: [1]
         }], {}, function(err, res) {
             assert.ifError(err);
             // sorts by relev, score
@@ -239,13 +294,13 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 1,
             weight: 0.5,
-            phrase: 1
+            phrases: [1]
         }, {
             cache: b,
             idx: 1,
             zoom: 2,
             weight: 0.5,
-            phrase: 1
+            phrases: [1]
         }], {
             centerzxy: [2,3,3]
         }, function(err, res) {
@@ -296,13 +351,13 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 0,
             weight: 0.5,
-            phrase: 1
+            phrases: [1]
         }, {
             cache: b,
             idx: 1,
             zoom: 14,
             weight: 0.5,
-            phrase: 1
+            phrases: [1]
         }], {
             centerzxy: [14,4601,6200]
         }, function(err, res) {
@@ -319,13 +374,13 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 0,
             weight: 0.5,
-            phrase: 1
+            phrases: [1]
         }, {
             cache: b,
             idx: 1,
             zoom: 14,
             weight: 0.5,
-            phrase: 1
+            phrases: [1]
         }], {
             centerzxy: [14,4605,6200]
         }, function(err, res) {
@@ -372,13 +427,13 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 1,
             weight: 0.5,
-            phrase: 1
+            phrases: [1]
         }, {
             cache: b,
             idx: 1,
             zoom: 2,
             weight: 0.5,
-            phrase: 1
+            phrases: [1]
         }], {}, function(err, res) {
             assert.ifError(err);
             // sorts by relev, score
@@ -387,6 +442,64 @@ test('coalesce args', function(assert) {
             assert.deepEqual(res[0].length, 2, '0.length');
             assert.deepEqual(res[0][0], { distance: 0, id: 3, idx: 1, relev: 0.5, score: 1, scoredist: 1, tmpid: 33554435, x: 2, y: 2 }, '0.0');
             assert.deepEqual(res[0][1], { distance: 0, id: 2, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 2, x: 1, y: 1 }, '0.1');
+            assert.end();
+        });
+    });
+})();
+
+// Phrases concatenation
+(function() {
+    var a = new Cache('a', 4);
+    var b = new Cache('b', 4);
+    a._set('grid', 0, 1, [
+        Grid.encode({
+            id: 1,
+            x: 1,
+            y: 1,
+            relev: 1,
+            score: 1
+        })
+    ]);
+    a._set('grid', 1, Math.pow(2,36), [
+        Grid.encode({
+            id: 2,
+            x: 1,
+            y: 1,
+            relev: 1,
+            score: 1
+        })
+    ]);
+    b._set('grid', 0, 2, [
+        Grid.encode({
+            id: 3,
+            x: 1,
+            y: 1,
+            relev: 1,
+            score: 1
+        }),
+    ]);
+    test('coalesceMulti (phrases concatenation + stacked)', function(assert) {
+        coalesce([{
+            cache: a,
+            idx: 0,
+            zoom: 1,
+            weight: 0.5,
+            phrases: [1, Math.pow(2,36)]
+        }, {
+            cache: b,
+            idx: 1,
+            zoom: 1,
+            weight: 0.5,
+            phrases: [2]
+        }], {}, function(err, res) {
+            assert.ifError(err);
+            assert.deepEqual(res.length, 2, '2 results');
+            assert.deepEqual(res[0].relev, 1, '0.relev');
+            assert.deepEqual(res[0].length, 2, '0.length');
+            assert.deepEqual(res[0][0].id, 1);
+            assert.deepEqual(res[0][1].id, 3);
+            assert.deepEqual(res[1][0].id, 2);
+            assert.deepEqual(res[1][1].id, 3);
             assert.end();
         });
     });
@@ -434,13 +547,13 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 0,
             weight: 0.5,
-            phrase: 1
+            phrases: [1]
         }, {
             cache: b,
             idx: 1,
             zoom: 1,
             weight: 0.5,
-            phrase: 1
+            phrases: [1]
         }], {}, function(err, res) {
             assert.ifError(err);
             assert.equal(res.length, 3, 'res length = 3');
@@ -488,13 +601,13 @@ test('coalesce args', function(assert) {
             idx: 25,
             zoom: 0,
             weight: 0.5,
-            phrase: 1
+            phrases: [1]
         }, {
             cache: b,
             idx: 20,
             zoom: 0,
             weight: 0.5,
-            phrase: 1
+            phrases: [1]
         }], {}, function(err, res) {
             assert.ifError(err);
             assert.equal(res.length, 2, 'res length = 2');

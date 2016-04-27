@@ -24,17 +24,17 @@ inline std::string shard(uint64_t level, uint64_t id) {
     return std::to_string(shard_id);
 }
 
-inline std::vector<unsigned> arrayToVector(Local<Array> const& array) {
-    std::vector<unsigned> cpp_array;
+inline std::vector<uint64_t> arrayToVector(Local<Array> const& array) {
+    std::vector<uint64_t> cpp_array;
     cpp_array.reserve(array->Length());
     for (uint32_t i = 0; i < array->Length(); i++) {
         int64_t js_value = array->Get(i)->IntegerValue();
-        if (js_value < 0 || js_value >= std::numeric_limits<unsigned>::max()) {
+        if (js_value < 0 || js_value >= std::numeric_limits<uint64_t>::max()) {
             std::stringstream s;
-            s << "value in array too large (cannot fit '" << js_value << "' in unsigned)";
+            s << "value in array too large (cannot fit '" << js_value << "' in uint64_t)";
             throw std::runtime_error(s.str());
         }
-        cpp_array.emplace_back(static_cast<unsigned>(js_value));
+        cpp_array.emplace_back(static_cast<uint64_t>(js_value));
     }
     return cpp_array;
 }
@@ -672,7 +672,7 @@ constexpr uint64_t POW2_2 = static_cast<uint64_t>(_pow(2.0,2));
 struct PhrasematchSubq {
     carmen::Cache *cache;
     double weight;
-    uint64_t phrase;
+    std::vector<uint64_t> phrases;
     unsigned short idx;
     unsigned short zoom;
 };
@@ -781,7 +781,7 @@ struct CoalesceBaton : carmen::noncopyable {
     uv_work_t request;
     // params
     std::vector<PhrasematchSubq> stack;
-    std::vector<unsigned> centerzxy;
+    std::vector<uint64_t> centerzxy;
     Nan::Persistent<v8::Function> callback;
     // return
     std::vector<Context> features;
@@ -834,8 +834,6 @@ void coalesceSingle(uv_work_t* req) {
 
     std::vector<PhrasematchSubq> const& stack = baton->stack;
     PhrasematchSubq const& subq = stack[0];
-    std::string type = "grid";
-    std::string shardId = shard(4, subq.phrase);
 
     // proximity (optional)
     bool proximity = !baton->centerzxy.empty();
@@ -852,8 +850,15 @@ void coalesceSingle(uv_work_t* req) {
         cy = 0;
     }
 
-    // sort grids by distance to proximity point
-    Cache::intarray grids = __get(subq.cache, type, shardId, subq.phrase);
+    // Load and concatenate grids for all ids in `phrases`
+    std::string type = "grid";
+    Cache::intarray grids;
+    unsigned long b = subq.phrases.size();
+    for (auto const& phrase : subq.phrases) {
+        std::string shardId = shard(4, phrase);
+        Cache::intarray phraseGrids = __get(subq.cache, type, shardId, phrase);
+        grids.insert(grids.end(), phraseGrids.begin(), phraseGrids.end());
+    }
 
     unsigned long m = grids.size();
     double relevMax = 0;
@@ -875,6 +880,7 @@ void coalesceSingle(uv_work_t* req) {
         covers.emplace_back(cover);
     }
 
+    // sort grids by distance to proximity point
     std::sort(covers.begin(), covers.end(), coverSortByRelev);
 
     uint32_t lastid = 0;
@@ -959,9 +965,15 @@ void coalesceMulti(uv_work_t* req) {
     for (unsigned short i = 0; i < size; i++) {
         PhrasematchSubq const& subq = stack[i];
 
-        std::string shardId = shard(4, subq.phrase);
-
-        Cache::intarray grids = __get(subq.cache, type, shardId, subq.phrase);
+        // Load and concatenate grids for all ids in `phrases`
+        std::string type = "grid";
+        Cache::intarray grids;
+        unsigned long b = subq.phrases.size();
+        for (auto const& phrase : subq.phrases) {
+            std::string shardId = shard(4, phrase);
+            Cache::intarray phraseGrids = __get(subq.cache, type, shardId, phrase);
+            grids.insert(grids.end(), phraseGrids.begin(), phraseGrids.end());
+        }
 
         unsigned short z = subq.zoom;
         auto const& zCache = zoomCache[z];
@@ -1145,7 +1157,12 @@ NAN_METHOD(Cache::coalesce) {
             subq.zoom = static_cast<unsigned short>(_zoom);
 
             subq.weight = jsStack->Get(Nan::New("weight").ToLocalChecked())->NumberValue();
-            subq.phrase = jsStack->Get(Nan::New("phrase").ToLocalChecked())->IntegerValue();
+
+            if (!jsStack->Has(Nan::New("phrases").ToLocalChecked())) {
+                delete baton;
+                return Nan::ThrowTypeError("Subq object must have 'phrases' array");
+            }
+            subq.phrases = arrayToVector(Local<Array>::Cast(jsStack->Get(Nan::New("phrases").ToLocalChecked())));
 
             // JS cache reference => cpp
             Local<Object> cache = Local<Object>::Cast(jsStack->Get(Nan::New("cache").ToLocalChecked()));

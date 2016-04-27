@@ -14,7 +14,7 @@ var mp36 = Math.pow(2,36);
         idx: 0,
         zoom: 14,
         weight: 1,
-        phrase: 3848571113
+        phrases: [3848571113]
     }];
     test('coalesceSingle', function(assert) {
         if (process.env.COVERAGE) return assert.end();
@@ -81,13 +81,13 @@ var mp36 = Math.pow(2,36);
         idx: 0,
         zoom: 12,
         weight: 0.25,
-        phrase: 1965155344
+        phrases: [1965155344]
     }, {
         cache: b,
         idx: 1,
         zoom: 14,
         weight: 0.75,
-        phrase: 3848571113
+        phrases: [3848571113]
     }];
     test('coalesceMulti', function(assert) {
         if (process.env.COVERAGE) return assert.end();
