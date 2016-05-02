@@ -635,7 +635,7 @@ ZXY pxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z) {
     return zxy;
 }
 
-ZXY bxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z) {
+ZXY bxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z, bool max=false) {
     ZXY zxy;
     zxy.z = target_z;
 
@@ -651,9 +651,17 @@ ZXY bxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z) {
     float mult = pow(2,zDist);
 
     // zoom in
-    if (zDist > 0) {
+    if (zDist > 0 && !max) {
         zxy.x = x * mult;
         zxy.y = y * mult;
+        return zxy;
+    }
+    else if (zDist > 0 && max) {
+        unsigned mod = pow(2,target_z);
+        unsigned tempX = x * mult;
+        unsigned tempY = y * mult;
+        zxy.x = ((tempX + 1) % mod) + tempX;
+        zxy.y = ((tempY + 1) % mod) + tempY;
         return zxy;
     }
     // zoom out
@@ -949,8 +957,9 @@ void coalesceMulti(uv_work_t* req) {
             }
 
             if (bbox) {
-                ZXY bxy = bxy2zxy(z, cover.x, cover.y, bboxz);
-                if (bxy.x < minx || bxy.y < miny || bxy.x > maxx || bxy.y > maxy) continue;
+                ZXY min = bxy2zxy(bboxz, minx, miny, z, false);
+                ZXY max = bxy2zxy(bboxz, maxx, maxy, z, true);
+                if (cover.x < min.x || cover.y < min.y || cover.x > max.x || cover.y > max.y) continue;
             }
 
             uint64_t zxy = (z * POW2_28) + (cover.x * POW2_14) + (cover.y);
