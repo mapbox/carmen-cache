@@ -650,12 +650,13 @@ ZXY bxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z, bool max=fals
     // zoom conversion multiplier
     float mult = pow(2,zDist);
 
-    // zoom in
+    // zoom in min
     if (zDist > 0 && !max) {
         zxy.x = x * mult;
         zxy.y = y * mult;
         return zxy;
     }
+    // zoom in max
     else if (zDist > 0 && max) {
         unsigned mod = pow(2,target_z);
         unsigned tempX = x * mult;
