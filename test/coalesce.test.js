@@ -489,6 +489,27 @@ test('coalesce args', function(assert) {
             assert.end();
         });
     });
+    test('coalesceMulti bbox', function(assert) {
+        coalesce([{
+            cache: a,
+            idx: 0,
+            zoom: 1,
+            weight: 0.5,
+            phrase: 1
+        }, {
+            cache: b,
+            idx: 1,
+            zoom: 2,
+            weight: 0.5,
+            phrase: 1
+        }], {
+            bboxzxy: [6, 14, 30, 15, 64]
+        }, function(err, res) {
+            assert.ifError(err);
+            assert.deepEqual(res.length, 2, '2 results: 1/0/0, 2/0/3');
+            assert.end();
+        });
+    });
 })();
 
 // Multi sandwich scenario
