@@ -210,24 +210,18 @@ NAN_METHOD(Cache::pack)
                     Cache::intarray varr = item.second;
                     // delta-encode values, sorted in descending order.
                     std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
-                    Cache::intarray varr_delta;
-                    varr_delta.reserve(array_size);
+
+                    // Using new (in protozero 1.3.0) packed writing API
+                    // https://github.com/mapbox/protozero/commit/4e7e32ac5350ea6d3dcf78ff5e74faeee513a6e1
+                    protozero::packed_field_uint64 field{item_writer, 2};
                     uint64_t lastval = 0;
                     for (auto const& vitem : varr) {
                         if (lastval == 0) {
-                            varr_delta.emplace_back(static_cast<int64_t>(vitem));
+                            field.add_element(static_cast<uint64_t>(vitem));
                         } else {
-                            varr_delta.emplace_back(static_cast<int64_t>(lastval - vitem));
+                            field.add_element(static_cast<uint64_t>(lastval - vitem));
                         }
                         lastval = vitem;
-                    }
-                    // Using new (in protozero 1.3.0) packed writing API
-                    // https://github.com/mapbox/protozero/commit/4e7e32ac5350ea6d3dcf78ff5e74faeee513a6e1
-                    {
-                        protozero::packed_field_uint64 field{item_writer, 2};
-                        for (auto d : varr_delta) {
-                            field.add_element(d);
-                        }
                     }
                 }
             }
