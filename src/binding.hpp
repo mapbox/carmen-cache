@@ -71,6 +71,9 @@ public:
     unsigned cachesize = 131072;
 };
 
+#define CACHE_MESSAGE 1
+#define CACHE_ITEM 1
+
 }
 
 #endif // __CARMEN_BINDING_HPP__
