@@ -415,6 +415,7 @@ test('coalesce args', function(assert) {
 (function() {
     var a = new Cache('a', 0);
     var b = new Cache('b', 0);
+    var c = new Cache('c', 0);
     a._set('grid', 0, 1, [
         Grid.encode({
             id: 1,
@@ -443,6 +444,22 @@ test('coalesce args', function(assert) {
             id: 4,
             x: 0,
             y: 3,
+            relev: 1,
+            score: 1
+        })
+    ]);
+    c._set('grid', 0, 1, [
+        Grid.encode({
+            id: 5,
+            x: 21,
+            y: 7,
+            relev: 1,
+            score: 1
+        }),
+        Grid.encode({
+            id: 6,
+            x: 21,
+            y: 18,
             relev: 1,
             score: 1
         })
@@ -507,6 +524,28 @@ test('coalesce args', function(assert) {
         }, function(err, res) {
             assert.ifError(err);
             assert.deepEqual(res.length, 2, '2 results: 1/0/0, 2/0/3');
+            assert.end();
+        });
+    });
+    test('coalesceMulti bbox', function(assert) {
+        coalesce([{
+            cache: b,
+            idx: 0,
+            zoom: 2,
+            weight: 0.5,
+            phrase: 1
+        }, {
+            cache: c,
+            idx: 1,
+            zoom: 5,
+            weight: 0.5,
+            phrase: 1
+        }], {
+            bboxzxy: [1, 0, 0, 1, 0]
+        }, function(err, res) {
+            assert.ifError(err);
+            console.log("res", res);
+            assert.deepEqual(res.length, 2, '2 results: 5/20/7, 2/3/0');
             assert.end();
         });
     });
