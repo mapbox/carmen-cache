@@ -105,9 +105,9 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string const
 
         std::string ref = cacheGet(c, key);
         protozero::pbf_reader message(ref);
-        while (message.next(1)) {
+        while (message.next(CACHE_MESSAGE)) {
             protozero::pbf_reader item = message.get_message();
-            while (item.next(1)) {
+            while (item.next(CACHE_ITEM)) {
                 uint64_t key_id = item.get_uint64();
                 if (key_id != id) break;
                 item.next();
@@ -375,9 +375,9 @@ NAN_METHOD(Cache::_set)
 
 void load_into_dict(Cache::ldictcache & ldict, const char * data, size_t size) {
     protozero::pbf_reader message(data,size);
-    while (message.next(1)) {
+    while (message.next(CACHE_MESSAGE)) {
         protozero::pbf_reader item = message.get_message();
-        if (item.next(1)) {
+        if (item.next(CACHE_ITEM)) {
             uint64_t key_id = item.get_uint64();
             ldict.insert(trunc_hash(key_id));
         }
