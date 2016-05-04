@@ -658,11 +658,8 @@ ZXY bxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z, bool max=fals
     }
     // zoom in max
     else if (zDist > 0 && max) {
-        unsigned mod = pow(2,target_z);
-        unsigned tempX = x * mult;
-        unsigned tempY = y * mult;
-        zxy.x = ((tempX + 1) % mod) + tempX;
-        zxy.y = ((tempY + 1) % mod) + tempY;
+        zxy.x = x * mult + (mult - 1);
+        zxy.y = y * mult + (mult - 1);
         return zxy;
     }
     // zoom out
