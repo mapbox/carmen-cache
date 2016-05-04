@@ -102,10 +102,9 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string const
 
         std::string ref = cacheGet(c, key);
         protozero::pbf_reader message(ref);
-        while (message.next(1)) {
+        while (message.next(CACHE_MESSAGE)) {
             protozero::pbf_reader item = message.get_message();
-            while (item.next()) {
-                if (item.tag() != 1) break;
+            while (item.next(CACHE_ITEM)) {
                 uint64_t key_id = item.get_uint64();
                 if (key_id != id) break;
                 item.next();
@@ -177,27 +176,36 @@ NAN_METHOD(Cache::pack)
         Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
         Cache::memcache const& mem = c->cache_;
         Cache::memcache::const_iterator itr = mem.find(key);
-        std::string message;
-        protozero::pbf_writer writer(message);
         if (itr != mem.end()) {
+            std::string message;
+            // Optimization idea: pre-pass on arrays to assemble guess about
+            // how long the final message will be in order to be able to call
+            // message.reserve(<length>)
+            protozero::pbf_writer writer(message);
             for (auto const& item : itr->second) {
                 protozero::pbf_writer item_writer(writer,1);
                 item_writer.add_uint64(1,item.first);
-                Cache::intarray varr = item.second;
-                // delta-encode values, sorted in descending order.
-                std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
-                Cache::intarray varr_delta;
-                varr_delta.reserve(varr.size());
-                uint64_t lastval = 0;
-                for (auto const& vitem : varr) {
-                    if (lastval == 0) {
-                        varr_delta.emplace_back(static_cast<int64_t>(vitem));
-                    } else {
-                        varr_delta.emplace_back(static_cast<int64_t>(lastval - vitem));
+                std::size_t array_size = item.second.size();
+                if (array_size > 0) {
+                    // make copy of intarray so we can sort without
+                    // modifying the original array
+                    Cache::intarray varr = item.second;
+                    // delta-encode values, sorted in descending order.
+                    std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
+
+                    // Using new (in protozero 1.3.0) packed writing API
+                    // https://github.com/mapbox/protozero/commit/4e7e32ac5350ea6d3dcf78ff5e74faeee513a6e1
+                    protozero::packed_field_uint64 field{item_writer, 2};
+                    uint64_t lastval = 0;
+                    for (auto const& vitem : varr) {
+                        if (lastval == 0) {
+                            field.add_element(static_cast<uint64_t>(vitem));
+                        } else {
+                            field.add_element(static_cast<uint64_t>(lastval - vitem));
+                        }
+                        lastval = vitem;
                     }
-                    lastval = vitem;
                 }
-                item_writer.add_packed_uint64(2,std::begin(varr_delta), std::end(varr_delta));
             }
             if (message.empty()) {
                 return Nan::ThrowTypeError("pack: invalid message ByteSize encountered");
@@ -271,9 +279,9 @@ NAN_METHOD(Cache::list)
                 std::string ref = cacheGet(c, key);
 
                 protozero::pbf_reader message(ref);
-                while (message.next(1)) {
+                while (message.next(CACHE_MESSAGE)) {
                     protozero::pbf_reader item = message.get_message();
-                    while (item.next(1)) {
+                    while (item.next(CACHE_ITEM)) {
                         uint64_t key_id = item.get_uint64();
                         ids->Set(idx++, Nan::New<Number>(key_id)->ToString());
                     }

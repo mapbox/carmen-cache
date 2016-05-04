@@ -60,8 +60,11 @@ public:
     memcache cache_;
     message_cache msg_;
     message_list msglist_;
-    unsigned cachesize = 65536;
+    unsigned cachesize = 131072;
 };
+
+#define CACHE_MESSAGE 1
+#define CACHE_ITEM 1
 
 }
 
