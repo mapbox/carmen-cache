@@ -297,9 +297,9 @@ NAN_METHOD(Cache::list)
                 std::string ref = cacheGet(c, key);
 
                 protozero::pbf_reader message(ref);
-                while (message.next(1)) {
+                while (message.next(CACHE_MESSAGE)) {
                     protozero::pbf_reader item = message.get_message();
-                    while (item.next(1)) {
+                    while (item.next(CACHE_ITEM)) {
                         uint64_t key_id = item.get_uint64();
                         ids->Set(idx++, Nan::New<Number>(key_id)->ToString());
                     }
