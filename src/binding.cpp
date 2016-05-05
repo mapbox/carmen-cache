@@ -247,8 +247,9 @@ NAN_METHOD(Cache::merge)
 
     try {
         // Ids that have been seen
-        std::map<uint64_t,bool> ids1;
-        std::map<uint64_t,bool> ids2;
+        std::map<uint64_t,protozero::pbf_reader> ids1;
+        std::map<uint64_t,protozero::pbf_reader> ids2;
+        std::set<uint64_t> ids_union;
 
         std::string merged;
         protozero::pbf_writer writer(merged);
@@ -258,7 +259,9 @@ NAN_METHOD(Cache::merge)
         while (pre1.next(CACHE_MESSAGE)) {
             protozero::pbf_reader item = pre1.get_message();
             while (item.next(CACHE_ITEM)) {
-                ids1.emplace(item.get_uint64(), true);
+                uint64_t key_id = item.get_uint64();
+                ids1.emplace(key_id, item);
+                ids_union.emplace(key_id);
             }
         }
 
@@ -267,72 +270,60 @@ NAN_METHOD(Cache::merge)
         while (pre2.next(CACHE_MESSAGE)) {
             protozero::pbf_reader item = pre2.get_message();
             while (item.next(CACHE_ITEM)) {
-                ids2.emplace(item.get_uint64(), true);
+                uint64_t key_id = item.get_uint64();
+                ids2.emplace(key_id, item);
+                ids_union.emplace(key_id);
             }
         }
 
-        // No delta writes from message1
-        protozero::pbf_reader message1(pbf1);
-        while (message1.next(CACHE_MESSAGE)) {
-            protozero::pbf_writer item_writer(writer,1);
-            protozero::pbf_reader item = message1.get_message();
-            while (item.next(CACHE_ITEM)) {
-                uint64_t key_id = item.get_uint64();
+        // iterate over the combined id list
+        for (auto id_it = ids_union.begin(); id_it != ids_union.end(); ++id_it) {
+            uint64_t key_id = *id_it;
 
-                // Skip this id if also in message 2
-                if (ids2.find(key_id) != ids2.end()) break;
+            auto found1 = ids1.find(key_id);
+            auto found2 = ids2.find(key_id);
 
-                item_writer.add_uint64(1,key_id);
+            protozero::pbf_writer item_writer(writer, 1);
+
+            if (found1 == ids1.end()) {
+                // No delta writes from message2
+                auto item = found2->second;
+
+                item_writer.add_uint64(1, key_id);
                 item.next();
                 protozero::packed_field_uint64 field{item_writer, 2};
                 auto vals = item.get_packed_uint64();
                 for (auto it = vals.first; it != vals.second; ++it) {
                     field.add_element(static_cast<uint64_t>(*it));
                 }
-            }
-        }
+            } else if (found2 == ids2.end()) {
+                // No delta writes from message2
+                auto item = found1->second;
 
-        // No delta writes from message2
-        protozero::pbf_reader message2(pbf2);
-        while (message2.next(CACHE_MESSAGE)) {
-            protozero::pbf_writer item_writer(writer,1);
-            protozero::pbf_reader item = message2.get_message();
-            while (item.next(CACHE_ITEM)) {
-                uint64_t key_id = item.get_uint64();
-
-                // Skip this id if also in message 2
-                if (ids1.find(key_id) != ids1.end()) break;
-
-                item_writer.add_uint64(1,key_id);
+                item_writer.add_uint64(1, key_id);
                 item.next();
                 protozero::packed_field_uint64 field{item_writer, 2};
                 auto vals = item.get_packed_uint64();
                 for (auto it = vals.first; it != vals.second; ++it) {
                     field.add_element(static_cast<uint64_t>(*it));
                 }
-            }
-        }
+            } else {
+                // this id is in both
+                item_writer.add_uint64(1, key_id);
 
-        // Delta writes for ids in both message1 and message2
-        protozero::pbf_reader overlap1(pbf1);
-        while (overlap1.next(CACHE_MESSAGE)) {
-            protozero::pbf_writer item_writer(writer,1);
-            protozero::pbf_reader item = overlap1.get_message();
-            while (item.next(CACHE_ITEM)) {
-                uint64_t key_id = item.get_uint64();
+                auto item1 = found1->second;
+                auto item2 = found2->second;
 
-                // Skip ids that are only in one or the other lists
-                if (ids1.find(key_id) == ids1.end() || ids2.find(key_id) == ids2.end()) break;
+                item1.next();
+                item2.next();
 
-                item_writer.add_uint64(1,key_id);
-
-                item.next();
                 uint64_t lastval = 0;
 
                 // Add values from pbf1
                 Cache::intarray varr;
-                auto vals = item.get_packed_uint64();
-                for (auto it = vals.first; it != vals.second; ++it) {
+
+                auto vals1 = item1.get_packed_uint64();
+                for (auto it = vals1.first; it != vals1.second; ++it) {
                     if (lastval == 0) {
                         lastval = *it;
                         varr.emplace_back(lastval);
@@ -342,25 +333,15 @@ NAN_METHOD(Cache::merge)
                     }
                 }
 
-                // Check pbf2 for this id and merge its items if found
-                protozero::pbf_reader overlap2(pbf2);
-                while (overlap2.next(CACHE_MESSAGE)) {
-                    protozero::pbf_reader item2 = overlap2.get_message();
-                    while (item2.next(CACHE_ITEM)) {
-                        uint64_t key_id2 = item2.get_uint64();
-                        if (key_id2 != key_id) break;
-                        item2.next();
-                        lastval = 0;
-                        auto vals2 = item2.get_packed_uint64();
-                        for (auto it = vals2.first; it != vals2.second; ++it) {
-                            if (lastval == 0) {
-                                lastval = *it;
-                                varr.emplace_back(lastval);
-                            } else {
-                                lastval = lastval - *it;
-                                varr.emplace_back(lastval);
-                            }
-                        }
+                lastval = 0;
+                auto vals2 = item2.get_packed_uint64();
+                for (auto it = vals2.first; it != vals2.second; ++it) {
+                    if (lastval == 0) {
+                        lastval = *it;
+                        varr.emplace_back(lastval);
+                    } else {
+                        lastval = lastval - *it;
+                        varr.emplace_back(lastval);
                     }
                 }
 
