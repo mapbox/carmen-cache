@@ -394,12 +394,6 @@ void mergeQueue(uv_work_t* req) {
     baton->pbf3 = merged;
 }
 
-void mergeMax(uv_work_t* req) {
-    MergeBaton *baton = static_cast<MergeBaton *>(req->data);
-    std::string merged;
-    baton->pbf3 = merged;
-}
-
 void mergeAfter(uv_work_t* req) {
     Nan::HandleScope scope;
     MergeBaton *baton = static_cast<MergeBaton *>(req->data);
