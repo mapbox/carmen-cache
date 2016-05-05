@@ -246,17 +246,89 @@ NAN_METHOD(Cache::merge)
     std::string pbf2 = std::string(node::Buffer::Data(obj2),node::Buffer::Length(obj2));
 
     try {
+        // Ids that have been seen
+        std::map<uint64_t,bool> seen;
+
         std::string merged;
         protozero::pbf_writer writer(merged);
 
-        protozero::pbf_reader message(pbf1);
-        while (message.next(CACHE_MESSAGE)) {
+        protozero::pbf_reader message1(pbf1);
+        while (message1.next(CACHE_MESSAGE)) {
             protozero::pbf_writer item_writer(writer,1);
-            protozero::pbf_reader item = message.get_message();
+            protozero::pbf_reader item = message1.get_message();
             while (item.next(CACHE_ITEM)) {
                 uint64_t key_id = item.get_uint64();
                 item_writer.add_uint64(1,key_id);
 
+                // Mark this ID as seen
+                seen.emplace(key_id, true);
+
+                item.next();
+                uint64_t lastval = 0;
+
+                // Add values from pbf1
+                Cache::intarray varr;
+                auto vals = item.get_packed_uint64();
+                for (auto it = vals.first; it != vals.second; ++it) {
+                    if (lastval == 0) {
+                        lastval = *it;
+                        varr.emplace_back(lastval);
+                    } else {
+                        lastval = lastval - *it;
+                        varr.emplace_back(lastval);
+                    }
+                }
+
+                // Check pbf2 for this id and merge its items if found
+                protozero::pbf_reader overlap(pbf2);
+                while (overlap.next(CACHE_MESSAGE)) {
+                    protozero::pbf_reader item2 = overlap.get_message();
+                    while (item2.next(CACHE_ITEM)) {
+                        uint64_t key_id2 = item2.get_uint64();
+                        if (key_id2 != key_id) break;
+                        item2.next();
+                        lastval = 0;
+                        auto vals2 = item2.get_packed_uint64();
+                        for (auto it = vals2.first; it != vals2.second; ++it) {
+                            if (lastval == 0) {
+                                lastval = *it;
+                                varr.emplace_back(lastval);
+                            } else {
+                                lastval = lastval - *it;
+                                varr.emplace_back(lastval);
+                            }
+                        }
+                    }
+                }
+
+                // Sort for proper delta encoding
+                std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
+
+                // Write varr to merged protobuf
+                protozero::packed_field_uint64 field{item_writer, 2};
+                lastval = 0;
+                for (auto const& vitem : varr) {
+                    if (lastval == 0) {
+                        field.add_element(static_cast<uint64_t>(vitem));
+                    } else {
+                        field.add_element(static_cast<uint64_t>(lastval - vitem));
+                    }
+                    lastval = vitem;
+                }
+            }
+        }
+
+        protozero::pbf_reader message2(pbf2);
+        while (message2.next(CACHE_MESSAGE)) {
+            protozero::pbf_writer item_writer(writer,1);
+            protozero::pbf_reader item = message2.get_message();
+            while (item.next(CACHE_ITEM)) {
+                uint64_t key_id = item.get_uint64();
+
+                // Skip this ID if seen when processing message1
+                if (seen.find(key_id) != seen.end()) break;
+
+                item_writer.add_uint64(1,key_id);
                 item.next();
                 protozero::packed_field_uint64 field{item_writer, 2};
                 auto vals = item.get_packed_uint64();
