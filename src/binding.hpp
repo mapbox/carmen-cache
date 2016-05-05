@@ -18,7 +18,6 @@
 #include <map>
 #include <list>
 #include <vector>
-#include <sparsehash/sparse_hash_set>
 #pragma clang diagnostic pop
 #include <iostream>
 
@@ -38,8 +37,6 @@ public:
     ~Cache();
     typedef uint64_t key_type;
     typedef uint64_t value_type;
-    // pbf message cache
-    typedef google::sparse_hash_set<uint32_t> ldictcache;
     // list + map as simple LRU cache
     typedef std::pair<std::string,std::string> message_pair;
     typedef std::list<message_pair> message_list;
@@ -48,24 +45,19 @@ public:
     typedef std::vector<value_type> intarray;
     typedef std::map<key_type,intarray> arraycache;
     typedef std::map<std::string,arraycache> memcache;
-    typedef std::map<std::string,ldictcache> dictcache;
     static Nan::Persistent<v8::FunctionTemplate> constructor;
     static void Initialize(v8::Handle<v8::Object> target);
     static NAN_METHOD(New);
     static NAN_METHOD(has);
-    static NAN_METHOD(hasDict);
     static NAN_METHOD(loadSync);
-    static NAN_METHOD(loadAsDict);
     static NAN_METHOD(pack);
     static NAN_METHOD(list);
     static NAN_METHOD(_get);
     static NAN_METHOD(_set);
-    static NAN_METHOD(_dict);
     static NAN_METHOD(unload);
     static NAN_METHOD(coalesce);
     explicit Cache();
     memcache cache_;
-    dictcache dict_;
     message_cache msg_;
     message_list msglist_;
     unsigned cachesize = 131072;

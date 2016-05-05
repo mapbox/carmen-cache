@@ -10,9 +10,6 @@
 
 namespace carmen {
 
-/* use only the 32 least significant bits (should it be most significant? does it matter?) */
-#define trunc_hash(id) static_cast<uint32_t>(id & 0xffffffff)
-
 using namespace v8;
 
 Nan::Persistent<FunctionTemplate> Cache::constructor;
@@ -137,32 +134,17 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string const
     }
 }
 
-bool __dict(Cache const* c, std::string const& type, std::string const& shard, uint64_t id) {
-    std::string key = type + "-" + shard;
-    Cache::dictcache const& dict = c->dict_;
-    Cache::dictcache::const_iterator itr = dict.find(key);
-    if (itr == dict.end()) {
-        return false;
-    } else {
-        Cache::ldictcache::const_iterator ditr = itr->second.find(trunc_hash(id));
-        return ditr != itr->second.end();
-    }
-}
-
 void Cache::Initialize(Handle<Object> target) {
     Nan::HandleScope scope;
     Local<FunctionTemplate> t = Nan::New<FunctionTemplate>(Cache::New);
     t->InstanceTemplate()->SetInternalFieldCount(1);
     t->SetClassName(Nan::New("Cache").ToLocalChecked());
     Nan::SetPrototypeMethod(t, "has", has);
-    Nan::SetPrototypeMethod(t, "hasDict", hasDict);
     Nan::SetPrototypeMethod(t, "loadSync", loadSync);
-    Nan::SetPrototypeMethod(t, "loadAsDict", loadAsDict);
     Nan::SetPrototypeMethod(t, "pack", pack);
     Nan::SetPrototypeMethod(t, "list", list);
     Nan::SetPrototypeMethod(t, "_set", _set);
     Nan::SetPrototypeMethod(t, "_get", _get);
-    Nan::SetPrototypeMethod(t, "_dict", _dict);
     Nan::SetPrototypeMethod(t, "unload", unload);
     Nan::SetMethod(t, "coalesce", coalesce);
     target->Set(Nan::New("Cache").ToLocalChecked(), t->GetFunction());
@@ -373,17 +355,6 @@ NAN_METHOD(Cache::_set)
     return;
 }
 
-void load_into_dict(Cache::ldictcache & ldict, const char * data, size_t size) {
-    protozero::pbf_reader message(data,size);
-    while (message.next(CACHE_MESSAGE)) {
-        protozero::pbf_reader item = message.get_message();
-        if (item.next(CACHE_ITEM)) {
-            uint64_t key_id = item.get_uint64();
-            ldict.insert(trunc_hash(key_id));
-        }
-    }
-}
-
 NAN_METHOD(Cache::loadSync)
 {
     if (info.Length() < 2) {
@@ -429,45 +400,6 @@ NAN_METHOD(Cache::loadSync)
     return;
 }
 
-NAN_METHOD(Cache::loadAsDict)
-{
-    if (info.Length() < 2) {
-        return Nan::ThrowTypeError("expected at three info: 'buffer', 'type', and 'shard'");
-    }
-    if (!info[0]->IsObject()) {
-        return Nan::ThrowTypeError("first argument must be a Buffer");
-    }
-    Local<Object> obj = info[0]->ToObject();
-    if (obj->IsNull() || obj->IsUndefined()) {
-        return Nan::ThrowTypeError("a buffer expected for first argument");
-    }
-    if (!node::Buffer::HasInstance(obj)) {
-        return Nan::ThrowTypeError("first argument must be a Buffer");
-    }
-    if (!info[1]->IsString()) {
-        return Nan::ThrowTypeError("second arg 'type' must be a String");
-    }
-    if (!info[2]->IsNumber()) {
-        return Nan::ThrowTypeError("third arg 'shard' must be an Integer");
-    }
-    try {
-        std::string type = *String::Utf8Value(info[1]->ToString());
-        std::string shard = *String::Utf8Value(info[2]->ToString());
-        std::string key = type + "-" + shard;
-        Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
-        Cache::dictcache & dict = c->dict_;
-        Cache::dictcache::iterator ditr = dict.find(key);
-        if (ditr == dict.end()) {
-            c->dict_.emplace(key,Cache::ldictcache());
-        }
-        load_into_dict(c->dict_[key],node::Buffer::Data(obj),node::Buffer::Length(obj));
-    } catch (std::exception const& ex) {
-        return Nan::ThrowTypeError(ex.what());
-    }
-    info.GetReturnValue().Set(Nan::Undefined());
-    return;
-}
-
 NAN_METHOD(Cache::has)
 {
     if (info.Length() < 2) {
@@ -497,36 +429,6 @@ NAN_METHOD(Cache::has)
                 info.GetReturnValue().Set(Nan::False());
                 return;
             }
-        }
-    } catch (std::exception const& ex) {
-        return Nan::ThrowTypeError(ex.what());
-    }
-}
-
-NAN_METHOD(Cache::hasDict)
-{
-    if (info.Length() < 2) {
-        return Nan::ThrowTypeError("expected two info: 'type' and 'shard'");
-    }
-    if (!info[0]->IsString()) {
-        return Nan::ThrowTypeError("first arg must be a String");
-    }
-    if (!info[1]->IsNumber()) {
-        return Nan::ThrowTypeError("second arg must be an Integer");
-    }
-    try {
-        std::string type = *String::Utf8Value(info[0]->ToString());
-        std::string shard = *String::Utf8Value(info[1]->ToString());
-        std::string key = type + "-" + shard;
-        Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
-        Cache::dictcache const& dict = c->dict_;
-        Cache::dictcache::const_iterator itr = dict.find(key);
-        if (itr != dict.end()) {
-            info.GetReturnValue().Set(Nan::True());
-            return;
-        } else {
-            info.GetReturnValue().Set(Nan::False());
-            return;
         }
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
@@ -564,33 +466,6 @@ NAN_METHOD(Cache::_get)
             info.GetReturnValue().Set(Nan::Undefined());
             return;
         }
-    } catch (std::exception const& ex) {
-        return Nan::ThrowTypeError(ex.what());
-    }
-}
-
-NAN_METHOD(Cache::_dict)
-{
-    if (info.Length() < 3) {
-        return Nan::ThrowTypeError("expected three info: type, shard, and id");
-    }
-    if (!info[0]->IsString()) {
-        return Nan::ThrowTypeError("first arg must be a String");
-    }
-    if (!info[1]->IsNumber()) {
-        return Nan::ThrowTypeError("second arg must be an Integer");
-    }
-    if (!info[2]->IsNumber()) {
-        return Nan::ThrowTypeError("third arg must be an Integer");
-    }
-    try {
-        std::string type = *String::Utf8Value(info[0]->ToString());
-        std::string shard = *String::Utf8Value(info[1]->ToString());
-        uint64_t id = static_cast<uint64_t>(info[2]->IntegerValue());
-        Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
-        bool exists = __dict(c, type, shard, id);
-        info.GetReturnValue().Set(Nan::New<Boolean>(exists));
-        return;
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
     }

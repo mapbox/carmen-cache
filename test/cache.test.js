@@ -72,12 +72,6 @@ tape('#pack', function(assert) {
     assert.throws(function() { loader.loadSync({}) });
     assert.throws(function() { loader.loadSync(new Buffer('a'),1,'foo') });
     assert.throws(function() { loader.loadSync(new Buffer('a'),'term','foo') });
-    assert.throws(function() { loader.loadAsDict() });
-    assert.throws(function() { loader.loadAsDict(1) });
-    assert.throws(function() { loader.loadAsDict(null) });
-    assert.throws(function() { loader.loadAsDict({}) });
-    assert.throws(function() { loader.loadAsDict(new Buffer('a'),1,'foo') });
-    assert.throws(function() { loader.loadAsDict(new Buffer('a'),'term','foo') });
 
     // grab data right back out
     loader.loadSync(packer.pack('term',0), 'term', 0);
@@ -122,36 +116,6 @@ tape('#load', function(assert) {
     assert.deepEqual(loader._get('term', 0, 21), [6,5]);
     assert.deepEqual(loader.list('term'), [0], 'single shard');
     assert.deepEqual(loader.list('term', 0), ['5', '21'], 'keys in shard');
-    assert.end();
-});
-
-tape('#dict', function(assert) {
-    var cache = new Cache('a');
-    cache._set('term', 0, 5, []);
-    cache._set('term', 0, 21, []);
-    cache._set('term', 0, 899688358, []);
-    cache._set('term', 0, mp53-1, []);
-    cache._set('term', 1, 4, []);
-    cache._set('term', 1, 91231, []);
-    cache._set('term', 1, 8, []);
-
-    var loader = new Cache('b');
-
-    assert.deepEqual(loader.hasDict('term', 0), false);
-    loader.loadAsDict(cache.pack('term', 0), 'term', 0);
-    assert.deepEqual(loader.hasDict('term', 0), true);
-    assert.deepEqual(loader._dict('term', 0, 5), true);
-    assert.deepEqual(loader._dict('term', 0, 21), true);
-    assert.deepEqual(loader._dict('term', 0, 22), false);
-    assert.deepEqual(loader._dict('term', 0, 899688358), true);
-    assert.deepEqual(loader._dict('term', 0, mp53-1), true);
-
-    assert.deepEqual(loader.hasDict('term', 1), false);
-    assert.deepEqual(loader._dict('term', 1, 4), false);
-    loader.loadAsDict(cache.pack('term', 1), 'term', 1);
-    assert.deepEqual(loader.hasDict('term', 1), true);
-    assert.deepEqual(loader._dict('term', 1, 4), true);
-
     assert.end();
 });
 
