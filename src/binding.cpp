@@ -142,6 +142,7 @@ void Cache::Initialize(Handle<Object> target) {
     Nan::SetPrototypeMethod(t, "has", has);
     Nan::SetPrototypeMethod(t, "loadSync", loadSync);
     Nan::SetPrototypeMethod(t, "pack", pack);
+    Nan::SetPrototypeMethod(t, "merge", merge);
     Nan::SetPrototypeMethod(t, "list", list);
     Nan::SetPrototypeMethod(t, "_set", _set);
     Nan::SetPrototypeMethod(t, "_get", _get);
@@ -222,6 +223,53 @@ NAN_METHOD(Cache::pack)
                 info.GetReturnValue().Set(buf);
                 return;
             }
+        }
+    } catch (std::exception const& ex) {
+        return Nan::ThrowTypeError(ex.what());
+    }
+    info.GetReturnValue().Set(Nan::Undefined());
+    return;
+}
+
+NAN_METHOD(Cache::merge)
+{
+    if (!info[0]->IsObject()) return Nan::ThrowTypeError("argument 1 must be a Buffer");
+    if (!info[1]->IsObject()) return Nan::ThrowTypeError("argument 2 must be a Buffer");
+
+    Local<Object> obj1 = info[0]->ToObject();
+    Local<Object> obj2 = info[1]->ToObject();
+
+    if (obj1->IsNull() || obj1->IsUndefined() || !node::Buffer::HasInstance(obj1)) return Nan::ThrowTypeError("argument 1 must be a Buffer");
+    if (obj2->IsNull() || obj2->IsUndefined() || !node::Buffer::HasInstance(obj2)) return Nan::ThrowTypeError("argument 1 must be a Buffer");
+
+    std::string pbf1 = std::string(node::Buffer::Data(obj1),node::Buffer::Length(obj1));
+    std::string pbf2 = std::string(node::Buffer::Data(obj2),node::Buffer::Length(obj2));
+
+    try {
+        std::string merged;
+        protozero::pbf_writer writer(merged);
+
+        protozero::pbf_reader message(pbf1);
+        while (message.next(CACHE_MESSAGE)) {
+            protozero::pbf_writer item_writer(writer,1);
+            protozero::pbf_reader item = message.get_message();
+            while (item.next(CACHE_ITEM)) {
+                uint64_t key_id = item.get_uint64();
+                item_writer.add_uint64(1,key_id);
+
+                item.next();
+                protozero::packed_field_uint64 field{item_writer, 2};
+                auto vals = item.get_packed_uint64();
+                for (auto it = vals.first; it != vals.second; ++it) {
+                    field.add_element(static_cast<uint64_t>(*it));
+                }
+            }
+        }
+        if (merged.empty()) {
+            return Nan::ThrowTypeError("pack: invalid message ByteSize encountered");
+        } else {
+            info.GetReturnValue().Set(Nan::CopyBuffer(merged.data(), merged.size()).ToLocalChecked());
+            return;
         }
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
