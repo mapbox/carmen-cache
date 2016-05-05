@@ -16,12 +16,14 @@ tape('#merge', function(assert) {
     var pbfB = cacheB.pack('term', 0);
 
     var cacheC = new Cache('c');
-    cacheC.loadSync(cacheA.merge(pbfA, pbfB), 'term', 0);
-    assert.deepEqual(cacheC._get('term', 0, 2).sort(numSort), [0,1,2,3], 'a-only');
-    assert.deepEqual(cacheC._get('term', 0, 3).sort(numSort), [10,11,12,13], 'b-only');
-    assert.deepEqual(cacheC._get('term', 0, 1).sort(numSort), [0,1,2,3,10,11,12,13], 'a-b-merged');
-
-    assert.end();
+    cacheA.merge(pbfA, pbfB, function(err, merged) {
+        assert.ifError(err);
+        cacheC.loadSync(merged, 'term', 0);
+        assert.deepEqual(cacheC._get('term', 0, 2).sort(numSort), [0,1,2,3], 'a-only');
+        assert.deepEqual(cacheC._get('term', 0, 3).sort(numSort), [10,11,12,13], 'b-only');
+        assert.deepEqual(cacheC._get('term', 0, 1).sort(numSort), [0,1,2,3,10,11,12,13], 'a-b-merged');
+        assert.end();
+    })
 });
 
 function numSort(a, b) { return a - b; }
