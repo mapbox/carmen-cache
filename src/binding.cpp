@@ -247,21 +247,84 @@ NAN_METHOD(Cache::merge)
 
     try {
         // Ids that have been seen
-        std::map<uint64_t,bool> seen;
+        std::map<uint64_t,bool> ids1;
+        std::map<uint64_t,bool> ids2;
 
         std::string merged;
         protozero::pbf_writer writer(merged);
 
+        // Store ids from 1
+        protozero::pbf_reader pre1(pbf1);
+        while (pre1.next(CACHE_MESSAGE)) {
+            protozero::pbf_reader item = pre1.get_message();
+            while (item.next(CACHE_ITEM)) {
+                ids1.emplace(item.get_uint64(), true);
+            }
+        }
+
+        // Store ids from 2
+        protozero::pbf_reader pre2(pbf2);
+        while (pre2.next(CACHE_MESSAGE)) {
+            protozero::pbf_reader item = pre2.get_message();
+            while (item.next(CACHE_ITEM)) {
+                ids2.emplace(item.get_uint64(), true);
+            }
+        }
+
+        // No delta writes from message1
         protozero::pbf_reader message1(pbf1);
         while (message1.next(CACHE_MESSAGE)) {
             protozero::pbf_writer item_writer(writer,1);
             protozero::pbf_reader item = message1.get_message();
             while (item.next(CACHE_ITEM)) {
                 uint64_t key_id = item.get_uint64();
-                item_writer.add_uint64(1,key_id);
 
-                // Mark this ID as seen
-                seen.emplace(key_id, true);
+                // Skip this id if also in message 2
+                if (ids2.find(key_id) != ids2.end()) break;
+
+                item_writer.add_uint64(1,key_id);
+                item.next();
+                protozero::packed_field_uint64 field{item_writer, 2};
+                auto vals = item.get_packed_uint64();
+                for (auto it = vals.first; it != vals.second; ++it) {
+                    field.add_element(static_cast<uint64_t>(*it));
+                }
+            }
+        }
+
+        // No delta writes from message2
+        protozero::pbf_reader message2(pbf2);
+        while (message2.next(CACHE_MESSAGE)) {
+            protozero::pbf_writer item_writer(writer,1);
+            protozero::pbf_reader item = message2.get_message();
+            while (item.next(CACHE_ITEM)) {
+                uint64_t key_id = item.get_uint64();
+
+                // Skip this id if also in message 2
+                if (ids1.find(key_id) != ids1.end()) break;
+
+                item_writer.add_uint64(1,key_id);
+                item.next();
+                protozero::packed_field_uint64 field{item_writer, 2};
+                auto vals = item.get_packed_uint64();
+                for (auto it = vals.first; it != vals.second; ++it) {
+                    field.add_element(static_cast<uint64_t>(*it));
+                }
+            }
+        }
+
+        // Delta writes for ids in both message1 and message2
+        protozero::pbf_reader overlap1(pbf1);
+        while (overlap1.next(CACHE_MESSAGE)) {
+            protozero::pbf_writer item_writer(writer,1);
+            protozero::pbf_reader item = overlap1.get_message();
+            while (item.next(CACHE_ITEM)) {
+                uint64_t key_id = item.get_uint64();
+
+                // Skip ids that are only in one or the other lists
+                if (ids1.find(key_id) == ids1.end() || ids2.find(key_id) == ids2.end()) break;
+
+                item_writer.add_uint64(1,key_id);
 
                 item.next();
                 uint64_t lastval = 0;
@@ -280,9 +343,9 @@ NAN_METHOD(Cache::merge)
                 }
 
                 // Check pbf2 for this id and merge its items if found
-                protozero::pbf_reader overlap(pbf2);
-                while (overlap.next(CACHE_MESSAGE)) {
-                    protozero::pbf_reader item2 = overlap.get_message();
+                protozero::pbf_reader overlap2(pbf2);
+                while (overlap2.next(CACHE_MESSAGE)) {
+                    protozero::pbf_reader item2 = overlap2.get_message();
                     while (item2.next(CACHE_ITEM)) {
                         uint64_t key_id2 = item2.get_uint64();
                         if (key_id2 != key_id) break;
@@ -318,25 +381,6 @@ NAN_METHOD(Cache::merge)
             }
         }
 
-        protozero::pbf_reader message2(pbf2);
-        while (message2.next(CACHE_MESSAGE)) {
-            protozero::pbf_writer item_writer(writer,1);
-            protozero::pbf_reader item = message2.get_message();
-            while (item.next(CACHE_ITEM)) {
-                uint64_t key_id = item.get_uint64();
-
-                // Skip this ID if seen when processing message1
-                if (seen.find(key_id) != seen.end()) break;
-
-                item_writer.add_uint64(1,key_id);
-                item.next();
-                protozero::packed_field_uint64 field{item_writer, 2};
-                auto vals = item.get_packed_uint64();
-                for (auto it = vals.first; it != vals.second; ++it) {
-                    field.add_element(static_cast<uint64_t>(*it));
-                }
-            }
-        }
         if (merged.empty()) {
             return Nan::ThrowTypeError("pack: invalid message ByteSize encountered");
         } else {
