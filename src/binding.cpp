@@ -317,47 +317,99 @@ NAN_METHOD(Cache::merge)
                 item1.next();
                 item2.next();
 
-                uint64_t lastval = 0;
+                uint64_t lastval_out = 0;
 
                 // Add values from pbf1
                 Cache::intarray varr;
 
                 auto vals1 = item1.get_packed_uint64();
-                for (auto it = vals1.first; it != vals1.second; ++it) {
-                    if (lastval == 0) {
-                        lastval = *it;
-                        varr.emplace_back(lastval);
-                    } else {
-                        lastval = lastval - *it;
-                        varr.emplace_back(lastval);
-                    }
-                }
-
-                lastval = 0;
                 auto vals2 = item2.get_packed_uint64();
-                for (auto it = vals2.first; it != vals2.second; ++it) {
-                    if (lastval == 0) {
-                        lastval = *it;
-                        varr.emplace_back(lastval);
-                    } else {
-                        lastval = lastval - *it;
-                        varr.emplace_back(lastval);
-                    }
-                }
 
-                // Sort for proper delta encoding
-                std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
+                auto it1 = vals1.first;
+                auto it2 = vals2.first;
 
-                // Write varr to merged protobuf
+                uint64_t lastval1 = it1 == vals1.second ? 0 : *it1;
+                uint64_t lastval2 = it2 == vals2.second ? 0 : *it2;
+
                 protozero::packed_field_uint64 field{item_writer, 2};
-                lastval = 0;
-                for (auto const& vitem : varr) {
-                    if (lastval == 0) {
-                        field.add_element(static_cast<uint64_t>(vitem));
+
+                // do a streaming merge from the two delta-encoded fields into another delta-encoded field
+                while (1) {
+                    if (it1 == vals1.second) {
+                        // it1 is consumed; finish consuming it2
+                        while (1) {
+                            if (lastval_out == 0) {
+                                field.add_element(static_cast<uint64_t>(lastval2));
+                            } else {
+                                field.add_element(static_cast<uint64_t>(lastval_out - lastval2));
+                            }
+                            lastval_out = lastval2;
+
+                            it2++;
+                            if (it2 == vals2.second) {
+                                break;
+                            } else {
+                                lastval2 = lastval2 - *it2;
+                            }
+                        }
+                        break;
+                    } else if (it2 == vals2.second) {
+                        // it2 is consumed; finish consuming it1
+                        while (1) {
+                            if (lastval_out == 0) {
+                                field.add_element(static_cast<uint64_t>(lastval1));
+                            } else {
+                                field.add_element(static_cast<uint64_t>(lastval_out - lastval1));
+                            }
+                            lastval_out = lastval1;
+
+                            it1++;
+                            if (it1 == vals1.second) {
+                                break;
+                            } else {
+                                lastval1 = lastval1 - *it1;
+                            }
+                        }
+                        break;
                     } else {
-                        field.add_element(static_cast<uint64_t>(lastval - vitem));
+                        if (lastval1 == lastval2) {
+                            // use lastval1 and consume both
+                            if (lastval_out == 0) {
+                                field.add_element(static_cast<uint64_t>(lastval1));
+                            } else {
+                                field.add_element(static_cast<uint64_t>(lastval_out - lastval1));
+                            }
+                            lastval_out = lastval1;
+
+                            it1++;
+                            if (it1 != vals1.second) lastval1 = lastval1 - *it1;
+
+                            it2++;
+                            if (it2 != vals2.second) lastval2 = lastval2 - *it2;
+                        } else if (lastval1 > lastval2) {
+                            // use lastval1
+                            if (lastval_out == 0) {
+                                field.add_element(static_cast<uint64_t>(lastval1));
+                            } else {
+                                field.add_element(static_cast<uint64_t>(lastval_out - lastval1));
+                            }
+                            lastval_out = lastval1;
+
+                            it1++;
+                            if (it1 != vals1.second) lastval1 = lastval1 - *it1;
+                        } else {
+                            // use lastval2
+                            if (lastval_out == 0) {
+                                field.add_element(static_cast<uint64_t>(lastval2));
+                            } else {
+                                field.add_element(static_cast<uint64_t>(lastval_out - lastval2));
+                            }
+                            lastval_out = lastval2;
+
+                            it2++;
+                            if (it2 != vals2.second) lastval2 = lastval2 - *it2;
+                        }
                     }
-                    lastval = vitem;
                 }
             }
         }
