@@ -635,6 +635,47 @@ ZXY pxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z) {
     return zxy;
 }
 
+ZXY bxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z, bool max=false) {
+    ZXY zxy;
+    zxy.z = target_z;
+
+    // Interval between parent and target zoom level
+    signed zDist = target_z - z;
+    if (zDist == 0) {
+        zxy.x = x;
+        zxy.y = y;
+        return zxy;
+    }
+
+    // zoom conversion multiplier
+    float mult = pow(2,zDist);
+
+    // zoom in min
+    if (zDist > 0 && !max) {
+        zxy.x = x * mult;
+        zxy.y = y * mult;
+        return zxy;
+    }
+    // zoom in max
+    else if (zDist > 0 && max) {
+        zxy.x = x * mult + (mult - 1);
+        zxy.y = y * mult + (mult - 1);
+        return zxy;
+    }
+    // zoom out
+    else {
+        unsigned mod = pow(2,target_z);
+        unsigned xDiff = x % mod;
+        unsigned yDiff = y % mod;
+        unsigned newX = x - xDiff;
+        unsigned newY = y - yDiff;
+
+        zxy.x = newX * mult;
+        zxy.y = newY * mult;
+        return zxy;
+    }
+}
+
 inline bool coverSortByRelev(Cover const& a, Cover const& b) noexcept {
     if (b.relev > a.relev) return false;
     else if (b.relev < a.relev) return true;
@@ -664,6 +705,7 @@ struct CoalesceBaton : carmen::noncopyable {
     // params
     std::vector<PhrasematchSubq> stack;
     std::vector<unsigned> centerzxy;
+    std::vector<unsigned> bboxzxy;
     Nan::Persistent<v8::Function> callback;
     // return
     std::vector<Context> features;
@@ -734,6 +776,27 @@ void coalesceSingle(uv_work_t* req) {
         cy = 0;
     }
 
+    // bbox (optional)
+    bool bbox = !baton->bboxzxy.empty();
+    unsigned bboxz;
+    unsigned minx;
+    unsigned miny;
+    unsigned maxx;
+    unsigned maxy;
+    if (bbox) {
+        bboxz = baton->bboxzxy[0];
+        minx = baton->bboxzxy[1];
+        miny = baton->bboxzxy[2];
+        maxx = baton->bboxzxy[3];
+        maxy = baton->bboxzxy[4];
+    } else {
+        bboxz = 0;
+        minx = 0;
+        miny = 0;
+        maxx = 0;
+        maxy = 0;
+    }
+
     // sort grids by distance to proximity point
     Cache::intarray grids = __get(subq.cache, type, shardId, subq.phrase);
 
@@ -753,6 +816,10 @@ void coalesceSingle(uv_work_t* req) {
         // short circuit based on relevMax thres
         if (relevMax - cover.relev >= 0.25) continue;
         if (cover.relev > relevMax) relevMax = cover.relev;
+
+        if (bbox) {
+            if (cover.x < minx || cover.y < miny || cover.x > maxx || cover.y > maxy) continue;
+        }
 
         covers.emplace_back(cover);
     }
@@ -838,6 +905,27 @@ void coalesceMulti(uv_work_t* req) {
         cy = 0;
     }
 
+    // bbox (optional)
+    bool bbox = !baton->bboxzxy.empty();
+    unsigned bboxz;
+    unsigned minx;
+    unsigned miny;
+    unsigned maxx;
+    unsigned maxy;
+    if (bbox) {
+        bboxz = baton->bboxzxy[0];
+        minx = baton->bboxzxy[1];
+        miny = baton->bboxzxy[2];
+        maxx = baton->bboxzxy[3];
+        maxy = baton->bboxzxy[4];
+    } else {
+        bboxz = 0;
+        minx = 0;
+        miny = 0;
+        maxx = 0;
+        maxy = 0;
+    }
+
     for (unsigned short i = 0; i < size; i++) {
         PhrasematchSubq const& subq = stack[i];
 
@@ -864,6 +952,12 @@ void coalesceMulti(uv_work_t* req) {
             } else {
                 cover.distance = 0;
                 cover.scoredist = cover.score;
+            }
+
+            if (bbox) {
+                ZXY min = bxy2zxy(bboxz, minx, miny, z, false);
+                ZXY max = bxy2zxy(bboxz, maxx, maxy, z, true);
+                if (cover.x < min.x || cover.y < min.y || cover.x > max.x || cover.y > max.y) continue;
             }
 
             uint64_t zxy = (z * POW2_28) + (cover.x * POW2_14) + (cover.y);
@@ -1045,6 +1139,10 @@ NAN_METHOD(Cache::coalesce) {
         const Local<Object> options = Local<Object>::Cast(info[1]);
         if (options->Has(Nan::New("centerzxy").ToLocalChecked())) {
             baton->centerzxy = arrayToVector(Local<Array>::Cast(options->Get(Nan::New("centerzxy").ToLocalChecked())));
+        }
+
+        if (options->Has(Nan::New("bboxzxy").ToLocalChecked())) {
+            baton->bboxzxy = arrayToVector(Local<Array>::Cast(options->Get(Nan::New("bboxzxy").ToLocalChecked())));
         }
 
         // callback
