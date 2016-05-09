@@ -10,9 +10,6 @@
 
 namespace carmen {
 
-/* use only the 32 least significant bits (should it be most significant? does it matter?) */
-#define trunc_hash(id) static_cast<uint32_t>(id & 0xffffffff)
-
 using namespace v8;
 
 Nan::Persistent<FunctionTemplate> Cache::constructor;
@@ -105,10 +102,9 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string const
 
         std::string ref = cacheGet(c, key);
         protozero::pbf_reader message(ref);
-        while (message.next(1)) {
+        while (message.next(CACHE_MESSAGE)) {
             protozero::pbf_reader item = message.get_message();
-            while (item.next()) {
-                if (item.tag() != 1) break;
+            while (item.next(CACHE_ITEM)) {
                 uint64_t key_id = item.get_uint64();
                 if (key_id != id) break;
                 item.next();
@@ -138,32 +134,17 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string const
     }
 }
 
-bool __dict(Cache const* c, std::string const& type, std::string const& shard, uint64_t id) {
-    std::string key = type + "-" + shard;
-    Cache::dictcache const& dict = c->dict_;
-    Cache::dictcache::const_iterator itr = dict.find(key);
-    if (itr == dict.end()) {
-        return false;
-    } else {
-        Cache::ldictcache::const_iterator ditr = itr->second.find(trunc_hash(id));
-        return ditr != itr->second.end();
-    }
-}
-
 void Cache::Initialize(Handle<Object> target) {
     Nan::HandleScope scope;
     Local<FunctionTemplate> t = Nan::New<FunctionTemplate>(Cache::New);
     t->InstanceTemplate()->SetInternalFieldCount(1);
     t->SetClassName(Nan::New("Cache").ToLocalChecked());
     Nan::SetPrototypeMethod(t, "has", has);
-    Nan::SetPrototypeMethod(t, "hasDict", hasDict);
     Nan::SetPrototypeMethod(t, "loadSync", loadSync);
-    Nan::SetPrototypeMethod(t, "loadAsDict", loadAsDict);
     Nan::SetPrototypeMethod(t, "pack", pack);
     Nan::SetPrototypeMethod(t, "list", list);
     Nan::SetPrototypeMethod(t, "_set", _set);
     Nan::SetPrototypeMethod(t, "_get", _get);
-    Nan::SetPrototypeMethod(t, "_dict", _dict);
     Nan::SetPrototypeMethod(t, "unload", unload);
     Nan::SetMethod(t, "coalesce", coalesce);
     target->Set(Nan::New("Cache").ToLocalChecked(), t->GetFunction());
@@ -195,27 +176,36 @@ NAN_METHOD(Cache::pack)
         Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
         Cache::memcache const& mem = c->cache_;
         Cache::memcache::const_iterator itr = mem.find(key);
-        std::string message;
-        protozero::pbf_writer writer(message);
         if (itr != mem.end()) {
+            std::string message;
+            // Optimization idea: pre-pass on arrays to assemble guess about
+            // how long the final message will be in order to be able to call
+            // message.reserve(<length>)
+            protozero::pbf_writer writer(message);
             for (auto const& item : itr->second) {
                 protozero::pbf_writer item_writer(writer,1);
                 item_writer.add_uint64(1,item.first);
-                Cache::intarray varr = item.second;
-                // delta-encode values, sorted in descending order.
-                std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
-                Cache::intarray varr_delta;
-                varr_delta.reserve(varr.size());
-                uint64_t lastval = 0;
-                for (auto const& vitem : varr) {
-                    if (lastval == 0) {
-                        varr_delta.emplace_back(static_cast<int64_t>(vitem));
-                    } else {
-                        varr_delta.emplace_back(static_cast<int64_t>(lastval - vitem));
+                std::size_t array_size = item.second.size();
+                if (array_size > 0) {
+                    // make copy of intarray so we can sort without
+                    // modifying the original array
+                    Cache::intarray varr = item.second;
+                    // delta-encode values, sorted in descending order.
+                    std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
+
+                    // Using new (in protozero 1.3.0) packed writing API
+                    // https://github.com/mapbox/protozero/commit/4e7e32ac5350ea6d3dcf78ff5e74faeee513a6e1
+                    protozero::packed_field_uint64 field{item_writer, 2};
+                    uint64_t lastval = 0;
+                    for (auto const& vitem : varr) {
+                        if (lastval == 0) {
+                            field.add_element(static_cast<uint64_t>(vitem));
+                        } else {
+                            field.add_element(static_cast<uint64_t>(lastval - vitem));
+                        }
+                        lastval = vitem;
                     }
-                    lastval = vitem;
                 }
-                item_writer.add_packed_uint64(2,std::begin(varr_delta), std::end(varr_delta));
             }
             if (message.empty()) {
                 return Nan::ThrowTypeError("pack: invalid message ByteSize encountered");
@@ -289,9 +279,9 @@ NAN_METHOD(Cache::list)
                 std::string ref = cacheGet(c, key);
 
                 protozero::pbf_reader message(ref);
-                while (message.next(1)) {
+                while (message.next(CACHE_MESSAGE)) {
                     protozero::pbf_reader item = message.get_message();
-                    while (item.next(1)) {
+                    while (item.next(CACHE_ITEM)) {
                         uint64_t key_id = item.get_uint64();
                         ids->Set(idx++, Nan::New<Number>(key_id)->ToString());
                     }
@@ -365,18 +355,6 @@ NAN_METHOD(Cache::_set)
     return;
 }
 
-void load_into_dict(Cache::ldictcache & ldict, const char * data, size_t size) {
-    protozero::pbf_reader message(data,size);
-    while (message.next(1)) {
-        protozero::pbf_reader item = message.get_message();
-        while (item.next(1)) {
-            uint64_t key_id = item.get_uint64();
-            ldict.insert(trunc_hash(key_id));
-            break;
-        }
-    }
-}
-
 NAN_METHOD(Cache::loadSync)
 {
     if (info.Length() < 2) {
@@ -422,45 +400,6 @@ NAN_METHOD(Cache::loadSync)
     return;
 }
 
-NAN_METHOD(Cache::loadAsDict)
-{
-    if (info.Length() < 2) {
-        return Nan::ThrowTypeError("expected at three info: 'buffer', 'type', and 'shard'");
-    }
-    if (!info[0]->IsObject()) {
-        return Nan::ThrowTypeError("first argument must be a Buffer");
-    }
-    Local<Object> obj = info[0]->ToObject();
-    if (obj->IsNull() || obj->IsUndefined()) {
-        return Nan::ThrowTypeError("a buffer expected for first argument");
-    }
-    if (!node::Buffer::HasInstance(obj)) {
-        return Nan::ThrowTypeError("first argument must be a Buffer");
-    }
-    if (!info[1]->IsString()) {
-        return Nan::ThrowTypeError("second arg 'type' must be a String");
-    }
-    if (!info[2]->IsNumber()) {
-        return Nan::ThrowTypeError("third arg 'shard' must be an Integer");
-    }
-    try {
-        std::string type = *String::Utf8Value(info[1]->ToString());
-        std::string shard = *String::Utf8Value(info[2]->ToString());
-        std::string key = type + "-" + shard;
-        Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
-        Cache::dictcache & dict = c->dict_;
-        Cache::dictcache::iterator ditr = dict.find(key);
-        if (ditr == dict.end()) {
-            c->dict_.emplace(key,Cache::ldictcache());
-        }
-        load_into_dict(c->dict_[key],node::Buffer::Data(obj),node::Buffer::Length(obj));
-    } catch (std::exception const& ex) {
-        return Nan::ThrowTypeError(ex.what());
-    }
-    info.GetReturnValue().Set(Nan::Undefined());
-    return;
-}
-
 NAN_METHOD(Cache::has)
 {
     if (info.Length() < 2) {
@@ -490,36 +429,6 @@ NAN_METHOD(Cache::has)
                 info.GetReturnValue().Set(Nan::False());
                 return;
             }
-        }
-    } catch (std::exception const& ex) {
-        return Nan::ThrowTypeError(ex.what());
-    }
-}
-
-NAN_METHOD(Cache::hasDict)
-{
-    if (info.Length() < 2) {
-        return Nan::ThrowTypeError("expected two info: 'type' and 'shard'");
-    }
-    if (!info[0]->IsString()) {
-        return Nan::ThrowTypeError("first arg must be a String");
-    }
-    if (!info[1]->IsNumber()) {
-        return Nan::ThrowTypeError("second arg must be an Integer");
-    }
-    try {
-        std::string type = *String::Utf8Value(info[0]->ToString());
-        std::string shard = *String::Utf8Value(info[1]->ToString());
-        std::string key = type + "-" + shard;
-        Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
-        Cache::dictcache const& dict = c->dict_;
-        Cache::dictcache::const_iterator itr = dict.find(key);
-        if (itr != dict.end()) {
-            info.GetReturnValue().Set(Nan::True());
-            return;
-        } else {
-            info.GetReturnValue().Set(Nan::False());
-            return;
         }
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
@@ -557,33 +466,6 @@ NAN_METHOD(Cache::_get)
             info.GetReturnValue().Set(Nan::Undefined());
             return;
         }
-    } catch (std::exception const& ex) {
-        return Nan::ThrowTypeError(ex.what());
-    }
-}
-
-NAN_METHOD(Cache::_dict)
-{
-    if (info.Length() < 3) {
-        return Nan::ThrowTypeError("expected three info: type, shard, and id");
-    }
-    if (!info[0]->IsString()) {
-        return Nan::ThrowTypeError("first arg must be a String");
-    }
-    if (!info[1]->IsNumber()) {
-        return Nan::ThrowTypeError("second arg must be an Integer");
-    }
-    if (!info[2]->IsNumber()) {
-        return Nan::ThrowTypeError("third arg must be an Integer");
-    }
-    try {
-        std::string type = *String::Utf8Value(info[0]->ToString());
-        std::string shard = *String::Utf8Value(info[1]->ToString());
-        uint64_t id = static_cast<uint64_t>(info[2]->IntegerValue());
-        Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
-        bool exists = __dict(c, type, shard, id);
-        info.GetReturnValue().Set(Nan::New<Boolean>(exists));
-        return;
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
     }
