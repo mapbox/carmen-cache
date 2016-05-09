@@ -51,6 +51,7 @@ public:
     static NAN_METHOD(has);
     static NAN_METHOD(loadSync);
     static NAN_METHOD(pack);
+    static NAN_METHOD(merge);
     static NAN_METHOD(list);
     static NAN_METHOD(_get);
     static NAN_METHOD(_set);
