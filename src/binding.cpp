@@ -142,6 +142,7 @@ void Cache::Initialize(Handle<Object> target) {
     Nan::SetPrototypeMethod(t, "has", has);
     Nan::SetPrototypeMethod(t, "loadSync", loadSync);
     Nan::SetPrototypeMethod(t, "pack", pack);
+    Nan::SetPrototypeMethod(t, "merge", merge);
     Nan::SetPrototypeMethod(t, "list", list);
     Nan::SetPrototypeMethod(t, "_set", _set);
     Nan::SetPrototypeMethod(t, "_get", _get);
@@ -230,6 +231,180 @@ NAN_METHOD(Cache::pack)
     return;
 }
 
+struct MergeBaton : carmen::noncopyable {
+    uv_work_t request;
+    std::string pbf1;
+    std::string pbf2;
+    std::string pbf3;
+    std::string method;
+    Nan::Persistent<v8::Function> callback;
+};
+
+void mergeQueue(uv_work_t* req) {
+    MergeBaton *baton = static_cast<MergeBaton *>(req->data);
+    std::string const& pbf1 = baton->pbf1;
+    std::string const& pbf2 = baton->pbf2;
+    std::string const& method = baton->method;
+
+    // Ids that have been seen
+    std::map<uint64_t,bool> ids1;
+    std::map<uint64_t,bool> ids2;
+
+    std::string merged;
+    protozero::pbf_writer writer(merged);
+
+    // Store ids from 1
+    protozero::pbf_reader pre1(pbf1);
+    while (pre1.next(CACHE_MESSAGE)) {
+        protozero::pbf_reader item = pre1.get_message();
+        while (item.next(CACHE_ITEM)) {
+            ids1.emplace(item.get_uint64(), true);
+        }
+    }
+
+    // Store ids from 2
+    protozero::pbf_reader pre2(pbf2);
+    while (pre2.next(CACHE_MESSAGE)) {
+        protozero::pbf_reader item = pre2.get_message();
+        while (item.next(CACHE_ITEM)) {
+            ids2.emplace(item.get_uint64(), true);
+        }
+    }
+
+    // No delta writes from message1
+    protozero::pbf_reader message1(pbf1);
+    while (message1.next(CACHE_MESSAGE)) {
+        protozero::pbf_writer item_writer(writer,1);
+        protozero::pbf_reader item = message1.get_message();
+        while (item.next(CACHE_ITEM)) {
+            uint64_t key_id = item.get_uint64();
+
+            // Skip this id if also in message 2
+            if (ids2.find(key_id) != ids2.end()) break;
+
+            item_writer.add_uint64(1,key_id);
+            item.next();
+            protozero::packed_field_uint64 field{item_writer, 2};
+            auto vals = item.get_packed_uint64();
+            for (auto it = vals.first; it != vals.second; ++it) {
+                field.add_element(static_cast<uint64_t>(*it));
+            }
+        }
+    }
+
+    // No delta writes from message2
+    protozero::pbf_reader message2(pbf2);
+    while (message2.next(CACHE_MESSAGE)) {
+        protozero::pbf_writer item_writer(writer,1);
+        protozero::pbf_reader item = message2.get_message();
+        while (item.next(CACHE_ITEM)) {
+            uint64_t key_id = item.get_uint64();
+
+            // Skip this id if also in message 2
+            if (ids1.find(key_id) != ids1.end()) break;
+
+            item_writer.add_uint64(1,key_id);
+            item.next();
+            protozero::packed_field_uint64 field{item_writer, 2};
+            auto vals = item.get_packed_uint64();
+            for (auto it = vals.first; it != vals.second; ++it) {
+                field.add_element(static_cast<uint64_t>(*it));
+            }
+        }
+    }
+
+    // Delta writes for ids in both message1 and message2
+    protozero::pbf_reader overlap1(pbf1);
+    while (overlap1.next(CACHE_MESSAGE)) {
+        protozero::pbf_writer item_writer(writer,1);
+        protozero::pbf_reader item = overlap1.get_message();
+        while (item.next(CACHE_ITEM)) {
+            uint64_t key_id = item.get_uint64();
+
+            // Skip ids that are only in one or the other lists
+            if (ids1.find(key_id) == ids1.end() || ids2.find(key_id) == ids2.end()) break;
+
+            item_writer.add_uint64(1,key_id);
+
+            item.next();
+            uint64_t lastval = 0;
+            Cache::intarray varr;
+
+            // Add values from pbf1
+            auto vals = item.get_packed_uint64();
+            for (auto it = vals.first; it != vals.second; ++it) {
+                if (method == "freq") {
+                    varr.emplace_back(*it);
+                    break;
+                } else if (lastval == 0) {
+                    lastval = *it;
+                    varr.emplace_back(lastval);
+                } else {
+                    lastval = lastval - *it;
+                    varr.emplace_back(lastval);
+                }
+            }
+
+            // Check pbf2 for this id and merge its items if found
+            protozero::pbf_reader overlap2(pbf2);
+            while (overlap2.next(CACHE_MESSAGE)) {
+                protozero::pbf_reader item2 = overlap2.get_message();
+                while (item2.next(CACHE_ITEM)) {
+                    uint64_t key_id2 = item2.get_uint64();
+                    if (key_id2 != key_id) break;
+                    item2.next();
+                    lastval = 0;
+                    auto vals2 = item2.get_packed_uint64();
+                    for (auto it = vals2.first; it != vals2.second; ++it) {
+                        if (method == "freq") {
+                            if (key_id2 == 1) {
+                                varr[0] = varr[0] > *it ? varr[0] : *it;
+                            } else {
+                                varr[0] = varr[0] + *it;
+                            }
+                            break;
+                        } else if (lastval == 0) {
+                            lastval = *it;
+                            varr.emplace_back(lastval);
+                        } else {
+                            lastval = lastval - *it;
+                            varr.emplace_back(lastval);
+                        }
+                    }
+                }
+            }
+
+            // Sort for proper delta encoding
+            std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
+
+            // Write varr to merged protobuf
+            protozero::packed_field_uint64 field{item_writer, 2};
+            lastval = 0;
+            for (auto const& vitem : varr) {
+                if (lastval == 0) {
+                    field.add_element(static_cast<uint64_t>(vitem));
+                } else {
+                    field.add_element(static_cast<uint64_t>(lastval - vitem));
+                }
+                lastval = vitem;
+            }
+        }
+    }
+
+    baton->pbf3 = merged;
+}
+
+void mergeAfter(uv_work_t* req) {
+    Nan::HandleScope scope;
+    MergeBaton *baton = static_cast<MergeBaton *>(req->data);
+    std::string const& merged = baton->pbf3;
+    Local<Object> buf = Nan::CopyBuffer((char*)merged.data(), merged.size()).ToLocalChecked();
+    Local<Value> argv[2] = { Nan::Null(), buf };
+    Nan::MakeCallback(Nan::GetCurrentContext()->Global(), Nan::New(baton->callback), 2, argv);
+    baton->callback.Reset();
+    delete baton;
+}
+
 NAN_METHOD(Cache::list)
 {
     if (info.Length() < 1) {
@@ -294,6 +469,33 @@ NAN_METHOD(Cache::list)
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
     }
+    info.GetReturnValue().Set(Nan::Undefined());
+    return;
+}
+
+NAN_METHOD(Cache::merge)
+{
+    if (!info[0]->IsObject()) return Nan::ThrowTypeError("argument 1 must be a Buffer");
+    if (!info[1]->IsObject()) return Nan::ThrowTypeError("argument 2 must be a Buffer");
+    if (!info[2]->IsString()) return Nan::ThrowTypeError("argument 3 must be a String");
+    if (!info[3]->IsFunction()) return Nan::ThrowTypeError("argument 3 must be a callback function");
+
+    Local<Object> obj1 = info[0]->ToObject();
+    Local<Object> obj2 = info[1]->ToObject();
+    Local<Value> callback = info[3];
+    std::string method = *String::Utf8Value(info[2]->ToString());
+
+    if (obj1->IsNull() || obj1->IsUndefined() || !node::Buffer::HasInstance(obj1)) return Nan::ThrowTypeError("argument 1 must be a Buffer");
+    if (obj2->IsNull() || obj2->IsUndefined() || !node::Buffer::HasInstance(obj2)) return Nan::ThrowTypeError("argument 1 must be a Buffer");
+
+    MergeBaton *baton = new MergeBaton();
+    baton->pbf1 = std::string(node::Buffer::Data(obj1),node::Buffer::Length(obj1));
+    baton->pbf2 = std::string(node::Buffer::Data(obj2),node::Buffer::Length(obj2));
+    baton->method = method;
+    baton->callback.Reset(callback.As<Function>());
+    baton->request.data = baton;
+    uv_queue_work(uv_default_loop(), &baton->request, mergeQueue, (uv_after_work_cb)mergeAfter);
+
     info.GetReturnValue().Set(Nan::Undefined());
     return;
 }
