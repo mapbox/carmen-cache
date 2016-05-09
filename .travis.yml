@@ -76,7 +76,7 @@ script:
 # only run unit tests (not benchmarks) when built with coverage/debug
 # because otherwise the benchmarks will fail since they are slow in debug
 - if [[ ${COVERAGE} == true ]]; then
-    ./node_modules/.bin/tape test/cache.test.js test/coalesce.test.js;
+    ./node_modules/.bin/tape test/cache.test.js test/coalesce.test.js test/merge.test.js;
   else
     npm test;
   fi

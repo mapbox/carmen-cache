@@ -850,30 +850,30 @@ ZXY bxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z, bool max=fals
     }
 
     // zoom conversion multiplier
-    float mult = pow(2,zDist);
+    float mult = static_cast<float>(std::pow(2,zDist));
 
     // zoom in min
     if (zDist > 0 && !max) {
-        zxy.x = x * mult;
-        zxy.y = y * mult;
+        zxy.x = static_cast<unsigned>(static_cast<float>(x) * mult);
+        zxy.y = static_cast<unsigned>(static_cast<float>(y) * mult);
         return zxy;
     }
     // zoom in max
     else if (zDist > 0 && max) {
-        zxy.x = x * mult + (mult - 1);
-        zxy.y = y * mult + (mult - 1);
+        zxy.x = static_cast<unsigned>(static_cast<float>(x) * mult + (mult - 1));
+        zxy.y = static_cast<unsigned>(static_cast<float>(y) * mult + (mult - 1));
         return zxy;
     }
     // zoom out
     else {
-        unsigned mod = pow(2,target_z);
+        unsigned mod = static_cast<unsigned>(std::pow(2,target_z));
         unsigned xDiff = x % mod;
         unsigned yDiff = y % mod;
         unsigned newX = x - xDiff;
         unsigned newY = y - yDiff;
 
-        zxy.x = newX * mult;
-        zxy.y = newY * mult;
+        zxy.x = static_cast<unsigned>(static_cast<float>(newX) * mult);
+        zxy.y = static_cast<unsigned>(static_cast<float>(newY) * mult);
         return zxy;
     }
 }
@@ -917,7 +917,7 @@ struct CoalesceBaton : carmen::noncopyable {
 // Simulates 40 mile cutoff in carmen.
 double scoredist(unsigned zoom, double distance, double score) {
     if (distance == 0.0) distance = 0.01;
-    double scoredist;
+    double scoredist = 0;
     if (zoom >= 14) scoredist = 32.0 / distance;
     if (zoom == 13) scoredist = 16.0 / distance;
     if (zoom == 12) scoredist = 8.0 / distance;
@@ -980,19 +980,16 @@ void coalesceSingle(uv_work_t* req) {
 
     // bbox (optional)
     bool bbox = !baton->bboxzxy.empty();
-    unsigned bboxz;
     unsigned minx;
     unsigned miny;
     unsigned maxx;
     unsigned maxy;
     if (bbox) {
-        bboxz = baton->bboxzxy[0];
         minx = baton->bboxzxy[1];
         miny = baton->bboxzxy[2];
         maxx = baton->bboxzxy[3];
         maxy = baton->bboxzxy[4];
     } else {
-        bboxz = 0;
         minx = 0;
         miny = 0;
         maxx = 0;
