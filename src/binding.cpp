@@ -144,6 +144,7 @@ void Cache::Initialize(Handle<Object> target) {
     Nan::SetPrototypeMethod(t, "pack", pack);
     Nan::SetPrototypeMethod(t, "merge", merge);
     Nan::SetPrototypeMethod(t, "list", list);
+    Nan::SetPrototypeMethod(t, "count", count);
     Nan::SetPrototypeMethod(t, "_set", _set);
     Nan::SetPrototypeMethod(t, "_get", _get);
     Nan::SetPrototypeMethod(t, "unload", unload);
@@ -466,6 +467,53 @@ NAN_METHOD(Cache::list)
             info.GetReturnValue().Set(ids);
             return;
         }
+    } catch (std::exception const& ex) {
+        return Nan::ThrowTypeError(ex.what());
+    }
+    info.GetReturnValue().Set(Nan::Undefined());
+    return;
+}
+
+NAN_METHOD(Cache::count)
+{
+    if (info.Length() != 1) {
+        return Nan::ThrowTypeError("expected exactly least one arg: 'type'");
+    }
+    if (!info[0]->IsString()) {
+        return Nan::ThrowTypeError("first argument must be a String");
+    }
+    try {
+        std::string type = *String::Utf8Value(info[0]->ToString());
+        Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
+        Cache::message_cache const& messages = c->msg_;
+        uint32_t count = 0;
+
+        std::size_t type_size = type.size();
+
+        // iterate over shards
+        for (auto const& item : messages) {
+            std::size_t item_size = item.first.size();
+            if (item_size > type_size && item.first.substr(0,type_size) == type) {
+                std::string shard = item.first.substr(type_size+1,item_size);
+
+                protozero::pbf_reader message(item.second->second);
+                while (message.next(CACHE_MESSAGE)) {
+                    protozero::pbf_reader pbitem = message.get_message();
+                    // iterate over ids within shared
+                    while (pbitem.next(CACHE_ITEM)) {
+                        pbitem.get_uint64(); // key_id
+                        pbitem.next();
+
+                        // get all grid values for each id and count them
+                        auto vals = pbitem.get_packed_uint64();
+                        for (auto it = vals.first; it != vals.second; ++it) count++;
+                    }
+                }
+            }
+        }
+
+        info.GetReturnValue().Set(Nan::New(count));
+        return;
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
     }
