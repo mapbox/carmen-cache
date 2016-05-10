@@ -53,6 +53,7 @@ public:
     static NAN_METHOD(pack);
     static NAN_METHOD(merge);
     static NAN_METHOD(list);
+    static NAN_METHOD(count);
     static NAN_METHOD(_get);
     static NAN_METHOD(_set);
     static NAN_METHOD(unload);

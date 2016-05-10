@@ -119,6 +119,25 @@ tape('#load', function(assert) {
     assert.end();
 });
 
+tape('#count', function(assert) {
+    var cache = new Cache('a', 2);
+
+    cache._set('term', 0, 5, [0,1,2]);
+    cache._set('term', 0, 6, [3,4,5]);
+    cache._set('term', 1, 10, [6,7,8,9]);
+
+    // cache A serializes data, cache B loads serialized data.
+    var pack = cache.pack('term', 0);
+    var loader = new Cache('b', 2);
+    loader.loadSync(cache.pack('term', 0), 'term', 0);
+    loader.loadSync(cache.pack('term', 1), 'term', 1);
+
+    assert.equal(loader.count('term'), 10, "loader has 10 protobuf grid records");
+    assert.equal(cache.count('term'), 0, "packer has 0 protobuf grid records");
+
+    assert.end();
+});
+
 tape('#unload on empty data', function(assert) {
     var cache = new Cache('a', 1);
     assert.equal(cache.unload('term',5), false);
