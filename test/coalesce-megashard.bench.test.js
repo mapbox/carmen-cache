@@ -29,8 +29,6 @@ var stacks = [{
     phrases: phrases
 }];
 test('coalesceSingle', function(assert) {
-    if (process.env.COVERAGE) return assert.end();
-
     var time = +new Date;
     function run(remaining) {
         if (!remaining) {
