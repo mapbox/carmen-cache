@@ -134,6 +134,73 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string const
     }
 }
 
+Cache::intarray __getall(Cache const* c, std::string const& type, unsigned shardlevel, Cache::intarray ids) {
+    std::sort(ids.begin(), ids.end(), std::less<uint64_t>());
+
+    Cache::intarray array;
+
+    std::string prevShard;
+    std::string prevKey;
+
+    // Load values from memory cache
+    prevShard = "";
+    prevKey = "";
+    Cache::memcache const& mem = c->cache_;
+    Cache::memcache::const_iterator memshard;
+    for (auto const& id : ids) {
+        std::string currShard = shard(shardlevel, id);
+        if (prevShard != currShard) {
+            prevShard = currShard;
+            prevKey = type + "-" + currShard;
+            memshard = mem.find(prevKey);
+            if (memshard == mem.end()) break;
+        }
+        Cache::arraycache::const_iterator mempair = memshard->second.find(id);
+        if (mempair == memshard->second.end()) {
+            break;
+        } else {
+            array.insert(array.end(), mempair->second.begin(), mempair->second.end());
+        }
+    }
+
+    // Load values from message cache
+    prevShard = "";
+    prevKey = "";
+    protozero::pbf_reader message;
+    for (auto const& id : ids) {
+        std::string currShard = shard(shardlevel, id);
+        if (prevShard != currShard) {
+            prevShard = currShard;
+            prevKey = type + "-" + currShard;
+            if (cacheHas(c, prevKey)) {
+                message = protozero::pbf_reader(cacheGet(c, prevKey));
+            }
+        }
+        while (message.next(CACHE_MESSAGE)) {
+            protozero::pbf_reader item = message.get_message();
+            while (item.next(CACHE_ITEM)) {
+                uint64_t key_id = item.get_uint64();
+                if (key_id != id) break;
+                item.next();
+                auto vals = item.get_packed_uint64();
+                uint64_t lastval = 0;
+                // delta decode values.
+                for (auto it = vals.first; it != vals.second; ++it) {
+                    if (lastval == 0) {
+                        lastval = *it;
+                        array.emplace_back(lastval);
+                    } else {
+                        lastval = lastval - *it;
+                        array.emplace_back(lastval);
+                    }
+                }
+            }
+        }
+    }
+
+    return array;
+}
+
 void Cache::Initialize(Handle<Object> target) {
     Nan::HandleScope scope;
     Local<FunctionTemplate> t = Nan::New<FunctionTemplate>(Cache::New);
@@ -996,12 +1063,8 @@ void coalesceSingle(uv_work_t* req) {
 
     // Load and concatenate grids for all ids in `phrases`
     std::string type = "grid";
-    Cache::intarray grids;
-    for (auto const& phrase : subq.phrases) {
-        std::string shardId = shard(4, phrase);
-        Cache::intarray phraseGrids = __get(subq.cache, type, shardId, phrase);
-        grids.insert(grids.end(), phraseGrids.begin(), phraseGrids.end());
-    }
+    uint64_t shardlevel = 4;
+    Cache::intarray grids = __getall(subq.cache, type, shardlevel, subq.phrases);
 
     unsigned long m = grids.size();
     double relevMax = 0;
@@ -1135,12 +1198,8 @@ void coalesceMulti(uv_work_t* req) {
 
         // Load and concatenate grids for all ids in `phrases`
         std::string type = "grid";
-        Cache::intarray grids;
-        for (auto const& phrase : subq.phrases) {
-            std::string shardId = shard(4, phrase);
-            Cache::intarray phraseGrids = __get(subq.cache, type, shardId, phrase);
-            grids.insert(grids.end(), phraseGrids.begin(), phraseGrids.end());
-        }
+        uint64_t shardlevel = 4;
+        Cache::intarray grids = __getall(subq.cache, type, shardlevel, subq.phrases);
 
         unsigned short z = subq.zoom;
         auto const& zCache = zoomCache[z];
