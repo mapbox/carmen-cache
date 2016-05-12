@@ -136,51 +136,42 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string const
 
 Cache::intarray __getall(Cache const* c, std::string const& type, unsigned shardlevel, Cache::intarray ids) {
     std::sort(ids.begin(), ids.end(), std::less<uint64_t>());
+    std::vector<std::string> keys;
+    std::map<uint64_t,bool> idmap;
 
     Cache::intarray array;
 
     std::string prevShard;
-    std::string prevKey;
-
-    // Load values from memory cache
-    prevShard = "";
-    prevKey = "";
-    Cache::memcache const& mem = c->cache_;
-    Cache::memcache::const_iterator memshard;
     for (auto const& id : ids) {
         std::string currShard = shard(shardlevel, id);
         if (prevShard != currShard) {
+            keys.emplace_back(type + "-" + currShard);
             prevShard = currShard;
-            prevKey = type + "-" + currShard;
-            memshard = mem.find(prevKey);
-            if (memshard == mem.end()) break;
         }
-        Cache::arraycache::const_iterator mempair = memshard->second.find(id);
-        if (mempair == memshard->second.end()) {
-            break;
-        } else {
-            array.insert(array.end(), mempair->second.begin(), mempair->second.end());
+        idmap.emplace(id, true);
+    }
+
+    // Load values from memory cache
+    Cache::memcache const& mem = c->cache_;
+    for (auto const& key : keys) {
+        Cache::memcache::const_iterator memshard = mem.find(key);
+        if (memshard == mem.end()) break;
+        for (auto const& item : memshard->second) {
+            if (idmap.find(item.first) == idmap.end()) continue;
+            array.insert(array.end(), item.second.begin(), item.second.end());
         }
     }
 
     // Load values from message cache
-    prevShard = "";
-    prevKey = "";
     protozero::pbf_reader message;
-    for (auto const& id : ids) {
-        std::string currShard = shard(shardlevel, id);
-        if (prevShard != currShard) {
-            prevShard = currShard;
-            prevKey = type + "-" + currShard;
-            if (cacheHas(c, prevKey)) {
-                message = protozero::pbf_reader(cacheGet(c, prevKey));
-            }
-        }
+    for (auto const& key : keys) {
+        if (!cacheHas(c, key)) continue;
+        protozero::pbf_reader message(cacheGet(c, key));
         while (message.next(CACHE_MESSAGE)) {
             protozero::pbf_reader item = message.get_message();
             while (item.next(CACHE_ITEM)) {
                 uint64_t key_id = item.get_uint64();
-                if (key_id != id) break;
+                if (idmap.find(key_id) == idmap.end()) break;
                 item.next();
                 auto vals = item.get_packed_uint64();
                 uint64_t lastval = 0;

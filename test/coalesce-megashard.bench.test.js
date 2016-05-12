@@ -42,7 +42,6 @@ test('coalesceSingle', function(assert) {
         coalesce(stacks, {}, function(err, res) {
             var checks = true;
             checks = checks && res.length === 40;
-            checks = checks && res[0][0].tmpid === 1;
             if (!checks) {
                 assert.fail('Failed checks');
                 assert.end();
