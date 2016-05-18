@@ -9,7 +9,7 @@ if (!fs.existsSync('/tmp/carmen-cache-megashard.pbf')) {
     var writer = new Cache('writer');
     var ids = [];
     for (var i = 0; i < 100; i++) ids.push(i);
-    for (var i = 0; i < Math.pow(2,18); i++) writer._set('grid', Math.floor(i/mp36), i, ids);
+    for (var i = 0; i < Math.pow(2,18); i++) writer._set('grid', Math.floor(i/mp36), "" + i, ids);
     fs.writeFileSync('/tmp/carmen-cache-megashard.pbf', writer.pack('grid', 0));
 }
 
@@ -18,7 +18,7 @@ c.loadSync(fs.readFileSync('/tmp/carmen-cache-megashard.pbf'), 'grid', 0);
 
 // Benchmark loading many phrases
 var phrases = [];
-for (var i = 1; i < 100; i++) phrases.push(Math.pow(2,18)-i);
+for (var i = 1; i < 100; i++) phrases.push("" + Math.pow(2,18)-i);
 
 var runs = 50;
 var stacks = [{

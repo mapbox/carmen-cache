@@ -35,7 +35,7 @@ protected:
 class Cache: public node::ObjectWrap {
 public:
     ~Cache();
-    typedef uint64_t key_type;
+    typedef std::string key_type;
     typedef uint64_t value_type;
     // list + map as simple LRU cache
     typedef std::pair<std::string,std::string> message_pair;
@@ -43,11 +43,13 @@ public:
     typedef std::map<std::string,message_list::iterator> message_cache;
     // fully cached item
     typedef std::vector<value_type> intarray;
+    typedef std::vector<key_type> keyarray;
     typedef std::map<key_type,intarray> arraycache;
     typedef std::map<std::string,arraycache> memcache;
     static Nan::Persistent<v8::FunctionTemplate> constructor;
     static void Initialize(v8::Handle<v8::Object> target);
     static NAN_METHOD(New);
+    static NAN_METHOD(_shard);
     static NAN_METHOD(has);
     static NAN_METHOD(loadSync);
     static NAN_METHOD(pack);

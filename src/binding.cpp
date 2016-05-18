@@ -14,11 +14,22 @@ using namespace v8;
 
 Nan::Persistent<FunctionTemplate> Cache::constructor;
 
-inline std::string shard(uint64_t level, uint64_t id) {
-    if (level == 0) return "0";
-    unsigned int bits = 52 - (static_cast<unsigned int>(level) * 4);
-    unsigned int shard_id = static_cast<unsigned int>(std::floor(id / std::pow(2, bits)));
-    return std::to_string(shard_id);
+inline std::string shard(std::string id) {
+    // strings of length < 3 go to magic shard 0
+    if (id.length() < 3) return "0";
+    const char* data_p = id.c_str();
+    int length = 3;
+
+    // crc16 of the first three bytes
+    unsigned char x;
+    uint16_t crc = 0xFFFF;
+
+    while (length--){
+        x = crc >> 8 ^ *data_p++;
+        x ^= x>>4;
+        crc = (crc << 8) ^ ((uint16_t)(x << 12)) ^ ((uint16_t)(x <<5)) ^ ((uint16_t)x);
+    }
+    return std::to_string(crc);
 }
 
 inline std::vector<uint64_t> arrayToVector(Local<Array> const& array) {
@@ -32,6 +43,16 @@ inline std::vector<uint64_t> arrayToVector(Local<Array> const& array) {
             throw std::runtime_error(s.str());
         }
         cpp_array.emplace_back(static_cast<uint64_t>(js_value));
+    }
+    return cpp_array;
+}
+
+inline std::vector<std::string> arrayToStrVector(Local<Array> const& array) {
+    std::vector<std::string> cpp_array;
+    cpp_array.reserve(array->Length());
+    for (uint32_t i = 0; i < array->Length(); i++) {
+        std::string js_value = *String::Utf8Value(array->Get(i)->ToString());;
+        cpp_array.emplace_back(js_value);
     }
     return cpp_array;
 }
@@ -92,7 +113,7 @@ inline bool cacheRemove(Cache * c, std::string const& key) {
     }
 }
 
-Cache::intarray __get(Cache const* c, std::string const& type, std::string const& shard, uint64_t id) {
+Cache::intarray __get(Cache const* c, std::string const& type, std::string const& shard, std::string id) {
     std::string key = type + "-" + shard;
     Cache::memcache const& mem = c->cache_;
     Cache::memcache::const_iterator itr = mem.find(key);
@@ -105,7 +126,7 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string const
         while (message.next(CACHE_MESSAGE)) {
             protozero::pbf_reader item = message.get_message();
             while (item.next(CACHE_ITEM)) {
-                uint64_t key_id = item.get_uint64();
+                std::string key_id = item.get_string();
                 if (key_id != id) break;
                 item.next();
                 auto vals = item.get_packed_uint64();
@@ -134,16 +155,16 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string const
     }
 }
 
-Cache::intarray __getall(Cache const* c, std::string const& type, unsigned shardlevel, Cache::intarray ids) {
-    std::sort(ids.begin(), ids.end(), std::less<uint64_t>());
+Cache::intarray __getall(Cache const* c, std::string const& type, Cache::keyarray ids) {
+    std::sort(ids.begin(), ids.end(), std::less<Cache::key_type>());
     std::vector<std::string> keys;
-    std::map<uint64_t,bool> idmap;
+    std::map<Cache::key_type,bool> idmap;
 
     Cache::intarray array;
 
     std::string prevShard;
     for (auto const& id : ids) {
-        std::string currShard = shard(shardlevel, id);
+        std::string currShard = shard(id);
         if (prevShard != currShard) {
             keys.emplace_back(type + "-" + currShard);
             prevShard = currShard;
@@ -166,11 +187,13 @@ Cache::intarray __getall(Cache const* c, std::string const& type, unsigned shard
     protozero::pbf_reader message;
     for (auto const& key : keys) {
         if (!cacheHas(c, key)) continue;
-        protozero::pbf_reader message(cacheGet(c, key));
+        // protozero::pbf_reader message(cacheGet(c, key));
+        std::string cg = cacheGet(c, key);
+        protozero::pbf_reader message(cg);
         while (message.next(CACHE_MESSAGE)) {
             protozero::pbf_reader item = message.get_message();
             while (item.next(CACHE_ITEM)) {
-                uint64_t key_id = item.get_uint64();
+                std::string key_id = item.get_string();
                 if (idmap.find(key_id) == idmap.end()) break;
                 item.next();
                 auto vals = item.get_packed_uint64();
@@ -206,6 +229,7 @@ void Cache::Initialize(Handle<Object> target) {
     Nan::SetPrototypeMethod(t, "_get", _get);
     Nan::SetPrototypeMethod(t, "unload", unload);
     Nan::SetMethod(t, "coalesce", coalesce);
+    Nan::SetMethod(t, "shard", _shard);
     target->Set(Nan::New("Cache").ToLocalChecked(), t->GetFunction());
     constructor.Reset(t);
 }
@@ -216,6 +240,21 @@ Cache::Cache()
     msg_() {}
 
 Cache::~Cache() { }
+
+NAN_METHOD(Cache::_shard)
+{
+    if (info.Length() != 1) {
+        return Nan::ThrowTypeError("expected at exactly one arg: 'id'");
+    }
+    if (!info[0]->IsString()) {
+        return Nan::ThrowTypeError("first argument must be a String");
+    }
+
+    std::string id = *String::Utf8Value(info[0]->ToString());
+
+    info.GetReturnValue().Set(Nan::New(shard(id)).ToLocalChecked());
+    return;
+}
 
 NAN_METHOD(Cache::pack)
 {
@@ -243,7 +282,7 @@ NAN_METHOD(Cache::pack)
             protozero::pbf_writer writer(message);
             for (auto const& item : itr->second) {
                 protozero::pbf_writer item_writer(writer,1);
-                item_writer.add_uint64(1,item.first);
+                item_writer.add_string(1,item.first);
                 std::size_t array_size = item.second.size();
                 if (array_size > 0) {
                     // make copy of intarray so we can sort without
@@ -305,8 +344,8 @@ void mergeQueue(uv_work_t* req) {
     std::string const& method = baton->method;
 
     // Ids that have been seen
-    std::map<uint64_t,bool> ids1;
-    std::map<uint64_t,bool> ids2;
+    std::map<Cache::key_type,bool> ids1;
+    std::map<Cache::key_type,bool> ids2;
 
     std::string merged;
     protozero::pbf_writer writer(merged);
@@ -316,7 +355,7 @@ void mergeQueue(uv_work_t* req) {
     while (pre1.next(CACHE_MESSAGE)) {
         protozero::pbf_reader item = pre1.get_message();
         while (item.next(CACHE_ITEM)) {
-            ids1.emplace(item.get_uint64(), true);
+            ids1.emplace(item.get_string(), true);
         }
     }
 
@@ -325,7 +364,7 @@ void mergeQueue(uv_work_t* req) {
     while (pre2.next(CACHE_MESSAGE)) {
         protozero::pbf_reader item = pre2.get_message();
         while (item.next(CACHE_ITEM)) {
-            ids2.emplace(item.get_uint64(), true);
+            ids2.emplace(item.get_string(), true);
         }
     }
 
@@ -335,12 +374,12 @@ void mergeQueue(uv_work_t* req) {
         protozero::pbf_writer item_writer(writer,1);
         protozero::pbf_reader item = message1.get_message();
         while (item.next(CACHE_ITEM)) {
-            uint64_t key_id = item.get_uint64();
+            std::string key_id = item.get_string();
 
             // Skip this id if also in message 2
             if (ids2.find(key_id) != ids2.end()) break;
 
-            item_writer.add_uint64(1,key_id);
+            item_writer.add_string(1,key_id);
             item.next();
             protozero::packed_field_uint64 field{item_writer, 2};
             auto vals = item.get_packed_uint64();
@@ -356,12 +395,12 @@ void mergeQueue(uv_work_t* req) {
         protozero::pbf_writer item_writer(writer,1);
         protozero::pbf_reader item = message2.get_message();
         while (item.next(CACHE_ITEM)) {
-            uint64_t key_id = item.get_uint64();
+            std::string key_id = item.get_string();
 
             // Skip this id if also in message 2
             if (ids1.find(key_id) != ids1.end()) break;
 
-            item_writer.add_uint64(1,key_id);
+            item_writer.add_string(1,key_id);
             item.next();
             protozero::packed_field_uint64 field{item_writer, 2};
             auto vals = item.get_packed_uint64();
@@ -377,12 +416,12 @@ void mergeQueue(uv_work_t* req) {
         protozero::pbf_writer item_writer(writer,1);
         protozero::pbf_reader item = overlap1.get_message();
         while (item.next(CACHE_ITEM)) {
-            uint64_t key_id = item.get_uint64();
+            std::string key_id = item.get_string();
 
             // Skip ids that are only in one or the other lists
             if (ids1.find(key_id) == ids1.end() || ids2.find(key_id) == ids2.end()) break;
 
-            item_writer.add_uint64(1,key_id);
+            item_writer.add_string(1,key_id);
 
             item.next();
             uint64_t lastval = 0;
@@ -408,14 +447,14 @@ void mergeQueue(uv_work_t* req) {
             while (overlap2.next(CACHE_MESSAGE)) {
                 protozero::pbf_reader item2 = overlap2.get_message();
                 while (item2.next(CACHE_ITEM)) {
-                    uint64_t key_id2 = item2.get_uint64();
+                    std::string key_id2 = item2.get_string();
                     if (key_id2 != key_id) break;
                     item2.next();
                     lastval = 0;
                     auto vals2 = item2.get_packed_uint64();
                     for (auto it = vals2.first; it != vals2.second; ++it) {
                         if (method == "freq") {
-                            if (key_id2 == 1) {
+                            if (key_id2 == "__MAX__") {
                                 varr[0] = varr[0] > *it ? varr[0] : *it;
                             } else {
                                 varr[0] = varr[0] + *it;
@@ -503,7 +542,7 @@ NAN_METHOD(Cache::list)
             unsigned idx = 0;
             if (itr != mem.end()) {
                 for (auto const& item : itr->second) {
-                    ids->Set(idx++,Nan::New<Number>(item.first)->ToString());
+                    ids->Set(idx++,Nan::New(item.first).ToLocalChecked());
                 }
             }
 
@@ -515,8 +554,8 @@ NAN_METHOD(Cache::list)
                 while (message.next(CACHE_MESSAGE)) {
                     protozero::pbf_reader item = message.get_message();
                     while (item.next(CACHE_ITEM)) {
-                        uint64_t key_id = item.get_uint64();
-                        ids->Set(idx++, Nan::New<Number>(key_id)->ToString());
+                        std::string key_id = item.get_string();
+                        ids->Set(idx++, Nan::New(key_id).ToLocalChecked());
                     }
                 }
             }
@@ -566,11 +605,8 @@ NAN_METHOD(Cache::_set)
     if (!info[0]->IsString()) {
         return Nan::ThrowTypeError("first argument must be a String");
     }
-    if (!info[1]->IsNumber()) {
-        return Nan::ThrowTypeError("second arg must be an Integer");
-    }
-    if (!info[2]->IsNumber()) {
-        return Nan::ThrowTypeError("third arg must be an Integer");
+    if (!info[2]->IsString()) {
+        return Nan::ThrowTypeError("third arg must be a String");
     }
     if (!info[3]->IsArray()) {
         return Nan::ThrowTypeError("fourth arg must be an Array");
@@ -581,8 +617,16 @@ NAN_METHOD(Cache::_set)
     }
     try {
         std::string type = *String::Utf8Value(info[0]->ToString());
-        std::string shard = *String::Utf8Value(info[1]->ToString());
-        std::string key = type + "-" + shard;
+        std::string id = *String::Utf8Value(info[2]->ToString());
+
+        std::string shd;
+        if (info[1]->IsNumber() || info[1]->IsString()) {
+            shd = *String::Utf8Value(info[1]->ToString());
+        } else {
+            shd = shard(id);
+        }
+
+        std::string key = type + "-" + shd;
         Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
         Cache::memcache & mem = c->cache_;
         Cache::memcache::const_iterator itr = mem.find(key);
@@ -590,7 +634,7 @@ NAN_METHOD(Cache::_set)
             c->cache_.emplace(key,Cache::arraycache());
         }
         Cache::arraycache & arrc = c->cache_[key];
-        Cache::arraycache::key_type key_id = static_cast<Cache::arraycache::key_type>(info[2]->IntegerValue());
+        Cache::arraycache::key_type key_id = static_cast<Cache::arraycache::key_type>(id);
         Cache::arraycache::iterator itr2 = arrc.find(key_id);
         if (itr2 == arrc.end()) {
             arrc.emplace(key_id,Cache::intarray());
@@ -703,22 +747,22 @@ NAN_METHOD(Cache::_get)
     if (!info[0]->IsString()) {
         return Nan::ThrowTypeError("first arg must be a String");
     }
-    if (!info[1]->IsNumber()) {
-        return Nan::ThrowTypeError("second arg must be an Integer");
-    }
-    if (!info[2]->IsNumber()) {
-        return Nan::ThrowTypeError("third arg must be a positive Integer");
+    if (!info[2]->IsString()) {
+        return Nan::ThrowTypeError("third arg must be a String");
     }
     try {
         std::string type = *String::Utf8Value(info[0]->ToString());
-        std::string shard = *String::Utf8Value(info[1]->ToString());
-        int64_t id = info[2]->IntegerValue();
-        if (id < 0) {
-            return Nan::ThrowTypeError("third arg must be a positive Integer");
+        std::string id = *String::Utf8Value(info[2]->ToString());
+
+        std::string shd;
+        if (info[1]->IsNumber() || info[1]->IsString()) {
+            shd = *String::Utf8Value(info[1]->ToString());
+        } else {
+            shd = shard(id);
         }
-        uint64_t id2 = static_cast<uint64_t>(id);
+
         Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
-        Cache::intarray vector = __get(c, type, shard, id2);
+        Cache::intarray vector = __get(c, type, shd, id);
         if (!vector.empty()) {
             info.GetReturnValue().Set(vectorToArray(vector));
             return;
@@ -814,7 +858,7 @@ constexpr uint64_t POW2_2 = static_cast<uint64_t>(_pow(2.0,2));
 struct PhrasematchSubq {
     carmen::Cache *cache;
     double weight;
-    std::vector<uint64_t> phrases;
+    std::vector<std::string> phrases;
     unsigned short idx;
     unsigned short zoom;
 };
@@ -1054,8 +1098,7 @@ void coalesceSingle(uv_work_t* req) {
 
     // Load and concatenate grids for all ids in `phrases`
     std::string type = "grid";
-    uint64_t shardlevel = 4;
-    Cache::intarray grids = __getall(subq.cache, type, shardlevel, subq.phrases);
+    Cache::intarray grids = __getall(subq.cache, type, subq.phrases);
 
     unsigned long m = grids.size();
     double relevMax = 0;
@@ -1189,8 +1232,7 @@ void coalesceMulti(uv_work_t* req) {
 
         // Load and concatenate grids for all ids in `phrases`
         std::string type = "grid";
-        uint64_t shardlevel = 4;
-        Cache::intarray grids = __getall(subq.cache, type, shardlevel, subq.phrases);
+        Cache::intarray grids = __getall(subq.cache, type, subq.phrases);
 
         unsigned short z = subq.zoom;
         auto const& zCache = zoomCache[z];
@@ -1385,7 +1427,7 @@ NAN_METHOD(Cache::coalesce) {
                 delete baton;
                 return Nan::ThrowTypeError("Subq object must have 'phrases' array");
             }
-            subq.phrases = arrayToVector(Local<Array>::Cast(jsStack->Get(Nan::New("phrases").ToLocalChecked())));
+            subq.phrases = arrayToStrVector(Local<Array>::Cast(jsStack->Get(Nan::New("phrases").ToLocalChecked())));
 
             // JS cache reference => cpp
             Local<Object> cache = Local<Object>::Cast(jsStack->Get(Nan::New("cache").ToLocalChecked()));
