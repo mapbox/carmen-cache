@@ -36,26 +36,28 @@ tape('#merge concat', function(assert) {
 
 tape('#merge freq', function(assert) {
     var cacheA = new Cache('a');
-    cacheA.set('freq', '...1', [1]);
-    cacheA.set('freq', '...2', [1]);
-    cacheA.set('freq', '...3', [1]);
+    // these would not ordinarily all be in the same shard, but force them to be
+    // in the same shard to make this test actually work
+    cacheA._set('freq', 0, '__MAX__', [1]);
+    cacheA._set('freq', 0, '__COUNT__', [1]);
+    cacheA._set('freq', 0, '3', [1]);
 
     var cacheB = new Cache('b');
-    cacheB.set('freq', '...1', [2]);
-    cacheB.set('freq', '...2', [2]);
-    cacheB.set('freq', '...4', [2]);
+    cacheB._set('freq', 0, '__MAX__', [2]);
+    cacheB._set('freq', 0, '__COUNT__', [2]);
+    cacheB._set('freq', 0, '4', [2]);
 
-    var pbfA = cacheA.pack('freq', +Cache.shard('...'));
-    var pbfB = cacheB.pack('freq', +Cache.shard('...'));
+    var pbfA = cacheA.pack('freq', 0);
+    var pbfB = cacheB.pack('freq', 0);
 
     var cacheC = new Cache('c');
     cacheA.merge(pbfA, pbfB, 'freq', function(err, merged) {
         assert.ifError(err);
-        cacheC.loadSync(merged, 'freq', +Cache.shard('...'));
-        assert.deepEqual(cacheC.get('freq', '...1').sort(numSort), [2], 'a-b-max');
-        assert.deepEqual(cacheC.get('freq', '...2').sort(numSort), [3], 'a-b-sum');
-        assert.deepEqual(cacheC.get('freq', '...3').sort(numSort), [1], 'a-only');
-        assert.deepEqual(cacheC.get('freq', '...4').sort(numSort), [2], 'b-only');
+        cacheC.loadSync(merged, 'freq', 0);
+        assert.deepEqual(cacheC._get('freq', 0, '__MAX__').sort(numSort), [2], 'a-b-max');
+        assert.deepEqual(cacheC._get('freq', 0, '__COUNT__').sort(numSort), [3], 'a-b-sum');
+        assert.deepEqual(cacheC._get('freq', 0, '3').sort(numSort), [1], 'a-only');
+        assert.deepEqual(cacheC._get('freq', 0, '4').sort(numSort), [2], 'b-only');
         assert.end();
     })
 });
