@@ -7,14 +7,14 @@ var mp36 = Math.pow(2,36);
 (function() {
     var runs = 50;
     var b = new Cache('b');
-    b._set('grid', Math.floor(3848571113/mp36), 3848571113, require('./fixtures/coalesce-bench-single-3848571113.json'));
-    console.log('# pack size', b.pack('grid', Math.floor(3848571113/mp36), 3848571113).length);
+    b._set('grid', Cache.shard('3848571113'), '3848571113', require('./fixtures/coalesce-bench-single-3848571113.json'));
+    console.log('# pack size', b.pack('grid', +Cache.shard('3848571113'), '3848571113').length);
     var stacks = [{
         cache: b,
         idx: 0,
         zoom: 14,
         weight: 1,
-        phrases: [3848571113]
+        phrases: ['3848571113']
     }];
     test('coalesceSingle', function(assert) {
         if (process.env.COVERAGE) return assert.end();
@@ -74,20 +74,20 @@ var mp36 = Math.pow(2,36);
     var runs = 50;
     var a = new Cache('a', 0);
     var b = new Cache('b', 0);
-    a._set('grid', Math.floor(1965155344/mp36), 1965155344, require('./fixtures/coalesce-bench-multi-1965155344.json'));
-    b._set('grid', Math.floor(3848571113/mp36), 3848571113, require('./fixtures/coalesce-bench-multi-3848571113.json'));
+    a._set('grid', Cache.shard('1965155344'), '1965155344', require('./fixtures/coalesce-bench-multi-1965155344.json'));
+    b._set('grid', Cache.shard('3848571113'), '3848571113', require('./fixtures/coalesce-bench-multi-3848571113.json'));
     var stacks = [{
         cache: a,
         idx: 0,
         zoom: 12,
         weight: 0.25,
-        phrases: [1965155344]
+        phrases: ['1965155344']
     }, {
         cache: b,
         idx: 1,
         zoom: 14,
         weight: 0.75,
-        phrases: [3848571113]
+        phrases: ['3848571113']
     }];
     test('coalesceMulti', function(assert) {
         if (process.env.COVERAGE) return assert.end();
