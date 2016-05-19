@@ -14,7 +14,9 @@ var mp36 = Math.pow(2,36);
         idx: 0,
         zoom: 14,
         weight: 1,
-        phrases: ['3848571113']
+        phrase: '3848571113',
+        prefix: false,
+        shards: [Cache.shard('3848571113')]
     }];
     test('coalesceSingle', function(assert) {
         if (process.env.COVERAGE) return assert.end();
@@ -81,13 +83,17 @@ var mp36 = Math.pow(2,36);
         idx: 0,
         zoom: 12,
         weight: 0.25,
-        phrases: ['1965155344']
+        phrase: '1965155344',
+        prefix: false,
+        shards: [Cache.shard('1965155344')]
     }, {
         cache: b,
         idx: 1,
         zoom: 14,
         weight: 0.75,
-        phrases: ['3848571113']
+        phrase: '3848571113',
+        prefix: false,
+        shards: [Cache.shard('3848571113')]
     }];
     test('coalesceMulti', function(assert) {
         if (process.env.COVERAGE) return assert.end();

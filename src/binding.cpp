@@ -4,6 +4,7 @@
 #include <sstream>
 #include <cmath>
 #include <cassert>
+#include <cstring>
 
 #include <protozero/pbf_writer.hpp>
 #include <protozero/pbf_reader.hpp>
@@ -154,21 +155,17 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string const
     }
 }
 
-Cache::intarray __getall(Cache const* c, std::string const& type, Cache::keyarray ids) {
-    std::sort(ids.begin(), ids.end(), std::less<Cache::key_type>());
+Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::vector<uint64_t> const& shards, std::string const& prefix) {
     std::vector<std::string> keys;
-    std::map<Cache::key_type,bool> idmap;
 
     Cache::intarray array;
+    uint64_t prefix_length = prefix.length();
+    const char* prefix_cstr = prefix.c_str();
+    bool startswith;
 
     std::string prevShard;
-    for (auto const& id : ids) {
-        std::string currShard = shard(id);
-        if (prevShard != currShard) {
-            keys.emplace_back(type + "-" + currShard);
-            prevShard = currShard;
-        }
-        idmap.emplace(id, true);
+    for (auto const& shard : shards) {
+        keys.emplace_back(type + "-" + std::to_string(shard));
     }
 
     // Load values from memory cache
@@ -177,7 +174,12 @@ Cache::intarray __getall(Cache const* c, std::string const& type, Cache::keyarra
         Cache::memcache::const_iterator memshard = mem.find(key);
         if (memshard == mem.end()) break;
         for (auto const& item : memshard->second) {
-            if (idmap.find(item.first) == idmap.end()) continue;
+            if (item.first.length() < prefix_length) {
+                startswith = false;
+            } else {
+                startswith = memcmp(prefix_cstr, item.first.c_str(), prefix_length) == 0;
+            }
+            if (!startswith) continue;
             array.insert(array.end(), item.second.begin(), item.second.end());
         }
     }
@@ -187,13 +189,16 @@ Cache::intarray __getall(Cache const* c, std::string const& type, Cache::keyarra
     for (auto const& key : keys) {
         if (!cacheHas(c, key)) continue;
         protozero::pbf_reader message(cacheGet(c, key));
-        //std::string cg = cacheGet(c, key);
-        //protozero::pbf_reader message(cg);
         while (message.next(CACHE_MESSAGE)) {
             protozero::pbf_reader item = message.get_message();
             while (item.next(CACHE_ITEM)) {
                 std::string key_id = item.get_string();
-                if (idmap.find(key_id) == idmap.end()) break;
+                if (key_id.length() < prefix_length) {
+                    startswith = false;
+                } else {
+                    startswith = memcmp(prefix_cstr, key_id.c_str(), prefix_length) == 0;
+                }
+                if (!startswith) break;
                 item.next();
                 auto vals = item.get_packed_uint64();
                 uint64_t lastval = 0;
@@ -857,7 +862,9 @@ constexpr uint64_t POW2_2 = static_cast<uint64_t>(_pow(2.0,2));
 struct PhrasematchSubq {
     carmen::Cache *cache;
     double weight;
-    std::vector<std::string> phrases;
+    std::string phrase;
+    bool prefix;
+    std::vector<uint64_t> shards;
     unsigned short idx;
     unsigned short zoom;
 };
@@ -1097,7 +1104,12 @@ void coalesceSingle(uv_work_t* req) {
 
     // Load and concatenate grids for all ids in `phrases`
     std::string type = "grid";
-    Cache::intarray grids = __getall(subq.cache, type, subq.phrases);
+    Cache::intarray grids;
+    if (subq.prefix) {
+        grids = __getbyprefix(subq.cache, type, subq.shards, subq.phrase);
+    } else {
+        grids = __get(subq.cache, type, std::to_string(subq.shards[0]), subq.phrase);
+    }
 
     unsigned long m = grids.size();
     double relevMax = 0;
@@ -1231,7 +1243,12 @@ void coalesceMulti(uv_work_t* req) {
 
         // Load and concatenate grids for all ids in `phrases`
         std::string type = "grid";
-        Cache::intarray grids = __getall(subq.cache, type, subq.phrases);
+        Cache::intarray grids;
+        if (subq.prefix) {
+            grids = __getbyprefix(subq.cache, type, subq.shards, subq.phrase);
+        } else {
+            grids = __get(subq.cache, type, std::to_string(subq.shards[0]), subq.phrase);
+        }
 
         unsigned short z = subq.zoom;
         auto const& zCache = zoomCache[z];
@@ -1421,12 +1438,15 @@ NAN_METHOD(Cache::coalesce) {
             subq.zoom = static_cast<unsigned short>(_zoom);
 
             subq.weight = jsStack->Get(Nan::New("weight").ToLocalChecked())->NumberValue();
+            subq.phrase = *String::Utf8Value(jsStack->Get(Nan::New("phrase").ToLocalChecked())->ToString());
 
-            if (!jsStack->Has(Nan::New("phrases").ToLocalChecked())) {
+            subq.prefix = jsStack->Get(Nan::New("prefix").ToLocalChecked())->BooleanValue();
+
+            if (!jsStack->Has(Nan::New("shards").ToLocalChecked())) {
                 delete baton;
-                return Nan::ThrowTypeError("Subq object must have 'phrases' array");
+                return Nan::ThrowTypeError("Subq object must have 'shards' array");
             }
-            subq.phrases = arrayToStrVector(Local<Array>::Cast(jsStack->Get(Nan::New("phrases").ToLocalChecked())));
+            subq.shards = arrayToVector(Local<Array>::Cast(jsStack->Get(Nan::New("shards").ToLocalChecked())));
 
             // JS cache reference => cpp
             Local<Object> cache = Local<Object>::Cast(jsStack->Get(Nan::New("cache").ToLocalChecked()));
