@@ -15,12 +15,11 @@ using namespace v8;
 Nan::Persistent<FunctionTemplate> Cache::constructor;
 
 inline std::string shard(std::string id) {
-    // strings of length < 3 go to magic shard 0
-    if (id.length() < 3) return "0";
     const char* data_p = id.c_str();
-    int length = 3;
+    int length = id.length();
+    if (length > 3) length = 3;
 
-    // crc16 of the first three bytes
+    // crc16 of the first three bytes, or all bytes if length is < 3
     unsigned char x;
     uint16_t crc = 0xFFFF;
 
@@ -74,7 +73,7 @@ inline Local<Object> mapToObject(std::map<std::uint64_t,std::uint64_t> const& ma
     return object;
 }
 
-inline std::string cacheGet(Cache const* c, std::string const& key) {
+inline const std::string & cacheGet(Cache const* c, std::string const& key) {
     Cache::message_cache const& messages = c->msg_;
     Cache::message_cache::const_iterator mitr = messages.find(key);
     return mitr->second->second;
@@ -121,7 +120,7 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string const
     if (itr == mem.end()) {
         if (!cacheHas(c, key)) return array;
 
-        std::string ref = cacheGet(c, key);
+        std::string const & ref = cacheGet(c, key);
         protozero::pbf_reader message(ref);
         while (message.next(CACHE_MESSAGE)) {
             protozero::pbf_reader item = message.get_message();
@@ -187,9 +186,9 @@ Cache::intarray __getall(Cache const* c, std::string const& type, Cache::keyarra
     protozero::pbf_reader message;
     for (auto const& key : keys) {
         if (!cacheHas(c, key)) continue;
-        // protozero::pbf_reader message(cacheGet(c, key));
-        std::string cg = cacheGet(c, key);
-        protozero::pbf_reader message(cg);
+        protozero::pbf_reader message(cacheGet(c, key));
+        //std::string cg = cacheGet(c, key);
+        //protozero::pbf_reader message(cg);
         while (message.next(CACHE_MESSAGE)) {
             protozero::pbf_reader item = message.get_message();
             while (item.next(CACHE_ITEM)) {
@@ -315,7 +314,7 @@ NAN_METHOD(Cache::pack)
             if (!cacheHas(c, key)) {
                 return Nan::ThrowTypeError("pack: cannot pack empty data");
             } else {
-                std::string ref = cacheGet(c, key);
+                std::string const & ref = cacheGet(c, key);
                 Local<Object> buf = Nan::CopyBuffer((char*)ref.data(), ref.size()).ToLocalChecked();
                 info.GetReturnValue().Set(buf);
                 return;
@@ -548,7 +547,7 @@ NAN_METHOD(Cache::list)
 
             // parse message for ids
             if (cacheHas(c, key)) {
-                std::string ref = cacheGet(c, key);
+                std::string const & ref = cacheGet(c, key);
 
                 protozero::pbf_reader message(ref);
                 while (message.next(CACHE_MESSAGE)) {
