@@ -113,7 +113,7 @@ inline bool cacheRemove(Cache * c, std::string const& key) {
     }
 }
 
-Cache::intarray __get(Cache const* c, std::string const& type, std::string const& shard, std::string id) {
+Cache::intarray __get(Cache const* c, std::string const& type, std::string const& shard, std::string id, bool ignorePrefixFlag) {
     std::string key = type + "-" + shard;
     Cache::memcache const& mem = c->cache_;
     Cache::memcache::const_iterator itr = mem.find(key);
@@ -127,7 +127,22 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string const
             protozero::pbf_reader item = message.get_message();
             while (item.next(CACHE_ITEM)) {
                 std::string key_id = item.get_string();
-                if (key_id != id) break;
+                const char* ckey_id = key_id.c_str();
+                // what we want to continue is either that the key is equal, or
+                // that we're ignoring the prefix flag ('.') and the key_id has
+                // the prefix flag, and the id is equal to the key_id minus the
+                // last character
+                //
+                // if that's *not* the case, break
+                if (!(
+                    (key_id == id) ||
+                    (
+                        ignorePrefixFlag &&
+                        ckey_id[key_id.size() - 1] == '.' &&
+                        key_id.size() == id.size() + 1 &&
+                        memcmp(ckey_id, id.c_str(), id.size()) == 0
+                    )
+                )) break;
                 item.next();
                 auto vals = item.get_packed_uint64();
                 uint64_t lastval = 0;
@@ -141,13 +156,21 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string const
                         array.emplace_back(lastval);
                     }
                 }
-                return array;
+                if (!ignorePrefixFlag) return array;
             }
         }
         return array;
     } else {
         Cache::arraycache::const_iterator aitr = itr->second.find(id);
         if (aitr == itr->second.end()) {
+            if (ignorePrefixFlag) {
+                Cache::arraycache::const_iterator aitr2 = itr->second.find(id + ".");
+                if (aitr2 == itr->second.end()) {
+                    return array;
+                } else {
+                    return aitr2->second;
+                }
+            }
             return array;
         } else {
             return aitr->second;
@@ -174,13 +197,22 @@ Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::vect
         Cache::memcache::const_iterator memshard = mem.find(key);
         if (memshard == mem.end()) break;
         for (auto const& item : memshard->second) {
-            if (item.first.length() < prefix_length) {
-                startswith = false;
-            } else {
-                startswith = memcmp(prefix_cstr, item.first.c_str(), prefix_length) == 0;
+            const char* item_cstr = item.first.c_str();
+            size_t item_length = item.first.length();
+            // here, we skip this iteration if either the key is shorter than
+            // the prefix, or, if the key has the no-prefix flag, its length
+            // without the flag isn't the same as the item length (which will
+            // make the prefix comparison in the next step effectively an
+            // equality check)
+            if (
+                item_length < prefix_length ||
+                (item_cstr[item_length - 1] == '.' && item_length != prefix_length + 1)
+            ) {
+                continue;
             }
-            if (!startswith) continue;
-            array.insert(array.end(), item.second.begin(), item.second.end());
+            if (memcmp(prefix_cstr, item_cstr, prefix_length) == 0) {
+                array.insert(array.end(), item.second.begin(), item.second.end());
+            }
         }
     }
 
@@ -766,7 +798,7 @@ NAN_METHOD(Cache::_get)
         }
 
         Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
-        Cache::intarray vector = __get(c, type, shd, id);
+        Cache::intarray vector = __get(c, type, shd, id, false);
         if (!vector.empty()) {
             info.GetReturnValue().Set(vectorToArray(vector));
             return;
@@ -1108,7 +1140,7 @@ void coalesceSingle(uv_work_t* req) {
     if (subq.prefix) {
         grids = __getbyprefix(subq.cache, type, subq.shards, subq.phrase);
     } else {
-        grids = __get(subq.cache, type, std::to_string(subq.shards[0]), subq.phrase);
+        grids = __get(subq.cache, type, std::to_string(subq.shards[0]), subq.phrase, true);
     }
 
     unsigned long m = grids.size();
@@ -1247,7 +1279,7 @@ void coalesceMulti(uv_work_t* req) {
         if (subq.prefix) {
             grids = __getbyprefix(subq.cache, type, subq.shards, subq.phrase);
         } else {
-            grids = __get(subq.cache, type, std::to_string(subq.shards[0]), subq.phrase);
+            grids = __get(subq.cache, type, std::to_string(subq.shards[0]), subq.phrase, true);
         }
 
         unsigned short z = subq.zoom;
