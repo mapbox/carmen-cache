@@ -18,7 +18,7 @@ Nan::Persistent<FunctionTemplate> Cache::constructor;
 inline std::string shard(std::string id) {
     const char* data_p = id.c_str();
     int length = id.length();
-    if (length > 3) length = 3;
+    if (length > SHARD_PREFIX_LENGTH) length = SHARD_PREFIX_LENGTH;
 
     // crc16 of the first three bytes, or all bytes if length is < 3
     unsigned char x;
@@ -266,6 +266,7 @@ void Cache::Initialize(Handle<Object> target) {
     Nan::SetPrototypeMethod(t, "unload", unload);
     Nan::SetMethod(t, "coalesce", coalesce);
     Nan::SetMethod(t, "shard", _shard);
+    target->Set(Nan::New("SHARD_PREFIX_LENGTH").ToLocalChecked(), Nan::New(SHARD_PREFIX_LENGTH));
     target->Set(Nan::New("Cache").ToLocalChecked(), t->GetFunction());
     constructor.Reset(t);
 }

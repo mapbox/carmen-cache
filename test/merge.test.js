@@ -13,23 +13,23 @@ Cache.prototype.get = function(type, key) {
 
 tape('#merge concat', function(assert) {
     var cacheA = new Cache('a');
-    cacheA.set('term', '...1', [0,1,2,3]);
-    cacheA.set('term', '...2', [0,1,2,3]);
+    cacheA.set('term', '....1', [0,1,2,3]);
+    cacheA.set('term', '....2', [0,1,2,3]);
 
     var cacheB = new Cache('b');
-    cacheB.set('term', '...1', [10,11,12,13]);
-    cacheB.set('term', '...3', [10,11,12,13]);
+    cacheB.set('term', '....1', [10,11,12,13]);
+    cacheB.set('term', '....3', [10,11,12,13]);
 
-    var pbfA = cacheA.pack('term', +Cache.shard('...'));
-    var pbfB = cacheB.pack('term', +Cache.shard('...'));
+    var pbfA = cacheA.pack('term', +Cache.shard('....'));
+    var pbfB = cacheB.pack('term', +Cache.shard('....'));
 
     var cacheC = new Cache('c');
     cacheA.merge(pbfA, pbfB, 'concat', function(err, merged) {
         assert.ifError(err);
-        cacheC.loadSync(merged, 'term', +Cache.shard('...'));
-        assert.deepEqual(cacheC.get('term', '...2').sort(numSort), [0,1,2,3], 'a-only');
-        assert.deepEqual(cacheC.get('term', '...3').sort(numSort), [10,11,12,13], 'b-only');
-        assert.deepEqual(cacheC.get('term', '...1').sort(numSort), [0,1,2,3,10,11,12,13], 'a-b-merged');
+        cacheC.loadSync(merged, 'term', +Cache.shard('....'));
+        assert.deepEqual(cacheC.get('term', '....2').sort(numSort), [0,1,2,3], 'a-only');
+        assert.deepEqual(cacheC.get('term', '....3').sort(numSort), [10,11,12,13], 'b-only');
+        assert.deepEqual(cacheC.get('term', '....1').sort(numSort), [0,1,2,3,10,11,12,13], 'a-b-merged');
         assert.end();
     })
 });

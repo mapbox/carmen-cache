@@ -9,16 +9,16 @@ if (!fs.existsSync('/tmp/carmen-cache-megashard.pbf')) {
     var writer = new Cache('writer');
     var ids = [];
     for (var i = 0; i < 100; i++) ids.push(i);
-    for (var i = 0; i < Math.pow(2,18); i++) writer._set('grid', Cache.shard('...'), "..." + i, ids);
-    fs.writeFileSync('/tmp/carmen-cache-megashard.pbf', writer.pack('grid', +Cache.shard('...')));
+    for (var i = 0; i < Math.pow(2,18); i++) writer._set('grid', Cache.shard('....'), "...." + i, ids);
+    fs.writeFileSync('/tmp/carmen-cache-megashard.pbf', writer.pack('grid', +Cache.shard('....')));
 }
 
 var c = new Cache('cache');
-c.loadSync(fs.readFileSync('/tmp/carmen-cache-megashard.pbf'), 'grid', +Cache.shard('...'));
+c.loadSync(fs.readFileSync('/tmp/carmen-cache-megashard.pbf'), 'grid', +Cache.shard('....'));
 
 // Benchmark loading many phrases
 var phrases = [];
-for (var i = 1; i < 100; i++) phrases.push("..." + (Math.pow(2,18)-i));
+for (var i = 1; i < 100; i++) phrases.push("...." + (Math.pow(2,18)-i));
 
 var runs = 50;
 var stacks = [{

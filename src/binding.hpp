@@ -69,6 +69,8 @@ public:
 #define CACHE_MESSAGE 1
 #define CACHE_ITEM 1
 
+#define SHARD_PREFIX_LENGTH 4
+
 }
 
 #endif // __CARMEN_BINDING_HPP__
