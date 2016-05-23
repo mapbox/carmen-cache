@@ -1142,6 +1142,15 @@ void coalesceSingle(uv_work_t* req) {
         grids = __getbyprefix(subq.cache, type, subq.shards, subq.phrase);
     } else {
         grids = __get(subq.cache, type, std::to_string(subq.shards[0]), subq.phrase, true);
+        if (subq.shards.size() > 1) {
+            Cache::intarray more_grids;
+            for (size_t i = 1; i < subq.shards.size(); i++) {
+                more_grids = __get(subq.cache, type, std::to_string(subq.shards[i]), subq.phrase, true);
+                for (size_t j = 0; j < more_grids.size(); j++) {
+                    grids.emplace_back(more_grids[j]);
+                }
+            }
+        }
     }
 
     unsigned long m = grids.size();
@@ -1281,6 +1290,15 @@ void coalesceMulti(uv_work_t* req) {
             grids = __getbyprefix(subq.cache, type, subq.shards, subq.phrase);
         } else {
             grids = __get(subq.cache, type, std::to_string(subq.shards[0]), subq.phrase, true);
+            if (subq.shards.size() > 1) {
+                Cache::intarray more_grids;
+                for (size_t i = 1; i < subq.shards.size(); i++) {
+                    more_grids = __get(subq.cache, type, std::to_string(subq.shards[i]), subq.phrase, true);
+                    for (size_t j = 0; j < more_grids.size(); j++) {
+                        grids.emplace_back(more_grids[j]);
+                    }
+                }
+            }
         }
 
         unsigned short z = subq.zoom;
