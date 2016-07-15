@@ -365,6 +365,64 @@ test('coalesce args', function(assert) {
             id: 1,
             x: 1,
             y: 1,
+            relev: 1,
+            score: 1
+        }),
+        Grid.encode({
+            id: 2,
+            x: 1,
+            y: 1,
+            relev: 1,
+            score: 1
+        }),
+    ]);
+    b._set('grid', 0, 1, [
+        Grid.encode({
+            id: 3,
+            x: 2,
+            y: 2,
+            relev: 1,
+            score: 1
+        }),
+    ]);
+    test('coalesceMulti (identical relev - both computed)', function(assert) {
+        coalesce([{
+            cache: a,
+            idx: 0,
+            zoom: 1,
+            weight: 0.5,
+            phrase: 1
+        }, {
+            cache: b,
+            idx: 1,
+            zoom: 2,
+            weight: 0.5,
+            phrase: 1
+        }], {}, function(err, res) {
+            assert.ifError(err);
+            // sorts by relev, score
+            assert.deepEqual(res.length, 2, '2 results');
+            assert.deepEqual(res[0].relev, 1, '0.relev');
+            assert.deepEqual(res[1].relev, 1, '1.relev');
+            assert.deepEqual(res[0].length, 2, '0.length');
+            assert.deepEqual(res[0].length, 2, '1.length');
+            assert.deepEqual(res[0][0], { distance: 0, id: 3, idx: 1, relev: 0.5, score: 1, scoredist: 1, tmpid: 33554435, x: 2, y: 2 }, '0.0');
+            assert.deepEqual(res[0][1], { distance: 0, id: 2, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 2, x: 1, y: 1 }, '0.1');
+            assert.deepEqual(res[1][0], { distance: 0, id: 3, idx: 1, relev: 0.5, score: 1, scoredist: 1, tmpid: 33554435, x: 2, y: 2 }, '1.0');
+            assert.deepEqual(res[1][1], { distance: 0, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 1, x: 1, y: 1 }, '1.1');
+            assert.end();
+        });
+    });
+})();
+
+(function() {
+    var a = new Cache('a', 0);
+    var b = new Cache('b', 0);
+    a._set('grid', 0, 1, [
+        Grid.encode({
+            id: 1,
+            x: 1,
+            y: 1,
             relev: 0.8,
             score: 1
         }),
