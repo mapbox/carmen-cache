@@ -486,7 +486,7 @@ NAN_METHOD(Cache::merge)
     std::string method = *String::Utf8Value(info[2]->ToString());
 
     if (obj1->IsNull() || obj1->IsUndefined() || !node::Buffer::HasInstance(obj1)) return Nan::ThrowTypeError("argument 1 must be a Buffer");
-    if (obj2->IsNull() || obj2->IsUndefined() || !node::Buffer::HasInstance(obj2)) return Nan::ThrowTypeError("argument 1 must be a Buffer");
+    if (obj2->IsNull() || obj2->IsUndefined() || !node::Buffer::HasInstance(obj2)) return Nan::ThrowTypeError("argument 2 must be a Buffer");
 
     MergeBaton *baton = new MergeBaton();
     baton->pbf1 = std::string(node::Buffer::Data(obj1),node::Buffer::Length(obj1));

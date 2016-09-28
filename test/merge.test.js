@@ -52,4 +52,12 @@ tape('#merge freq', function(assert) {
     })
 });
 
+tape('#merge invalid pbf throws JS error', function(assert) {
+    var cacheA = new Cache('a');
+    cacheA.merge(new Buffer("phony protobuf"), new Buffer("phony protobuf"), 'freq', function(err, merged) {
+        assert.ok(err);
+        assert.end();
+    })
+});
+
 function numSort(a, b) { return a - b; }
