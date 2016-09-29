@@ -74,10 +74,10 @@ inline Local<Object> mapToObject(std::map<std::uint64_t,std::uint64_t> const& ma
     return object;
 }
 
-inline const std::string & cacheGet(Cache const* c, std::string const& key) {
+inline Cache::shard_pair* cacheGet(Cache const* c, std::string const& key) {
     Cache::message_cache const& messages = c->msg_;
     Cache::message_cache::const_iterator mitr = messages.find(key);
-    return mitr->second->second;
+    return &(mitr->second->second);
 }
 
 inline bool cacheHas(Cache const* c, std::string const& key) {
@@ -86,7 +86,7 @@ inline bool cacheHas(Cache const* c, std::string const& key) {
     return mitr != messages.end();
 }
 
-inline void cacheInsert(Cache * c, std::string const& key, std::string const& message) {
+inline void cacheInsert(Cache * c, std::string const& key, Cache::shard_pair const& message) {
     Cache::message_list &list = c->msglist_;
     Cache::message_cache &messages = c->msg_;
     Cache::message_cache::iterator mitr = messages.find(key);
@@ -121,29 +121,23 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string const
     if (itr == mem.end()) {
         if (!cacheHas(c, key)) return array;
 
-        std::string const & ref = cacheGet(c, key);
-        protozero::pbf_reader message(ref);
-        while (message.next(CACHE_MESSAGE)) {
-            protozero::pbf_reader item = message.get_message();
-            while (item.next(CACHE_ITEM)) {
-                std::string key_id = item.get_string();
-                const char* ckey_id = key_id.c_str();
-                // what we want to continue is either that the key is equal, or
-                // that we're ignoring the prefix flag ('.') and the key_id has
-                // the prefix flag, and the id is equal to the key_id minus the
-                // last character
-                //
-                // if that's *not* the case, break
-                if (!(
-                    (key_id == id) ||
-                    (
-                        ignorePrefixFlag &&
-                        ckey_id[key_id.size() - 1] == '.' &&
-                        key_id.size() == id.size() + 1 &&
-                        memcmp(ckey_id, id.c_str(), id.size()) == 0
-                    )
-                )) break;
-                item.next();
+        Cache::shard_pair* ref = cacheGet(c, key);
+
+        Cache::shard_trie trie;
+        trie.set_array((void*)(std::get<0>(*ref).c_str()), std::get<0>(*ref).length() / trie.unit_size());
+
+        std::string const & proto = std::get<1>(*ref);
+
+        std::string search_id = id;
+        for (uint32_t i = 0; i < 2; i++) {
+            auto result = trie.exactMatchSearch<Cache::shard_trie::result_type>(search_id.c_str(), search_id.length(), 0);
+            if (result != Cache::shard_trie::error_code::CEDAR_NO_VALUE) {
+                protozero::pbf_reader message(proto.substr(result));
+
+                message.next(CACHE_MESSAGE);
+                protozero::pbf_reader item = message.get_message();
+
+                item.next(CACHE_ITEM);
                 auto vals = item.get_packed_uint64();
                 uint64_t lastval = 0;
                 // delta decode values.
@@ -156,7 +150,13 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string const
                         array.emplace_back(lastval);
                     }
                 }
-                if (!ignorePrefixFlag) return array;
+            }
+            if (i == 0) {
+                if (!ignorePrefixFlag) {
+                    break;
+                } else {
+                    search_id = search_id + ".";
+                }
             }
         }
         return array;
@@ -220,29 +220,39 @@ Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::vect
     protozero::pbf_reader message;
     for (auto const& key : keys) {
         if (!cacheHas(c, key)) continue;
-        protozero::pbf_reader message(cacheGet(c, key));
-        while (message.next(CACHE_MESSAGE)) {
+
+        Cache::shard_pair* ref = cacheGet(c, key);
+
+        Cache::shard_trie trie;
+        trie.set_array((void*)(std::get<0>(*ref).c_str()), std::get<0>(*ref).length() / trie.unit_size());
+
+        std::string const & proto = std::get<1>(*ref);
+
+        const char* k = prefix.c_str();
+        size_t len = prefix.length();
+        size_t from = 0;
+
+        for (size_t pos = 0; pos < len; ) {
+            int32_t result = trie.traverse(k, from, pos, pos + 1);
+            if (result == Cache::shard_trie::error_code::CEDAR_NO_VALUE) continue;
+            if (result == Cache::shard_trie::error_code::CEDAR_NO_PATH)  break;
+
+            protozero::pbf_reader message(proto.substr(result));
+
+            message.next(CACHE_MESSAGE);
             protozero::pbf_reader item = message.get_message();
-            while (item.next(CACHE_ITEM)) {
-                std::string key_id = item.get_string();
-                if (key_id.length() < prefix_length) {
-                    startswith = false;
+
+            item.next(CACHE_ITEM);
+            auto vals = item.get_packed_uint64();
+            uint64_t lastval = 0;
+            // delta decode values.
+            for (auto it = vals.first; it != vals.second; ++it) {
+                if (lastval == 0) {
+                    lastval = *it;
+                    array.emplace_back(lastval);
                 } else {
-                    startswith = memcmp(prefix_cstr, key_id.c_str(), prefix_length) == 0;
-                }
-                if (!startswith) break;
-                item.next();
-                auto vals = item.get_packed_uint64();
-                uint64_t lastval = 0;
-                // delta decode values.
-                for (auto it = vals.first; it != vals.second; ++it) {
-                    if (lastval == 0) {
-                        lastval = *it;
-                        array.emplace_back(lastval);
-                    } else {
-                        lastval = lastval - *it;
-                        array.emplace_back(lastval);
-                    }
+                    lastval = lastval - *it;
+                    array.emplace_back(lastval);
                 }
             }
         }
@@ -312,14 +322,16 @@ NAN_METHOD(Cache::pack)
         Cache::memcache const& mem = c->cache_;
         Cache::memcache::const_iterator itr = mem.find(key);
         if (itr != mem.end()) {
+            Cache::shard_trie trie;
             std::string message;
+
             // Optimization idea: pre-pass on arrays to assemble guess about
             // how long the final message will be in order to be able to call
             // message.reserve(<length>)
             protozero::pbf_writer writer(message);
             for (auto const& item : itr->second) {
-                protozero::pbf_writer item_writer(writer,1);
-                item_writer.add_string(1,item.first);
+                int32_t m_pos = message.length();
+                protozero::pbf_writer item_writer(writer, 1);
                 std::size_t array_size = item.second.size();
                 if (array_size > 0) {
                     // make copy of intarray so we can sort without
@@ -330,7 +342,7 @@ NAN_METHOD(Cache::pack)
 
                     // Using new (in protozero 1.3.0) packed writing API
                     // https://github.com/mapbox/protozero/commit/4e7e32ac5350ea6d3dcf78ff5e74faeee513a6e1
-                    protozero::packed_field_uint64 field{item_writer, 2};
+                    protozero::packed_field_uint64 field{item_writer, 1};
                     uint64_t lastval = 0;
                     for (auto const& vitem : varr) {
                         if (lastval == 0) {
@@ -341,19 +353,50 @@ NAN_METHOD(Cache::pack)
                         lastval = vitem;
                     }
                 }
+                trie.update(item.first.c_str(), item.first.length(), m_pos);
             }
             if (message.empty()) {
                 return Nan::ThrowTypeError("pack: invalid message ByteSize encountered");
             } else {
-                info.GetReturnValue().Set(Nan::CopyBuffer(message.data(), message.size()).ToLocalChecked());
+                const char* trie_arr = static_cast<const char*>(trie.array());
+
+                uint32_t trie_size = trie.size() * trie.unit_size();
+                uint32_t proto_size = message.length();
+
+                Local<Object> buf = (Nan::NewBuffer((sizeof(uint32_t) * 2) + trie_size + proto_size)).ToLocalChecked();
+
+                char* data = node::Buffer::Data(buf);
+
+                std::memcpy(data, &trie_size, sizeof(uint32_t));
+                std::memcpy(data + sizeof(uint32_t), &proto_size, sizeof(uint32_t));
+                std::memcpy(data + (2 * sizeof(uint32_t)), trie_arr, trie_size);
+                std::memcpy(data + (2 * sizeof(uint32_t)) + trie_size, message.c_str(), proto_size);
+
+                info.GetReturnValue().Set(buf);
                 return;
             }
         } else {
             if (!cacheHas(c, key)) {
                 return Nan::ThrowTypeError("pack: cannot pack empty data");
             } else {
-                std::string const & ref = cacheGet(c, key);
-                Local<Object> buf = Nan::CopyBuffer((char*)ref.data(), ref.size()).ToLocalChecked();
+                Cache::shard_pair* ref = cacheGet(c, key);
+
+                Cache::shard_trie trie;
+                trie.set_array((void*)(std::get<0>(*ref).c_str()), std::get<0>(*ref).length() / trie.unit_size());
+
+                std::string const & proto = std::get<1>(*ref);
+
+                uint32_t trie_size = trie.size() * sizeof(cedar::da<uint32_t>::node);
+                uint32_t proto_size = proto.length();
+
+                Local<Object> buf = (Nan::NewBuffer((sizeof(uint32_t) * 2) + trie_size + proto_size)).ToLocalChecked();
+                char* data = node::Buffer::Data(buf);
+
+                std::memcpy(data, &trie_size, sizeof(uint32_t));
+                std::memcpy(data + sizeof(uint32_t), &proto_size, sizeof(uint32_t));
+                std::memcpy(data + (2 * sizeof(uint32_t)), static_cast<const char*>(trie.array()), trie_size);
+                std::memcpy(data + (2 * sizeof(uint32_t)) + trie_size, proto.c_str(), proto_size);
+
                 info.GetReturnValue().Set(buf);
                 return;
             }
@@ -585,15 +628,17 @@ NAN_METHOD(Cache::list)
 
             // parse message for ids
             if (cacheHas(c, key)) {
-                std::string const & ref = cacheGet(c, key);
+                Cache::shard_pair* ref = cacheGet(c, key);
 
-                protozero::pbf_reader message(ref);
-                while (message.next(CACHE_MESSAGE)) {
-                    protozero::pbf_reader item = message.get_message();
-                    while (item.next(CACHE_ITEM)) {
-                        std::string key_id = item.get_string();
-                        ids->Set(idx++, Nan::New(key_id).ToLocalChecked());
-                    }
+                Cache::shard_trie trie;
+                trie.set_array((void*)(std::get<0>(*ref).c_str()), std::get<0>(*ref).length() / trie.unit_size());
+
+                size_t from (0), p (0);
+                char trie_key[1024];
+                for (int32_t i = trie.begin (from, p); i != Cache::shard_trie::error_code::CEDAR_NO_PATH; i = trie.next (from, p)) {
+                    trie.suffix(trie_key, p, from);
+                    std::string key_id(trie_key, p);
+                    ids->Set(idx++, Nan::New(key_id).ToLocalChecked());
                 }
             }
 
@@ -732,7 +777,16 @@ NAN_METHOD(Cache::loadSync)
             mem.erase(itr2);
         }
         if (!cacheHas(c, key)) {
-            cacheInsert(c, key, std::string(node::Buffer::Data(obj),node::Buffer::Length(obj)));
+            char* data = node::Buffer::Data(obj);
+            Cache::shard_trie trie;
+
+            uint32_t trie_size, proto_size;
+            memcpy(&trie_size, data, sizeof(uint32_t));
+            memcpy(&proto_size, data + sizeof(uint32_t), sizeof(uint32_t));
+
+            Cache::shard_pair tpl = std::make_pair(std::string(data + (2 * sizeof(uint32_t)), trie_size), std::string(data + (2 * sizeof(uint32_t)) + trie_size, proto_size));
+
+            cacheInsert(c, key, tpl);
         }
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());

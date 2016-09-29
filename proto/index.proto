@@ -6,8 +6,7 @@ option optimize_for = LITE_RUNTIME;
 message object {
 
     message item {
-        required string key = 1;
-        repeated int64 val = 2 [ packed = true ];
+        repeated int64 val = 1 [ packed = true ];
     }
 
     repeated item items = 1;
