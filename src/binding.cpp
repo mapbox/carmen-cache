@@ -184,10 +184,10 @@ NAN_METHOD(Cache::pack)
             // message.reserve(<length>)
             protozero::pbf_writer writer(message);
             for (auto const& item : itr->second) {
-                protozero::pbf_writer item_writer(writer,1);
-                item_writer.add_uint64(1,item.first);
                 std::size_t array_size = item.second.size();
                 if (array_size > 0) {
+                    protozero::pbf_writer item_writer(writer,1);
+                    item_writer.add_uint64(1,item.first);
                     // make copy of intarray so we can sort without
                     // modifying the original array
                     Cache::intarray varr = item.second;
