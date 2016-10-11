@@ -3,11 +3,6 @@ package carmen.proto;
 
 option optimize_for = LITE_RUNTIME;
 
-message object {
-
-    message item {
-        repeated int64 val = 1 [ packed = true ];
-    }
-
-    repeated item items = 1;
+message item {
+    repeated int64 val = 1 [ packed = true ];
 }

@@ -132,11 +132,11 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string const
         for (uint32_t i = 0; i < 2; i++) {
             auto result = trie.exactMatchSearch<Cache::shard_trie::result_type>(search_id.c_str(), search_id.length(), 0);
             if (result != Cache::shard_trie::error_code::CEDAR_NO_VALUE) {
-                protozero::pbf_reader message(proto.substr(result));
+                uint32_t m_len;
 
-                message.next(CACHE_MESSAGE);
-                protozero::pbf_reader item = message.get_message();
-
+                std::memcpy(&m_len, (void*)(proto.data() + result), sizeof(uint32_t));
+                std::string message(proto.data() + result + sizeof(uint32_t), m_len);
+                protozero::pbf_reader item(message);
                 item.next(CACHE_ITEM);
                 auto vals = item.get_packed_uint64();
                 uint64_t lastval = 0;
@@ -237,12 +237,13 @@ Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::vect
             if (result == Cache::shard_trie::error_code::CEDAR_NO_VALUE) continue;
             if (result == Cache::shard_trie::error_code::CEDAR_NO_PATH)  break;
 
-            protozero::pbf_reader message(proto.substr(result));
+            uint32_t m_len;
 
-            message.next(CACHE_MESSAGE);
-            protozero::pbf_reader item = message.get_message();
-
+            std::memcpy(&m_len, (void*)(proto.data() + result), sizeof(uint32_t));
+            std::string message(proto.data() + result + sizeof(uint32_t), m_len);
+            protozero::pbf_reader item(message);
             item.next(CACHE_ITEM);
+
             auto vals = item.get_packed_uint64();
             uint64_t lastval = 0;
             // delta decode values.
@@ -323,15 +324,16 @@ NAN_METHOD(Cache::pack)
         Cache::memcache::const_iterator itr = mem.find(key);
         if (itr != mem.end()) {
             Cache::shard_trie trie;
-            std::string message;
+            std::string all_messages;
 
             // Optimization idea: pre-pass on arrays to assemble guess about
             // how long the final message will be in order to be able to call
             // message.reserve(<length>)
-            protozero::pbf_writer writer(message);
             for (auto const& item : itr->second) {
-                int32_t m_pos = message.length();
-                protozero::pbf_writer item_writer(writer, 1);
+                std::string message;
+                message.clear();
+
+                protozero::pbf_writer item_writer(message);
                 std::size_t array_size = item.second.size();
                 if (array_size > 0) {
                     // make copy of intarray so we can sort without
@@ -353,15 +355,22 @@ NAN_METHOD(Cache::pack)
                         lastval = vitem;
                     }
                 }
+
+                int32_t m_pos = all_messages.length();
+
+                uint32_t m_len = message.length();
+                all_messages.append(reinterpret_cast<const char*>(&m_len), sizeof(uint32_t));
+                all_messages.append(message);
+
                 trie.update(item.first.c_str(), item.first.length(), m_pos);
             }
-            if (message.empty()) {
+            if (all_messages.empty()) {
                 return Nan::ThrowTypeError("pack: invalid message ByteSize encountered");
             } else {
                 const char* trie_arr = static_cast<const char*>(trie.array());
 
                 uint32_t trie_size = trie.size() * trie.unit_size();
-                uint32_t proto_size = message.length();
+                uint32_t proto_size = all_messages.length();
 
                 Local<Object> buf = (Nan::NewBuffer((sizeof(uint32_t) * 2) + trie_size + proto_size)).ToLocalChecked();
 
@@ -370,7 +379,7 @@ NAN_METHOD(Cache::pack)
                 std::memcpy(data, &trie_size, sizeof(uint32_t));
                 std::memcpy(data + sizeof(uint32_t), &proto_size, sizeof(uint32_t));
                 std::memcpy(data + (2 * sizeof(uint32_t)), trie_arr, trie_size);
-                std::memcpy(data + (2 * sizeof(uint32_t)) + trie_size, message.c_str(), proto_size);
+                std::memcpy(data + (2 * sizeof(uint32_t)) + trie_size, all_messages.c_str(), proto_size);
 
                 info.GetReturnValue().Set(buf);
                 return;
