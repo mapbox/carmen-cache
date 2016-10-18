@@ -229,13 +229,13 @@ Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::vect
 
         const char* k = prefix.c_str();
         size_t len = prefix.length();
-        size_t from = 0;
+        size_t from (0);
 
-        for (size_t pos = 0; pos < len; ) {
-            int32_t result = trie.traverse(k, from, pos, pos + 1);
-            if (result == Cache::shard_trie::error_code::CEDAR_NO_VALUE) continue;
-            if (result == Cache::shard_trie::error_code::CEDAR_NO_PATH)  break;
+        size_t pos (0), p (0);
+        if (trie.traverse(k, from, pos, len) == Cache::shard_trie::error_code::CEDAR_NO_PATH) continue;
+        size_t root = from;
 
+        for (int32_t result = trie.begin (from, p); result != Cache::shard_trie::error_code::CEDAR_NO_PATH; result = trie.next (from, p, root)) {
             uint32_t m_len;
 
             std::memcpy(&m_len, (void*)(proto.data() + result), sizeof(uint32_t));
