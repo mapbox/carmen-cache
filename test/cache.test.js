@@ -48,8 +48,8 @@ tape('#pack', function(assert) {
     // set should replace data
     cache._set('term', 0, '5', [0,1,2,4]);
     assert.deepEqual(cache.pack('term', 0).length, 2066);
-    //cache._set('term', 0, '5', []);
-    //assert.deepEqual(cache.pack('term', 0).length, 5);
+    cache._set('term', 0, '5', []);
+    assert.deepEqual(cache.pack('term', 0).length, 2060);
 
     // fake data
     var array = [];
