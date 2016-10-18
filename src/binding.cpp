@@ -217,7 +217,6 @@ Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::vect
     }
 
     // Load values from message cache
-    protozero::pbf_reader message;
     for (auto const& key : keys) {
         if (!cacheHas(c, key)) continue;
 
@@ -432,95 +431,175 @@ void mergeQueue(uv_work_t* req) {
     std::string const& pbf2 = baton->pbf2;
     std::string const& method = baton->method;
 
+    const char* data1 = pbf1.data();
+    const char* data2 = pbf2.data();
+
+    uint32_t trie_size, proto_size;
+
+    memcpy(&trie_size, data1, sizeof(uint32_t));
+    memcpy(&proto_size, data1 + sizeof(uint32_t), sizeof(uint32_t));
+    std::string trie_data1(data1 + (2 * sizeof(uint32_t)), trie_size);
+    std::string proto_data1(data1 + (2 * sizeof(uint32_t)) + trie_size, proto_size);
+    Cache::shard_trie trie1;
+    trie1.set_array((void*)(trie_data1.data()), trie_data1.length() / trie1.unit_size());
+
+    memcpy(&trie_size, data2, sizeof(uint32_t));
+    memcpy(&proto_size, data2 + sizeof(uint32_t), sizeof(uint32_t));
+    std::string trie_data2(data2 + (2 * sizeof(uint32_t)), trie_size);
+    std::string proto_data2(data2 + (2 * sizeof(uint32_t)) + trie_size, proto_size);
+    Cache::shard_trie trie2;
+    trie2.set_array((void*)(trie_data2.data()), trie_data2.length() / trie2.unit_size());
+
     // Ids that have been seen
     std::map<Cache::key_type,bool> ids1;
     std::map<Cache::key_type,bool> ids2;
 
-    std::string merged;
-    protozero::pbf_writer writer(merged);
+    // output
+    Cache::shard_trie out_trie;
+    std::string out_messages;
 
     // Store ids from 1
-    protozero::pbf_reader pre1(pbf1);
-    while (pre1.next(CACHE_MESSAGE)) {
-        protozero::pbf_reader item = pre1.get_message();
-        while (item.next(CACHE_ITEM)) {
-            ids1.emplace(item.get_string(), true);
-        }
+    size_t from (0), p (0);
+    char trie_key[1024];
+    for (int32_t i = trie1.begin (from, p); i != Cache::shard_trie::error_code::CEDAR_NO_PATH; i = trie1.next (from, p)) {
+        trie1.suffix(trie_key, p, from);
+        std::string key_id(trie_key, p);
+        ids1.emplace(key_id, true);
     }
 
     // Store ids from 2
-    protozero::pbf_reader pre2(pbf2);
-    while (pre2.next(CACHE_MESSAGE)) {
-        protozero::pbf_reader item = pre2.get_message();
-        while (item.next(CACHE_ITEM)) {
-            ids2.emplace(item.get_string(), true);
-        }
+    from = 0; p = 0;
+    for (int32_t i = trie2.begin (from, p); i != Cache::shard_trie::error_code::CEDAR_NO_PATH; i = trie2.next (from, p)) {
+        trie2.suffix(trie_key, p, from);
+        std::string key_id(trie_key, p);
+        ids2.emplace(key_id, true);
     }
 
     // No delta writes from message1
-    protozero::pbf_reader message1(pbf1);
-    while (message1.next(CACHE_MESSAGE)) {
-        protozero::pbf_writer item_writer(writer,1);
-        protozero::pbf_reader item = message1.get_message();
-        while (item.next(CACHE_ITEM)) {
-            std::string key_id = item.get_string();
+    from = 0; p = 0;
+    for (int32_t i = trie1.begin (from, p); i != Cache::shard_trie::error_code::CEDAR_NO_PATH; i = trie1.next (from, p)) {
+        trie1.suffix(trie_key, p, from);
+        std::string key_id(trie_key, p);
 
-            // Skip this id if also in message 2
-            if (ids2.find(key_id) != ids2.end()) break;
+        // Skip this id if also in message 2
+        if (ids2.find(key_id) != ids2.end()) continue;
 
-            item_writer.add_string(1,key_id);
-            item.next();
-            protozero::packed_field_uint64 field{item_writer, 2};
+        // get input proto
+        uint32_t m_len;
+        std::memcpy(&m_len, (void*)(proto_data1.data() + i), sizeof(uint32_t));
+        std::string in_message(proto_data1.data() + i + sizeof(uint32_t), m_len);
+        protozero::pbf_reader item(in_message);
+        item.next(CACHE_ITEM);
+
+        std::string message;
+        message.clear();
+
+        protozero::pbf_writer item_writer(message);
+        {
+            protozero::packed_field_uint64 field{item_writer, 1};
             auto vals = item.get_packed_uint64();
             for (auto it = vals.first; it != vals.second; ++it) {
                 field.add_element(static_cast<uint64_t>(*it));
             }
         }
+
+        int32_t m_pos = out_messages.length();
+
+        uint32_t om_len = message.length();
+        out_messages.append(reinterpret_cast<const char*>(&om_len), sizeof(uint32_t));
+        out_messages.append(message);
+
+        out_trie.update(key_id.c_str(), key_id.length(), m_pos);
     }
 
     // No delta writes from message2
-    protozero::pbf_reader message2(pbf2);
-    while (message2.next(CACHE_MESSAGE)) {
-        protozero::pbf_writer item_writer(writer,1);
-        protozero::pbf_reader item = message2.get_message();
-        while (item.next(CACHE_ITEM)) {
-            std::string key_id = item.get_string();
+    from = 0; p = 0;
+    for (int32_t i = trie2.begin (from, p); i != Cache::shard_trie::error_code::CEDAR_NO_PATH; i = trie2.next (from, p)) {
+        trie2.suffix(trie_key, p, from);
+        std::string key_id(trie_key, p);
 
-            // Skip this id if also in message 2
-            if (ids1.find(key_id) != ids1.end()) break;
+        // Skip this id if also in message 1
+        if (ids1.find(key_id) != ids1.end()) continue;
 
-            item_writer.add_string(1,key_id);
-            item.next();
-            protozero::packed_field_uint64 field{item_writer, 2};
+        // get input proto
+        uint32_t m_len;
+        std::memcpy(&m_len, (void*)(proto_data2.data() + i), sizeof(uint32_t));
+        std::string in_message(proto_data2.data() + i + sizeof(uint32_t), m_len);
+        protozero::pbf_reader item(in_message);
+        item.next(CACHE_ITEM);
+
+        std::string message;
+        message.clear();
+
+        protozero::pbf_writer item_writer(message);
+        {
+            protozero::packed_field_uint64 field{item_writer, 1};
             auto vals = item.get_packed_uint64();
             for (auto it = vals.first; it != vals.second; ++it) {
                 field.add_element(static_cast<uint64_t>(*it));
             }
         }
+
+        int32_t m_pos = out_messages.length();
+
+        uint32_t om_len = message.length();
+        out_messages.append(reinterpret_cast<const char*>(&om_len), sizeof(uint32_t));
+        out_messages.append(message);
+
+        out_trie.update(key_id.c_str(), key_id.length(), m_pos);
     }
 
     // Delta writes for ids in both message1 and message2
-    protozero::pbf_reader overlap1(pbf1);
-    while (overlap1.next(CACHE_MESSAGE)) {
-        protozero::pbf_writer item_writer(writer,1);
-        protozero::pbf_reader item = overlap1.get_message();
-        while (item.next(CACHE_ITEM)) {
-            std::string key_id = item.get_string();
+    from = 0; p = 0;
+    for (int32_t i = trie2.begin (from, p); i != Cache::shard_trie::error_code::CEDAR_NO_PATH; i = trie2.next (from, p)) {
+        trie2.suffix(trie_key, p, from);
+        std::string key_id(trie_key, p);
 
-            // Skip ids that are only in one or the other lists
-            if (ids1.find(key_id) == ids1.end() || ids2.find(key_id) == ids2.end()) break;
+        // Skip ids that are only in one or the other lists
+        if (ids1.find(key_id) == ids1.end() || ids2.find(key_id) == ids2.end()) continue;
 
-            item_writer.add_string(1,key_id);
+        // get input proto
+        uint32_t m_len;
+        std::memcpy(&m_len, (void*)(proto_data1.data() + i), sizeof(uint32_t));
+        std::string in_message(proto_data1.data() + i + sizeof(uint32_t), m_len);
+        protozero::pbf_reader item(in_message);
+        item.next(CACHE_ITEM);
 
-            item.next();
-            uint64_t lastval = 0;
-            Cache::intarray varr;
+        uint64_t lastval = 0;
+        Cache::intarray varr;
 
-            // Add values from pbf1
-            auto vals = item.get_packed_uint64();
-            for (auto it = vals.first; it != vals.second; ++it) {
+        // Add values from pbf1
+        auto vals = item.get_packed_uint64();
+        for (auto it = vals.first; it != vals.second; ++it) {
+            if (method == "freq") {
+                varr.emplace_back(*it);
+                break;
+            } else if (lastval == 0) {
+                lastval = *it;
+                varr.emplace_back(lastval);
+            } else {
+                lastval = lastval - *it;
+                varr.emplace_back(lastval);
+            }
+        }
+
+        auto result = trie2.exactMatchSearch<Cache::shard_trie::result_type>(key_id.c_str(), key_id.length(), 0);
+        if (result != Cache::shard_trie::error_code::CEDAR_NO_VALUE) {
+            // get input proto 2
+            uint32_t m_len2;
+            std::memcpy(&m_len2, (void*)(proto_data2.data() + i), sizeof(uint32_t));
+            std::string in_message2(proto_data2.data() + i + sizeof(uint32_t), m_len2);
+            protozero::pbf_reader item2(in_message2);
+            item2.next(CACHE_ITEM);
+
+            auto vals2 = item2.get_packed_uint64();
+            for (auto it = vals2.first; it != vals2.second; ++it) {
                 if (method == "freq") {
-                    varr.emplace_back(*it);
+                    if (key_id == "__MAX__") {
+                        varr[0] = varr[0] > *it ? varr[0] : *it;
+                    } else {
+                        varr[0] = varr[0] + *it;
+                    }
                     break;
                 } else if (lastval == 0) {
                     lastval = *it;
@@ -530,41 +609,18 @@ void mergeQueue(uv_work_t* req) {
                     varr.emplace_back(lastval);
                 }
             }
+        }
 
-            // Check pbf2 for this id and merge its items if found
-            protozero::pbf_reader overlap2(pbf2);
-            while (overlap2.next(CACHE_MESSAGE)) {
-                protozero::pbf_reader item2 = overlap2.get_message();
-                while (item2.next(CACHE_ITEM)) {
-                    std::string key_id2 = item2.get_string();
-                    if (key_id2 != key_id) break;
-                    item2.next();
-                    lastval = 0;
-                    auto vals2 = item2.get_packed_uint64();
-                    for (auto it = vals2.first; it != vals2.second; ++it) {
-                        if (method == "freq") {
-                            if (key_id2 == "__MAX__") {
-                                varr[0] = varr[0] > *it ? varr[0] : *it;
-                            } else {
-                                varr[0] = varr[0] + *it;
-                            }
-                            break;
-                        } else if (lastval == 0) {
-                            lastval = *it;
-                            varr.emplace_back(lastval);
-                        } else {
-                            lastval = lastval - *it;
-                            varr.emplace_back(lastval);
-                        }
-                    }
-                }
-            }
+        // Sort for proper delta encoding
+        std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
 
-            // Sort for proper delta encoding
-            std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
+        // Write varr to merged protobuf
+        std::string message;
+        message.clear();
 
-            // Write varr to merged protobuf
-            protozero::packed_field_uint64 field{item_writer, 2};
+        protozero::pbf_writer item_writer(message);
+        {
+            protozero::packed_field_uint64 field{item_writer, 1};
             lastval = 0;
             for (auto const& vitem : varr) {
                 if (lastval == 0) {
@@ -575,7 +631,26 @@ void mergeQueue(uv_work_t* req) {
                 lastval = vitem;
             }
         }
+
+        int32_t m_pos = out_messages.length();
+
+        uint32_t om_len = message.length();
+        out_messages.append(reinterpret_cast<const char*>(&om_len), sizeof(uint32_t));
+        out_messages.append(message);
+
+        out_trie.update(key_id.c_str(), key_id.length(), m_pos);
     }
+
+    uint32_t out_trie_size = out_trie.size() * out_trie.unit_size();
+    uint32_t out_proto_size = out_messages.length();
+
+    std::string merged("");
+    merged.reserve((sizeof(uint32_t) * 2) + out_trie_size + out_proto_size);
+
+    merged.append(reinterpret_cast<const char*>(&out_trie_size), sizeof(uint32_t));
+    merged.append(reinterpret_cast<const char*>(&out_proto_size), sizeof(uint32_t));
+    merged.append(static_cast<const char*>(out_trie.array()), out_trie_size);
+    merged.append(out_messages);
 
     baton->pbf3 = merged;
 }

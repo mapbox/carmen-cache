@@ -44,10 +44,10 @@ tape('#pack', function(assert) {
     var cache = new Cache('a', 1);
     cache._set('term', 0, '5', [0,1,2]);
     b = cache.pack('term', 0);
-    assert.deepEqual(cache.pack('term', 0).length, 10);
+    assert.deepEqual(cache.pack('term', 0).length, 2065);
     // set should replace data
     cache._set('term', 0, '5', [0,1,2,4]);
-    assert.deepEqual(cache.pack('term', 0).length, 11);
+    assert.deepEqual(cache.pack('term', 0).length, 2066);
     //cache._set('term', 0, '5', []);
     //assert.deepEqual(cache.pack('term', 0).length, 5);
 
@@ -76,12 +76,12 @@ tape('#pack', function(assert) {
 
     // grab data right back out
     loader.loadSync(packer.pack('term',0), 'term', 0);
-    assert.deepEqual(loader.pack('term', 0).length, 10009);
+    assert.deepEqual(loader.pack('term', 0).length, 12063);
     assert.deepEqual(loader._get('term', 0, '5'), array);
 
     // grab data right back out
     loader.loadSync(packer.pack('term', 1), 'term', 1);
-    assert.deepEqual(loader.pack('term', 1).length, 10009);
+    assert.deepEqual(loader.pack('term', 1).length, 12063);
     assert.deepEqual(loader._get('term', 1, '6'), array);
 
     // try to grab data that does not exist
