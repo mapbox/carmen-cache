@@ -230,6 +230,7 @@ Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::vect
         const char* k = prefix.c_str();
         size_t len = prefix.length();
         size_t from (0);
+        char trie_key[1024];
 
         size_t pos (0), p (0);
         if (trie.traverse(k, from, pos, len) == Cache::shard_trie::error_code::CEDAR_NO_PATH) continue;
@@ -237,6 +238,19 @@ Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::vect
 
         for (int32_t result = trie.begin (from, p); result != Cache::shard_trie::error_code::CEDAR_NO_PATH; result = trie.next (from, p, root)) {
             uint32_t m_len;
+
+            // get the key string to check for the suffix
+            trie.suffix(trie_key, p, from);
+            std::string key_id = prefix;
+            key_id.append(trie_key, p);
+
+            // same skip operation as for the memory cache; see above
+            if (
+                key_id.length() < prefix.length() ||
+                (key_id.at(key_id.length() - 1) == '.' && key_id.length() != prefix.length() + 1)
+            ) {
+                continue;
+            }
 
             std::memcpy(&m_len, (void*)(proto.data() + result), sizeof(uint32_t));
             std::string message(proto.data() + result + sizeof(uint32_t), m_len);
