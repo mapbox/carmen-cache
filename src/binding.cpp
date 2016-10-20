@@ -565,8 +565,8 @@ void mergeQueue(uv_work_t* req) {
 
     // Delta writes for ids in both message1 and message2
     from = 0; p = 0;
-    for (int32_t i = trie2.begin (from, p); i != Cache::shard_trie::error_code::CEDAR_NO_PATH; i = trie2.next (from, p)) {
-        trie2.suffix(trie_key, p, from);
+    for (int32_t i = trie1.begin (from, p); i != Cache::shard_trie::error_code::CEDAR_NO_PATH; i = trie1.next (from, p)) {
+        trie1.suffix(trie_key, p, from);
         std::string key_id(trie_key, p);
 
         // Skip ids that are only in one or the other lists
@@ -601,12 +601,13 @@ void mergeQueue(uv_work_t* req) {
         if (result != Cache::shard_trie::error_code::CEDAR_NO_VALUE) {
             // get input proto 2
             uint32_t m_len2;
-            std::memcpy(&m_len2, (void*)(proto_data2.data() + i), sizeof(uint32_t));
-            std::string in_message2(proto_data2.data() + i + sizeof(uint32_t), m_len2);
+            std::memcpy(&m_len2, (void*)(proto_data2.data() + result), sizeof(uint32_t));
+            std::string in_message2(proto_data2.data() + result + sizeof(uint32_t), m_len2);
             protozero::pbf_reader item2(in_message2);
             item2.next(CACHE_ITEM);
 
             auto vals2 = item2.get_packed_uint64();
+            lastval = 0;
             for (auto it = vals2.first; it != vals2.second; ++it) {
                 if (method == "freq") {
                     if (key_id == "__MAX__") {
