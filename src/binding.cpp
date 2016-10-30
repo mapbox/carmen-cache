@@ -355,27 +355,29 @@ NAN_METHOD(Cache::pack)
                     // delta-encode values, sorted in descending order.
                     std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
 
-                    // Using new (in protozero 1.3.0) packed writing API
-                    // https://github.com/mapbox/protozero/commit/4e7e32ac5350ea6d3dcf78ff5e74faeee513a6e1
-                    protozero::packed_field_uint64 field{item_writer, 1};
-                    uint64_t lastval = 0;
-                    for (auto const& vitem : varr) {
-                        if (lastval == 0) {
-                            field.add_element(static_cast<uint64_t>(vitem));
-                        } else {
-                            field.add_element(static_cast<uint64_t>(lastval - vitem));
+                    {
+                        // Using new (in protozero 1.3.0) packed writing API
+                        // https://github.com/mapbox/protozero/commit/4e7e32ac5350ea6d3dcf78ff5e74faeee513a6e1
+                        protozero::packed_field_uint64 field{item_writer, 1};
+                        uint64_t lastval = 0;
+                        for (auto const& vitem : varr) {
+                            if (lastval == 0) {
+                                field.add_element(static_cast<uint64_t>(vitem));
+                            } else {
+                                field.add_element(static_cast<uint64_t>(lastval - vitem));
+                            }
+                            lastval = vitem;
                         }
-                        lastval = vitem;
                     }
+
+                    int32_t m_pos = all_messages.length();
+
+                    uint32_t m_len = message.length();
+                    all_messages.append(reinterpret_cast<const char*>(&m_len), sizeof(uint32_t));
+                    all_messages.append(message);
+
+                    trie.update(item.first.c_str(), item.first.length(), m_pos);
                 }
-
-                int32_t m_pos = all_messages.length();
-
-                uint32_t m_len = message.length();
-                all_messages.append(reinterpret_cast<const char*>(&m_len), sizeof(uint32_t));
-                all_messages.append(message);
-
-                trie.update(item.first.c_str(), item.first.length(), m_pos);
             }
             if (all_messages.empty()) {
                 return Nan::ThrowTypeError("pack: invalid message ByteSize encountered");
