@@ -438,6 +438,7 @@ struct MergeBaton : carmen::noncopyable {
     std::string pbf2;
     std::string pbf3;
     std::string method;
+    std::string error;
     Nan::Persistent<v8::Function> callback;
 };
 
@@ -470,153 +471,126 @@ void mergeQueue(uv_work_t* req) {
     std::map<Cache::key_type,bool> ids1;
     std::map<Cache::key_type,bool> ids2;
 
-    // output
-    Cache::shard_trie out_trie;
-    std::string out_messages;
+    try {
+        // output
+        Cache::shard_trie out_trie;
+        std::string out_messages;
 
-    // Store ids from 1
-    size_t from (0), p (0);
-    char trie_key[1024];
-    for (int32_t i = trie1.begin (from, p); i != Cache::shard_trie::error_code::CEDAR_NO_PATH; i = trie1.next (from, p)) {
-        trie1.suffix(trie_key, p, from);
-        std::string key_id(trie_key, p);
-        ids1.emplace(key_id, true);
-    }
+        // Store ids from 1
+        size_t from (0), p (0);
+        char trie_key[1024];
+        for (int32_t i = trie1.begin (from, p); i != Cache::shard_trie::error_code::CEDAR_NO_PATH; i = trie1.next (from, p)) {
+            trie1.suffix(trie_key, p, from);
+            std::string key_id(trie_key, p);
+            ids1.emplace(key_id, true);
+        }
 
-    // Store ids from 2
-    from = 0; p = 0;
-    for (int32_t i = trie2.begin (from, p); i != Cache::shard_trie::error_code::CEDAR_NO_PATH; i = trie2.next (from, p)) {
-        trie2.suffix(trie_key, p, from);
-        std::string key_id(trie_key, p);
-        ids2.emplace(key_id, true);
-    }
+        // Store ids from 2
+        from = 0; p = 0;
+        for (int32_t i = trie2.begin (from, p); i != Cache::shard_trie::error_code::CEDAR_NO_PATH; i = trie2.next (from, p)) {
+            trie2.suffix(trie_key, p, from);
+            std::string key_id(trie_key, p);
+            ids2.emplace(key_id, true);
+        }
 
-    // No delta writes from message1
-    from = 0; p = 0;
-    for (int32_t i = trie1.begin (from, p); i != Cache::shard_trie::error_code::CEDAR_NO_PATH; i = trie1.next (from, p)) {
-        trie1.suffix(trie_key, p, from);
-        std::string key_id(trie_key, p);
+        // No delta writes from message1
+        from = 0; p = 0;
+        for (int32_t i = trie1.begin (from, p); i != Cache::shard_trie::error_code::CEDAR_NO_PATH; i = trie1.next (from, p)) {
+            trie1.suffix(trie_key, p, from);
+            std::string key_id(trie_key, p);
 
-        // Skip this id if also in message 2
-        if (ids2.find(key_id) != ids2.end()) continue;
+            // Skip this id if also in message 2
+            if (ids2.find(key_id) != ids2.end()) continue;
 
-        // get input proto
-        uint32_t m_len;
-        std::memcpy(&m_len, (void*)(proto_data1.data() + i), sizeof(uint32_t));
-        std::string in_message(proto_data1.data() + i + sizeof(uint32_t), m_len);
-        protozero::pbf_reader item(in_message);
-        item.next(CACHE_ITEM);
+            // get input proto
+            uint32_t m_len;
+            std::memcpy(&m_len, (void*)(proto_data1.data() + i), sizeof(uint32_t));
+            std::string in_message(proto_data1.data() + i + sizeof(uint32_t), m_len);
+            protozero::pbf_reader item(in_message);
+            item.next(CACHE_ITEM);
 
-        std::string message;
-        message.clear();
+            std::string message;
+            message.clear();
 
-        protozero::pbf_writer item_writer(message);
-        {
-            protozero::packed_field_uint64 field{item_writer, 1};
+            protozero::pbf_writer item_writer(message);
+            {
+                protozero::packed_field_uint64 field{item_writer, 1};
+                auto vals = item.get_packed_uint64();
+                for (auto it = vals.first; it != vals.second; ++it) {
+                    field.add_element(static_cast<uint64_t>(*it));
+                }
+            }
+
+            int32_t m_pos = out_messages.length();
+
+            uint32_t om_len = message.length();
+            out_messages.append(reinterpret_cast<const char*>(&om_len), sizeof(uint32_t));
+            out_messages.append(message);
+
+            out_trie.update(key_id.c_str(), key_id.length(), m_pos);
+        }
+
+        // No delta writes from message2
+        from = 0; p = 0;
+        for (int32_t i = trie2.begin (from, p); i != Cache::shard_trie::error_code::CEDAR_NO_PATH; i = trie2.next (from, p)) {
+            trie2.suffix(trie_key, p, from);
+            std::string key_id(trie_key, p);
+
+            // Skip this id if also in message 1
+            if (ids1.find(key_id) != ids1.end()) continue;
+
+            // get input proto
+            uint32_t m_len;
+            std::memcpy(&m_len, (void*)(proto_data2.data() + i), sizeof(uint32_t));
+            std::string in_message(proto_data2.data() + i + sizeof(uint32_t), m_len);
+            protozero::pbf_reader item(in_message);
+            item.next(CACHE_ITEM);
+
+            std::string message;
+            message.clear();
+
+            protozero::pbf_writer item_writer(message);
+            {
+                protozero::packed_field_uint64 field{item_writer, 1};
+                auto vals = item.get_packed_uint64();
+                for (auto it = vals.first; it != vals.second; ++it) {
+                    field.add_element(static_cast<uint64_t>(*it));
+                }
+            }
+
+            int32_t m_pos = out_messages.length();
+
+            uint32_t om_len = message.length();
+            out_messages.append(reinterpret_cast<const char*>(&om_len), sizeof(uint32_t));
+            out_messages.append(message);
+
+            out_trie.update(key_id.c_str(), key_id.length(), m_pos);
+        }
+
+        // Delta writes for ids in both message1 and message2
+        from = 0; p = 0;
+        for (int32_t i = trie1.begin (from, p); i != Cache::shard_trie::error_code::CEDAR_NO_PATH; i = trie1.next (from, p)) {
+            trie1.suffix(trie_key, p, from);
+            std::string key_id(trie_key, p);
+
+            // Skip ids that are only in one or the other lists
+            if (ids1.find(key_id) == ids1.end() || ids2.find(key_id) == ids2.end()) continue;
+
+            // get input proto
+            uint32_t m_len;
+            std::memcpy(&m_len, (void*)(proto_data1.data() + i), sizeof(uint32_t));
+            std::string in_message(proto_data1.data() + i + sizeof(uint32_t), m_len);
+            protozero::pbf_reader item(in_message);
+            item.next(CACHE_ITEM);
+
+            uint64_t lastval = 0;
+            Cache::intarray varr;
+
+            // Add values from pbf1
             auto vals = item.get_packed_uint64();
             for (auto it = vals.first; it != vals.second; ++it) {
-                field.add_element(static_cast<uint64_t>(*it));
-            }
-        }
-
-        int32_t m_pos = out_messages.length();
-
-        uint32_t om_len = message.length();
-        out_messages.append(reinterpret_cast<const char*>(&om_len), sizeof(uint32_t));
-        out_messages.append(message);
-
-        out_trie.update(key_id.c_str(), key_id.length(), m_pos);
-    }
-
-    // No delta writes from message2
-    from = 0; p = 0;
-    for (int32_t i = trie2.begin (from, p); i != Cache::shard_trie::error_code::CEDAR_NO_PATH; i = trie2.next (from, p)) {
-        trie2.suffix(trie_key, p, from);
-        std::string key_id(trie_key, p);
-
-        // Skip this id if also in message 1
-        if (ids1.find(key_id) != ids1.end()) continue;
-
-        // get input proto
-        uint32_t m_len;
-        std::memcpy(&m_len, (void*)(proto_data2.data() + i), sizeof(uint32_t));
-        std::string in_message(proto_data2.data() + i + sizeof(uint32_t), m_len);
-        protozero::pbf_reader item(in_message);
-        item.next(CACHE_ITEM);
-
-        std::string message;
-        message.clear();
-
-        protozero::pbf_writer item_writer(message);
-        {
-            protozero::packed_field_uint64 field{item_writer, 1};
-            auto vals = item.get_packed_uint64();
-            for (auto it = vals.first; it != vals.second; ++it) {
-                field.add_element(static_cast<uint64_t>(*it));
-            }
-        }
-
-        int32_t m_pos = out_messages.length();
-
-        uint32_t om_len = message.length();
-        out_messages.append(reinterpret_cast<const char*>(&om_len), sizeof(uint32_t));
-        out_messages.append(message);
-
-        out_trie.update(key_id.c_str(), key_id.length(), m_pos);
-    }
-
-    // Delta writes for ids in both message1 and message2
-    from = 0; p = 0;
-    for (int32_t i = trie1.begin (from, p); i != Cache::shard_trie::error_code::CEDAR_NO_PATH; i = trie1.next (from, p)) {
-        trie1.suffix(trie_key, p, from);
-        std::string key_id(trie_key, p);
-
-        // Skip ids that are only in one or the other lists
-        if (ids1.find(key_id) == ids1.end() || ids2.find(key_id) == ids2.end()) continue;
-
-        // get input proto
-        uint32_t m_len;
-        std::memcpy(&m_len, (void*)(proto_data1.data() + i), sizeof(uint32_t));
-        std::string in_message(proto_data1.data() + i + sizeof(uint32_t), m_len);
-        protozero::pbf_reader item(in_message);
-        item.next(CACHE_ITEM);
-
-        uint64_t lastval = 0;
-        Cache::intarray varr;
-
-        // Add values from pbf1
-        auto vals = item.get_packed_uint64();
-        for (auto it = vals.first; it != vals.second; ++it) {
-            if (method == "freq") {
-                varr.emplace_back(*it);
-                break;
-            } else if (lastval == 0) {
-                lastval = *it;
-                varr.emplace_back(lastval);
-            } else {
-                lastval = lastval - *it;
-                varr.emplace_back(lastval);
-            }
-        }
-
-        auto result = trie2.exactMatchSearch<Cache::shard_trie::result_type>(key_id.c_str(), key_id.length(), 0);
-        if (result != Cache::shard_trie::error_code::CEDAR_NO_VALUE) {
-            // get input proto 2
-            uint32_t m_len2;
-            std::memcpy(&m_len2, (void*)(proto_data2.data() + result), sizeof(uint32_t));
-            std::string in_message2(proto_data2.data() + result + sizeof(uint32_t), m_len2);
-            protozero::pbf_reader item2(in_message2);
-            item2.next(CACHE_ITEM);
-
-            auto vals2 = item2.get_packed_uint64();
-            lastval = 0;
-            for (auto it = vals2.first; it != vals2.second; ++it) {
                 if (method == "freq") {
-                    if (key_id == "__MAX__") {
-                        varr[0] = varr[0] > *it ? varr[0] : *it;
-                    } else {
-                        varr[0] = varr[0] + *it;
-                    }
+                    varr.emplace_back(*it);
                     break;
                 } else if (lastval == 0) {
                     lastval = *it;
@@ -626,59 +600,95 @@ void mergeQueue(uv_work_t* req) {
                     varr.emplace_back(lastval);
                 }
             }
-        }
 
-        // Sort for proper delta encoding
-        std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
+            auto result = trie2.exactMatchSearch<Cache::shard_trie::result_type>(key_id.c_str(), key_id.length(), 0);
+            if (result != Cache::shard_trie::error_code::CEDAR_NO_VALUE) {
+                // get input proto 2
+                uint32_t m_len2;
+                std::memcpy(&m_len2, (void*)(proto_data2.data() + result), sizeof(uint32_t));
+                std::string in_message2(proto_data2.data() + result + sizeof(uint32_t), m_len2);
+                protozero::pbf_reader item2(in_message2);
+                item2.next(CACHE_ITEM);
 
-        // Write varr to merged protobuf
-        std::string message;
-        message.clear();
-
-        protozero::pbf_writer item_writer(message);
-        {
-            protozero::packed_field_uint64 field{item_writer, 1};
-            lastval = 0;
-            for (auto const& vitem : varr) {
-                if (lastval == 0) {
-                    field.add_element(static_cast<uint64_t>(vitem));
-                } else {
-                    field.add_element(static_cast<uint64_t>(lastval - vitem));
+                auto vals2 = item2.get_packed_uint64();
+                lastval = 0;
+                for (auto it = vals2.first; it != vals2.second; ++it) {
+                    if (method == "freq") {
+                        if (key_id == "__MAX__") {
+                            varr[0] = varr[0] > *it ? varr[0] : *it;
+                        } else {
+                            varr[0] = varr[0] + *it;
+                        }
+                        break;
+                    } else if (lastval == 0) {
+                        lastval = *it;
+                        varr.emplace_back(lastval);
+                    } else {
+                        lastval = lastval - *it;
+                        varr.emplace_back(lastval);
+                    }
                 }
-                lastval = vitem;
             }
+
+            // Sort for proper delta encoding
+            std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
+
+            // Write varr to merged protobuf
+            std::string message;
+            message.clear();
+
+            protozero::pbf_writer item_writer(message);
+            {
+                protozero::packed_field_uint64 field{item_writer, 1};
+                lastval = 0;
+                for (auto const& vitem : varr) {
+                    if (lastval == 0) {
+                        field.add_element(static_cast<uint64_t>(vitem));
+                    } else {
+                        field.add_element(static_cast<uint64_t>(lastval - vitem));
+                    }
+                    lastval = vitem;
+                }
+            }
+
+            int32_t m_pos = out_messages.length();
+
+            uint32_t om_len = message.length();
+            out_messages.append(reinterpret_cast<const char*>(&om_len), sizeof(uint32_t));
+            out_messages.append(message);
+
+            out_trie.update(key_id.c_str(), key_id.length(), m_pos);
         }
 
-        int32_t m_pos = out_messages.length();
+        uint32_t out_trie_size = out_trie.size() * out_trie.unit_size();
+        uint32_t out_proto_size = out_messages.length();
 
-        uint32_t om_len = message.length();
-        out_messages.append(reinterpret_cast<const char*>(&om_len), sizeof(uint32_t));
-        out_messages.append(message);
+        std::string merged("");
+        merged.reserve((sizeof(uint32_t) * 2) + out_trie_size + out_proto_size);
 
-        out_trie.update(key_id.c_str(), key_id.length(), m_pos);
+        merged.append(reinterpret_cast<const char*>(&out_trie_size), sizeof(uint32_t));
+        merged.append(reinterpret_cast<const char*>(&out_proto_size), sizeof(uint32_t));
+        merged.append(static_cast<const char*>(out_trie.array()), out_trie_size);
+        merged.append(out_messages);
+
+        baton->pbf3 = merged;
+    } catch (std::exception const& ex) {
+        baton->error = ex.what();
     }
-
-    uint32_t out_trie_size = out_trie.size() * out_trie.unit_size();
-    uint32_t out_proto_size = out_messages.length();
-
-    std::string merged("");
-    merged.reserve((sizeof(uint32_t) * 2) + out_trie_size + out_proto_size);
-
-    merged.append(reinterpret_cast<const char*>(&out_trie_size), sizeof(uint32_t));
-    merged.append(reinterpret_cast<const char*>(&out_proto_size), sizeof(uint32_t));
-    merged.append(static_cast<const char*>(out_trie.array()), out_trie_size);
-    merged.append(out_messages);
-
-    baton->pbf3 = merged;
 }
 
 void mergeAfter(uv_work_t* req) {
     Nan::HandleScope scope;
     MergeBaton *baton = static_cast<MergeBaton *>(req->data);
-    std::string const& merged = baton->pbf3;
-    Local<Object> buf = Nan::CopyBuffer((char*)merged.data(), merged.size()).ToLocalChecked();
-    Local<Value> argv[2] = { Nan::Null(), buf };
-    Nan::MakeCallback(Nan::GetCurrentContext()->Global(), Nan::New(baton->callback), 2, argv);
+    if (!baton->error.empty()) {
+        v8::Local<v8::Value> argv[1] = { Nan::Error(baton->error.c_str()) };
+        Nan::MakeCallback(Nan::GetCurrentContext()->Global(), Nan::New(baton->callback), 1, argv);
+    } else {
+        std::string const& merged = baton->pbf3;
+        Local<Object> buf = Nan::CopyBuffer((char*)merged.data(), merged.size()).ToLocalChecked();
+        Local<Value> argv[2] = { Nan::Null(), buf };
+        Nan::MakeCallback(Nan::GetCurrentContext()->Global(), Nan::New(baton->callback), 2, argv);
+    }
     baton->callback.Reset();
     delete baton;
 }
@@ -766,7 +776,7 @@ NAN_METHOD(Cache::merge)
     std::string method = *String::Utf8Value(info[2]->ToString());
 
     if (obj1->IsNull() || obj1->IsUndefined() || !node::Buffer::HasInstance(obj1)) return Nan::ThrowTypeError("argument 1 must be a Buffer");
-    if (obj2->IsNull() || obj2->IsUndefined() || !node::Buffer::HasInstance(obj2)) return Nan::ThrowTypeError("argument 1 must be a Buffer");
+    if (obj2->IsNull() || obj2->IsUndefined() || !node::Buffer::HasInstance(obj2)) return Nan::ThrowTypeError("argument 2 must be a Buffer");
 
     MergeBaton *baton = new MergeBaton();
     baton->pbf1 = std::string(node::Buffer::Data(obj1),node::Buffer::Length(obj1));
@@ -1207,6 +1217,8 @@ struct CoalesceBaton : carmen::noncopyable {
     Nan::Persistent<v8::Function> callback;
     // return
     std::vector<Context> features;
+    // error
+    std::string error;
 };
 
 // 32 tiles is about 40 miles at z14.
@@ -1254,189 +1266,42 @@ void coalesceFinalize(CoalesceBaton* baton, std::vector<Context> const& contexts
 void coalesceSingle(uv_work_t* req) {
     CoalesceBaton *baton = static_cast<CoalesceBaton *>(req->data);
 
-    std::vector<PhrasematchSubq> const& stack = baton->stack;
-    PhrasematchSubq const& subq = stack[0];
+    try {
+        std::vector<PhrasematchSubq> const& stack = baton->stack;
+        PhrasematchSubq const& subq = stack[0];
 
-    // proximity (optional)
-    bool proximity = !baton->centerzxy.empty();
-    unsigned cz;
-    unsigned cx;
-    unsigned cy;
-    if (proximity) {
-        cz = static_cast<unsigned>(baton->centerzxy[0]);
-        cx = static_cast<unsigned>(baton->centerzxy[1]);
-        cy = static_cast<unsigned>(baton->centerzxy[2]);
-    } else {
-        cz = 0;
-        cx = 0;
-        cy = 0;
-    }
-
-    // bbox (optional)
-    bool bbox = !baton->bboxzxy.empty();
-    unsigned minx;
-    unsigned miny;
-    unsigned maxx;
-    unsigned maxy;
-    if (bbox) {
-        minx = static_cast<unsigned>(baton->bboxzxy[1]);
-        miny = static_cast<unsigned>(baton->bboxzxy[2]);
-        maxx = static_cast<unsigned>(baton->bboxzxy[3]);
-        maxy = static_cast<unsigned>(baton->bboxzxy[4]);
-    } else {
-        minx = 0;
-        miny = 0;
-        maxx = 0;
-        maxy = 0;
-    }
-
-    // Load and concatenate grids for all ids in `phrases`
-    std::string type = "grid";
-    Cache::intarray grids;
-    if (subq.prefix) {
-        grids = __getbyprefix(subq.cache, type, subq.shards, subq.phrase);
-    } else {
-        grids = __get(subq.cache, type, std::to_string(subq.shards[0]), subq.phrase, true);
-        if (subq.shards.size() > 1) {
-            Cache::intarray more_grids;
-            for (size_t i = 1; i < subq.shards.size(); i++) {
-                more_grids = __get(subq.cache, type, std::to_string(subq.shards[i]), subq.phrase, true);
-                for (size_t j = 0; j < more_grids.size(); j++) {
-                    grids.emplace_back(more_grids[j]);
-                }
-            }
+        // proximity (optional)
+        bool proximity = !baton->centerzxy.empty();
+        unsigned cz;
+        unsigned cx;
+        unsigned cy;
+        if (proximity) {
+            cz = static_cast<unsigned>(baton->centerzxy[0]);
+            cx = static_cast<unsigned>(baton->centerzxy[1]);
+            cy = static_cast<unsigned>(baton->centerzxy[2]);
+        } else {
+            cz = 0;
+            cx = 0;
+            cy = 0;
         }
-    }
 
-    unsigned long m = grids.size();
-    double relevMax = 0;
-    std::vector<Cover> covers;
-    covers.reserve(m);
-
-    for (unsigned long j = 0; j < m; j++) {
-        Cover cover = numToCover(grids[j]);
-        cover.idx = subq.idx;
-        cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
-        cover.relev = cover.relev * subq.weight;
-        cover.distance = proximity ? tileDist(cx, cover.x, cy, cover.y) : 0;
-        cover.scoredist = proximity ? scoredist(cz, cover.distance, cover.score) : cover.score;
-
-        // short circuit based on relevMax thres
-        if (relevMax - cover.relev >= 0.25) continue;
-        if (cover.relev > relevMax) relevMax = cover.relev;
-
+        // bbox (optional)
+        bool bbox = !baton->bboxzxy.empty();
+        unsigned minx;
+        unsigned miny;
+        unsigned maxx;
+        unsigned maxy;
         if (bbox) {
-            if (cover.x < minx || cover.y < miny || cover.x > maxx || cover.y > maxy) continue;
+            minx = static_cast<unsigned>(baton->bboxzxy[1]);
+            miny = static_cast<unsigned>(baton->bboxzxy[2]);
+            maxx = static_cast<unsigned>(baton->bboxzxy[3]);
+            maxy = static_cast<unsigned>(baton->bboxzxy[4]);
+        } else {
+            minx = 0;
+            miny = 0;
+            maxx = 0;
+            maxy = 0;
         }
-
-        covers.emplace_back(cover);
-    }
-
-    // sort grids by distance to proximity point
-    std::sort(covers.begin(), covers.end(), coverSortByRelev);
-
-    uint32_t lastid = 0;
-    unsigned short added = 0;
-    std::vector<Context> contexts;
-    m = covers.size();
-    contexts.reserve(m);
-    for (unsigned long j = 0; j < m; j++) {
-        // Stop at 40 contexts
-        if (added == 40) break;
-
-        // Attempt not to add the same feature but by diff cover twice
-        if (lastid == covers[j].id) continue;
-
-        lastid = covers[j].id;
-        added++;
-
-        Context context;
-        context.coverList.emplace_back(covers[j]);
-        context.relev = covers[j].relev;
-        contexts.emplace_back(context);
-    }
-
-    coalesceFinalize(baton, contexts);
-}
-
-void coalesceMulti(uv_work_t* req) {
-    CoalesceBaton *baton = static_cast<CoalesceBaton *>(req->data);
-    std::vector<PhrasematchSubq> const& stack = baton->stack;
-
-    size_t size;
-
-    // Cache zoom levels to iterate over as coalesce occurs.
-    Cache::intarray zoom;
-    std::vector<bool> zoomUniq(22);
-    std::vector<Cache::intarray> zoomCache(22);
-    size = stack.size();
-    for (unsigned short i = 0; i < size; i++) {
-        if (zoomUniq[stack[i].zoom]) continue;
-        zoomUniq[stack[i].zoom] = true;
-        zoom.emplace_back(stack[i].zoom);
-    }
-
-    size = zoom.size();
-    for (unsigned short i = 0; i < size; i++) {
-        Cache::intarray sliced;
-        sliced.reserve(i);
-        for (unsigned short j = 0; j < i; j++) {
-            sliced.emplace_back(zoom[j]);
-        }
-        std::reverse(sliced.begin(), sliced.end());
-        zoomCache[zoom[i]] = sliced;
-    }
-
-    // Coalesce relevs into higher zooms, e.g.
-    // z5 inherits relev of overlapping tiles at z4.
-    // @TODO assumes sources are in zoom ascending order.
-    std::string type = "grid";
-    std::map<uint64_t,std::vector<Cover>> coalesced;
-    std::map<uint64_t,std::vector<Cover>>::iterator cit;
-    std::map<uint64_t,std::vector<Cover>>::iterator pit;
-    std::map<uint64_t,bool> done;
-    std::map<uint64_t,bool>::iterator dit;
-
-    size = stack.size();
-
-    // proximity (optional)
-    bool proximity = baton->centerzxy.size() > 0;
-    unsigned cz;
-    unsigned cx;
-    unsigned cy;
-    if (proximity) {
-        cz = static_cast<unsigned>(baton->centerzxy[0]);
-        cx = static_cast<unsigned>(baton->centerzxy[1]);
-        cy = static_cast<unsigned>(baton->centerzxy[2]);
-    } else {
-        cz = 0;
-        cx = 0;
-        cy = 0;
-    }
-
-    // bbox (optional)
-    bool bbox = !baton->bboxzxy.empty();
-    unsigned bboxz;
-    unsigned minx;
-    unsigned miny;
-    unsigned maxx;
-    unsigned maxy;
-    if (bbox) {
-        bboxz = static_cast<unsigned>(baton->bboxzxy[0]);
-        minx = static_cast<unsigned>(baton->bboxzxy[1]);
-        miny = static_cast<unsigned>(baton->bboxzxy[2]);
-        maxx = static_cast<unsigned>(baton->bboxzxy[3]);
-        maxy = static_cast<unsigned>(baton->bboxzxy[4]);
-    } else {
-        bboxz = 0;
-        minx = 0;
-        miny = 0;
-        maxx = 0;
-        maxy = 0;
-    }
-
-    for (unsigned short i = 0; i < size; i++) {
-        PhrasematchSubq const& subq = stack[i];
 
         // Load and concatenate grids for all ids in `phrases`
         std::string type = "grid";
@@ -1456,117 +1321,273 @@ void coalesceMulti(uv_work_t* req) {
             }
         }
 
-        unsigned short z = subq.zoom;
-        auto const& zCache = zoomCache[z];
-        std::size_t zCacheSize = zCache.size();
-
         unsigned long m = grids.size();
+        double relevMax = 0;
+        std::vector<Cover> covers;
+        covers.reserve(m);
 
         for (unsigned long j = 0; j < m; j++) {
             Cover cover = numToCover(grids[j]);
             cover.idx = subq.idx;
-            cover.subq = i;
             cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
             cover.relev = cover.relev * subq.weight;
-            if (proximity) {
-                ZXY dxy = pxy2zxy(z, cover.x, cover.y, cz);
-                cover.distance = tileDist(cx, dxy.x, cy, dxy.y);
-                cover.scoredist = scoredist(cz, cover.distance, cover.score);
-            } else {
-                cover.distance = 0;
-                cover.scoredist = cover.score;
-            }
+            cover.distance = proximity ? tileDist(cx, cover.x, cy, cover.y) : 0;
+            cover.scoredist = proximity ? scoredist(cz, cover.distance, cover.score) : cover.score;
+
+            // short circuit based on relevMax thres
+            if (relevMax - cover.relev >= 0.25) continue;
+            if (cover.relev > relevMax) relevMax = cover.relev;
 
             if (bbox) {
-                ZXY min = bxy2zxy(bboxz, minx, miny, z, false);
-                ZXY max = bxy2zxy(bboxz, maxx, maxy, z, true);
-                if (cover.x < min.x || cover.y < min.y || cover.x > max.x || cover.y > max.y) continue;
+                if (cover.x < minx || cover.y < miny || cover.x > maxx || cover.y > maxy) continue;
             }
 
-            uint64_t zxy = (z * POW2_28) + (cover.x * POW2_14) + (cover.y);
+            covers.emplace_back(cover);
+        }
 
-            cit = coalesced.find(zxy);
-            if (cit == coalesced.end()) {
-                std::vector<Cover> coverList;
-                coverList.push_back(cover);
-                coalesced.emplace(zxy, coverList);
+        // sort grids by distance to proximity point
+        std::sort(covers.begin(), covers.end(), coverSortByRelev);
+
+        uint32_t lastid = 0;
+        unsigned short added = 0;
+        std::vector<Context> contexts;
+        m = covers.size();
+        contexts.reserve(m);
+        for (unsigned long j = 0; j < m; j++) {
+            // Stop at 40 contexts
+            if (added == 40) break;
+
+            // Attempt not to add the same feature but by diff cover twice
+            if (lastid == covers[j].id) continue;
+
+            lastid = covers[j].id;
+            added++;
+
+            Context context;
+            context.coverList.emplace_back(covers[j]);
+            context.relev = covers[j].relev;
+            contexts.emplace_back(context);
+        }
+
+        coalesceFinalize(baton, contexts);
+    } catch (std::exception const& ex) {
+        baton->error = ex.what();
+    }
+}
+
+void coalesceMulti(uv_work_t* req) {
+    CoalesceBaton *baton = static_cast<CoalesceBaton *>(req->data);
+
+    try {
+        std::vector<PhrasematchSubq> const& stack = baton->stack;
+
+        size_t size;
+
+        // Cache zoom levels to iterate over as coalesce occurs.
+        Cache::intarray zoom;
+        std::vector<bool> zoomUniq(22);
+        std::vector<Cache::intarray> zoomCache(22);
+        size = stack.size();
+        for (unsigned short i = 0; i < size; i++) {
+            if (zoomUniq[stack[i].zoom]) continue;
+            zoomUniq[stack[i].zoom] = true;
+            zoom.emplace_back(stack[i].zoom);
+        }
+
+        size = zoom.size();
+        for (unsigned short i = 0; i < size; i++) {
+            Cache::intarray sliced;
+            sliced.reserve(i);
+            for (unsigned short j = 0; j < i; j++) {
+                sliced.emplace_back(zoom[j]);
+            }
+            std::reverse(sliced.begin(), sliced.end());
+            zoomCache[zoom[i]] = sliced;
+        }
+
+        // Coalesce relevs into higher zooms, e.g.
+        // z5 inherits relev of overlapping tiles at z4.
+        // @TODO assumes sources are in zoom ascending order.
+        std::string type = "grid";
+        std::map<uint64_t,std::vector<Cover>> coalesced;
+        std::map<uint64_t,std::vector<Cover>>::iterator cit;
+        std::map<uint64_t,std::vector<Cover>>::iterator pit;
+        std::map<uint64_t,bool> done;
+        std::map<uint64_t,bool>::iterator dit;
+
+        size = stack.size();
+
+        // proximity (optional)
+        bool proximity = baton->centerzxy.size() > 0;
+        unsigned cz;
+        unsigned cx;
+        unsigned cy;
+        if (proximity) {
+            cz = static_cast<unsigned>(baton->centerzxy[0]);
+            cx = static_cast<unsigned>(baton->centerzxy[1]);
+            cy = static_cast<unsigned>(baton->centerzxy[2]);
+        } else {
+            cz = 0;
+            cx = 0;
+            cy = 0;
+        }
+
+        // bbox (optional)
+        bool bbox = !baton->bboxzxy.empty();
+        unsigned bboxz;
+        unsigned minx;
+        unsigned miny;
+        unsigned maxx;
+        unsigned maxy;
+        if (bbox) {
+            bboxz = static_cast<unsigned>(baton->bboxzxy[0]);
+            minx = static_cast<unsigned>(baton->bboxzxy[1]);
+            miny = static_cast<unsigned>(baton->bboxzxy[2]);
+            maxx = static_cast<unsigned>(baton->bboxzxy[3]);
+            maxy = static_cast<unsigned>(baton->bboxzxy[4]);
+        } else {
+            bboxz = 0;
+            minx = 0;
+            miny = 0;
+            maxx = 0;
+            maxy = 0;
+        }
+
+        for (unsigned short i = 0; i < size; i++) {
+            PhrasematchSubq const& subq = stack[i];
+
+            // Load and concatenate grids for all ids in `phrases`
+            std::string type = "grid";
+            Cache::intarray grids;
+            if (subq.prefix) {
+                grids = __getbyprefix(subq.cache, type, subq.shards, subq.phrase);
             } else {
-                cit->second.push_back(cover);
+                grids = __get(subq.cache, type, std::to_string(subq.shards[0]), subq.phrase, true);
+                if (subq.shards.size() > 1) {
+                    Cache::intarray more_grids;
+                    for (size_t i = 1; i < subq.shards.size(); i++) {
+                        more_grids = __get(subq.cache, type, std::to_string(subq.shards[i]), subq.phrase, true);
+                        for (size_t j = 0; j < more_grids.size(); j++) {
+                            grids.emplace_back(more_grids[j]);
+                        }
+                    }
+                }
             }
 
-            dit = done.find(zxy);
-            if (dit == done.end()) {
-                for (unsigned a = 0; a < zCacheSize; a++) {
-                    uint64_t p = zCache[a];
-                    double s = static_cast<double>(1 << (z-p));
-                    uint64_t pxy = static_cast<uint64_t>(p * POW2_28) +
-                        static_cast<uint64_t>(std::floor(cover.x/s) * POW2_14) +
-                        static_cast<uint64_t>(std::floor(cover.y/s));
-                    // Set a flag to ensure coalesce occurs only once per zxy.
-                    pit = coalesced.find(pxy);
-                    if (pit != coalesced.end()) {
-                        cit = coalesced.find(zxy);
-                        for (auto const& pArray : pit->second) {
-                            cit->second.emplace_back(pArray);
+            unsigned short z = subq.zoom;
+            auto const& zCache = zoomCache[z];
+            std::size_t zCacheSize = zCache.size();
+
+            unsigned long m = grids.size();
+
+            for (unsigned long j = 0; j < m; j++) {
+                Cover cover = numToCover(grids[j]);
+                cover.idx = subq.idx;
+                cover.subq = i;
+                cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
+                cover.relev = cover.relev * subq.weight;
+                if (proximity) {
+                    ZXY dxy = pxy2zxy(z, cover.x, cover.y, cz);
+                    cover.distance = tileDist(cx, dxy.x, cy, dxy.y);
+                    cover.scoredist = scoredist(cz, cover.distance, cover.score);
+                } else {
+                    cover.distance = 0;
+                    cover.scoredist = cover.score;
+                }
+
+                if (bbox) {
+                    ZXY min = bxy2zxy(bboxz, minx, miny, z, false);
+                    ZXY max = bxy2zxy(bboxz, maxx, maxy, z, true);
+                    if (cover.x < min.x || cover.y < min.y || cover.x > max.x || cover.y > max.y) continue;
+                }
+
+                uint64_t zxy = (z * POW2_28) + (cover.x * POW2_14) + (cover.y);
+
+                cit = coalesced.find(zxy);
+                if (cit == coalesced.end()) {
+                    std::vector<Cover> coverList;
+                    coverList.push_back(cover);
+                    coalesced.emplace(zxy, coverList);
+                } else {
+                    cit->second.push_back(cover);
+                }
+
+                dit = done.find(zxy);
+                if (dit == done.end()) {
+                    for (unsigned a = 0; a < zCacheSize; a++) {
+                        uint64_t p = zCache[a];
+                        double s = static_cast<double>(1 << (z-p));
+                        uint64_t pxy = static_cast<uint64_t>(p * POW2_28) +
+                            static_cast<uint64_t>(std::floor(cover.x/s) * POW2_14) +
+                            static_cast<uint64_t>(std::floor(cover.y/s));
+                        // Set a flag to ensure coalesce occurs only once per zxy.
+                        pit = coalesced.find(pxy);
+                        if (pit != coalesced.end()) {
+                            cit = coalesced.find(zxy);
+                            for (auto const& pArray : pit->second) {
+                                cit->second.emplace_back(pArray);
+                            }
+                            done.emplace(zxy, true);
+                            break;
                         }
-                        done.emplace(zxy, true);
-                        break;
                     }
                 }
             }
         }
-    }
 
-    std::vector<Context> contexts;
-    for (auto const& matched : coalesced) {
-        std::vector<Cover> const& coverList = matched.second;
-        size_t coverSize = coverList.size();
-        for (unsigned i = 0; i < coverSize; i++) {
-            unsigned used = 1 << coverList[i].subq;
-            unsigned lastMask = 0;
-            double lastRelev = 0.0;
-            double stacky = 0.0;
+        std::vector<Context> contexts;
+        for (auto const& matched : coalesced) {
+            std::vector<Cover> const& coverList = matched.second;
+            size_t coverSize = coverList.size();
+            for (unsigned i = 0; i < coverSize; i++) {
+                unsigned used = 1 << coverList[i].subq;
+                unsigned lastMask = 0;
+                double lastRelev = 0.0;
+                double stacky = 0.0;
 
-            unsigned coverPos = 0;
+                unsigned coverPos = 0;
 
-            Context context;
-            context.coverList.emplace_back(coverList[i]);
-            context.relev = coverList[i].relev;
-            for (unsigned j = i+1; j < coverSize; j++) {
-                unsigned mask = 1 << coverList[j].subq;
+                Context context;
+                context.coverList.emplace_back(coverList[i]);
+                context.relev = coverList[i].relev;
+                for (unsigned j = i+1; j < coverSize; j++) {
+                    unsigned mask = 1 << coverList[j].subq;
 
-                // this cover is functionally identical with previous and
-                // is more relevant, replace the previous.
-                if (mask == lastMask && coverList[j].relev > lastRelev) {
-                    context.relev -= lastRelev;
-                    context.relev += coverList[j].relev;
-                    context.coverList[coverPos] = coverList[j];
+                    // this cover is functionally identical with previous and
+                    // is more relevant, replace the previous.
+                    if (mask == lastMask && coverList[j].relev > lastRelev) {
+                        context.relev -= lastRelev;
+                        context.relev += coverList[j].relev;
+                        context.coverList[coverPos] = coverList[j];
 
-                    stacky = 1.0;
-                    used = used | mask;
-                    lastMask = mask;
-                    lastRelev = coverList[j].relev;
-                    coverPos++;
-                // this cover doesn't overlap with used mask.
-                } else if (!(used & mask)) {
-                    context.coverList.emplace_back(coverList[j]);
-                    context.relev += coverList[j].relev;
+                        stacky = 1.0;
+                        used = used | mask;
+                        lastMask = mask;
+                        lastRelev = coverList[j].relev;
+                        coverPos++;
+                    // this cover doesn't overlap with used mask.
+                    } else if (!(used & mask)) {
+                        context.coverList.emplace_back(coverList[j]);
+                        context.relev += coverList[j].relev;
 
-                    stacky = 1.0;
-                    used = used | mask;
-                    lastMask = mask;
-                    lastRelev = coverList[j].relev;
-                    coverPos++;
+                        stacky = 1.0;
+                        used = used | mask;
+                        lastMask = mask;
+                        lastRelev = coverList[j].relev;
+                        coverPos++;
+                    }
+                    // all other cases conflict with existing mask. skip.
                 }
-                // all other cases conflict with existing mask. skip.
+                context.relev -= 0.01;
+                context.relev += 0.01 * stacky;
+                contexts.emplace_back(context);
             }
-            context.relev -= 0.01;
-            context.relev += 0.01 * stacky;
-            contexts.emplace_back(context);
         }
+        std::sort(contexts.begin(), contexts.end(), contextSortByRelev);
+        coalesceFinalize(baton, contexts);
+    } catch (std::exception const& ex) {
+       baton->error = ex.what();
     }
-    std::sort(contexts.begin(), contexts.end(), contextSortByRelev);
-    coalesceFinalize(baton, contexts);
 }
 
 Local<Object> coverToObject(Cover const& cover) {
@@ -1594,15 +1615,23 @@ Local<Array> contextToArray(Context const& context) {
 void coalesceAfter(uv_work_t* req) {
     Nan::HandleScope scope;
     CoalesceBaton *baton = static_cast<CoalesceBaton *>(req->data);
-    std::vector<Context> const& features = baton->features;
 
-    Local<Array> jsFeatures = Nan::New<Array>(static_cast<int>(features.size()));
-    for (unsigned short i = 0; i < features.size(); i++) {
-        jsFeatures->Set(i, contextToArray(features[i]));
+    if (!baton->error.empty()) {
+        v8::Local<v8::Value> argv[1] = { Nan::Error(baton->error.c_str()) };
+        Nan::MakeCallback(Nan::GetCurrentContext()->Global(), Nan::New(baton->callback), 1, argv);
+    }
+    else {
+        std::vector<Context> const& features = baton->features;
+
+        Local<Array> jsFeatures = Nan::New<Array>(static_cast<int>(features.size()));
+        for (unsigned short i = 0; i < features.size(); i++) {
+            jsFeatures->Set(i, contextToArray(features[i]));
+        }
+
+        Local<Value> argv[2] = { Nan::Null(), jsFeatures };
+        Nan::MakeCallback(Nan::GetCurrentContext()->Global(), Nan::New(baton->callback), 2, argv);
     }
 
-    Local<Value> argv[2] = { Nan::Null(), jsFeatures };
-    Nan::MakeCallback(Nan::GetCurrentContext()->Global(), Nan::New(baton->callback), 2, argv);
     baton->callback.Reset();
     delete baton;
 }

@@ -48,8 +48,7 @@ tape('#pack', function(assert) {
     // set should replace data
     cache._set('term', 0, '5', [0,1,2,4]);
     assert.deepEqual(cache.pack('term', 0).length, 2066);
-    cache._set('term', 0, '5', []);
-    assert.deepEqual(cache.pack('term', 0).length, 2060);
+    assert.throws(cache._set.bind(null, 'term', 0, 5, []), 'can\'t set empty term');
 
     // fake data
     var array = [];
