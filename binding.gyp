@@ -4,6 +4,7 @@
     {
       'target_name': '<(module_name)',
       'sources': [
+        "./src/cache.cpp",
         "./src/binding.cpp"
       ],
       "include_dirs" : [

@@ -64,6 +64,47 @@ public:
     unsigned cachesize = 131072;
 };
 
+Cache::intarray __get(Cache const* c, std::string const& type, std::string const& shard, uint64_t id);
+
+struct PhrasematchSubq {
+    carmen::Cache *cache;
+    double weight;
+    uint64_t phrase;
+    unsigned short idx;
+    unsigned short zoom;
+};
+
+struct Cover {
+    double relev;
+    uint32_t id;
+    uint32_t tmpid;
+    unsigned short x;
+    unsigned short y;
+    unsigned short score;
+    unsigned short idx;
+    unsigned short subq;
+    unsigned distance;
+    double scoredist;
+};
+
+struct Context {
+    std::vector<Cover> coverList;
+    double relev;
+};
+
+struct CoalesceBaton : carmen::noncopyable {
+    uv_work_t request;
+    // params
+    std::vector<PhrasematchSubq> stack;
+    std::vector<unsigned> centerzxy;
+    std::vector<unsigned> bboxzxy;
+    Nan::Persistent<v8::Function> callback;
+    // return
+    std::vector<Context> features;
+    // error
+    std::string error;
+};
+
 #define CACHE_MESSAGE 1
 #define CACHE_ITEM 1
 
