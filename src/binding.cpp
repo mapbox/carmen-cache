@@ -896,7 +896,12 @@ inline bool coverSortByRelev(Cover const& a, Cover const& b) noexcept {
     else if (b.scoredist < a.scoredist) return true;
     else if (b.idx < a.idx) return false;
     else if (b.idx > a.idx) return true;
-    return (b.id > a.id);
+    else if (b.id < a.id) return false;
+    else if (b.id > a.id) return true;
+    // sorting by x and y is arbitrary but provides a more deterministic output order
+    else if (b.x < a.x) return false;
+    else if (b.x > a.x) return true;
+    else return (b.y > a.y);
 }
 
 inline bool contextSortByRelev(Context const& a, Context const& b) noexcept {
