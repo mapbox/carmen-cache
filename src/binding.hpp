@@ -32,6 +32,26 @@ protected:
     noncopyable& operator=(noncopyable const& ) = delete;
 };
 
+struct PhrasematchSubq;
+
+struct Cover {
+    double relev;
+    uint32_t id;
+    uint32_t tmpid;
+    unsigned short x;
+    unsigned short y;
+    unsigned short score;
+    unsigned short idx;
+    unsigned short subq;
+    unsigned distance;
+    double scoredist;
+};
+
+struct Context {
+    std::vector<Cover> coverList;
+    double relev;
+};
+
 class Cache: public node::ObjectWrap {
 public:
     ~Cache();
@@ -62,6 +82,22 @@ public:
     message_cache msg_;
     message_list msglist_;
     unsigned cachesize = 131072;
+
+private:
+    static void coalesceSingleAsync(uv_work_t* req);
+    static void coalesceMultiAsync(uv_work_t* req);
+    static void coalesceSingle(std::vector<PhrasematchSubq> const& stack, std::vector<unsigned> const& centerzxy, std::vector<unsigned> const& bboxzxy, std::vector<Context>& features);
+    static void coalesceMulti(std::vector<PhrasematchSubq> const& stack, std::vector<unsigned> const& centerzxy, std::vector<unsigned> const& bboxzxy, std::vector<Context>& features);
+};
+
+Cache::intarray __get(Cache const* c, std::string const& type, std::string const& shard, uint64_t id);
+
+struct PhrasematchSubq {
+    carmen::Cache *cache;
+    double weight;
+    uint64_t phrase;
+    unsigned short idx;
+    unsigned short zoom;
 };
 
 #define CACHE_MESSAGE 1
