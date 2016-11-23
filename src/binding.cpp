@@ -1,6 +1,5 @@
 
 #include "binding.hpp"
-#include "cache.hpp"
 
 #include <sstream>
 #include <cmath>
@@ -760,6 +759,38 @@ Local<Array> contextToArray(Context const& context) {
     array->Set(Nan::New("relev").ToLocalChecked(), Nan::New(context.relev));
     return array;
 }
+
+struct CoalesceBaton : carmen::noncopyable {
+    uv_work_t request;
+    // params
+    std::vector<PhrasematchSubq> stack;
+    std::vector<unsigned> centerzxy;
+    std::vector<unsigned> bboxzxy;
+    Nan::Persistent<v8::Function> callback;
+    // return
+    std::vector<Context> features;
+    // error
+    std::string error;
+};
+
+void Cache::coalesceSingleAsync(uv_work_t* req) {
+    CoalesceBaton *baton = static_cast<CoalesceBaton *>(req->data);
+    try {
+        coalesceSingle(baton->stack, baton->centerzxy, baton->bboxzxy, baton->features);
+    } catch (std::exception const& ex) {
+        baton->error = ex.what();
+    }
+}
+
+void Cache::coalesceMultiAsync(uv_work_t* req) {
+    CoalesceBaton *baton = static_cast<CoalesceBaton *>(req->data);
+    try {
+        coalesceMulti(baton->stack, baton->centerzxy, baton->bboxzxy, baton->features);
+    } catch (std::exception const& ex) {
+        baton->error = ex.what();
+    }
+}
+
 void coalesceAfter(uv_work_t* req) {
     Nan::HandleScope scope;
     CoalesceBaton *baton = static_cast<CoalesceBaton *>(req->data);
@@ -857,9 +888,9 @@ NAN_METHOD(Cache::coalesce) {
         baton->request.data = baton;
         // optimization: for stacks of 1, use coalesceSingle
         if (stack.size() == 1) {
-            uv_queue_work(uv_default_loop(), &baton->request, coalesceSingle, (uv_after_work_cb)coalesceAfter);
+            uv_queue_work(uv_default_loop(), &baton->request, coalesceSingleAsync, (uv_after_work_cb)coalesceAfter);
         } else {
-            uv_queue_work(uv_default_loop(), &baton->request, coalesceMulti, (uv_after_work_cb)coalesceAfter);
+            uv_queue_work(uv_default_loop(), &baton->request, coalesceMultiAsync, (uv_after_work_cb)coalesceAfter);
         }
     } catch (std::exception const& ex) {
         delete baton;

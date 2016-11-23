@@ -4,7 +4,7 @@
     {
       'target_name': '<(module_name)',
       'sources': [
-        "./src/cache.cpp",
+        "./src/coalesce.cpp",
         "./src/binding.cpp"
       ],
       "include_dirs" : [
