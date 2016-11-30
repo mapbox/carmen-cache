@@ -924,12 +924,16 @@ inline bool contextSortByRelev(Context const& a, Context const& b) noexcept {
     return (b.coverList[0].id > a.coverList[0].id);
 }
 
-inline double tileDist(double px, double py, unsigned tileX, unsigned tileY) {
+inline double tileDist(double px, double py, unsigned tileX, unsigned tileY, unsigned tileZ) {
     const double tileCenterX = tileX + 0.5;
     const double tileCenterY = tileY + 0.5;
     const double dx = px - tileCenterX;
     const double dy = py - tileCenterY;
-    return std::sqrt(dx * dx + dy * dy);
+    const double distance = std::sqrt(dx * dx + dy * dy);
+
+    // convert distance to approximate miles
+    const double earthCircumferenceMiles = 24901.0;
+    return distance / std::pow(2.0, tileZ) * earthCircumferenceMiles;
 }
 
 struct CoalesceBaton : carmen::noncopyable {
@@ -945,18 +949,8 @@ struct CoalesceBaton : carmen::noncopyable {
     std::string error;
 };
 
-// 32 tiles is about 40 miles at z14.
-// Simulates 40 mile cutoff in carmen.
-double scoredist(unsigned zoom, double distance, double score) {
-    if (distance == 0.0) distance = 0.01;
-    double scoredist = 0;
-    if (zoom >= 14) scoredist = 32.0 / distance;
-    if (zoom == 13) scoredist = 16.0 / distance;
-    if (zoom == 12) scoredist = 8.0 / distance;
-    if (zoom == 11) scoredist = 4.0 / distance;
-    if (zoom == 10) scoredist = 2.0 / distance;
-    if (zoom <= 9)  scoredist = 1.0 / distance;
-    return score > scoredist ? score : scoredist;
+double scoredist(double distance, double score) {
+    return (score + 1.0) / (std::pow(distance, 1.1) + 1.0);
 }
 
 void coalesceFinalize(CoalesceBaton* baton, std::vector<Context> const& contexts) {
@@ -1042,8 +1036,8 @@ void coalesceSingle(uv_work_t* req) {
             cover.idx = subq.idx;
             cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
             cover.relev = cover.relev * subq.weight;
-            cover.distance = proximity ? tileDist(cx, cy, cover.x, cover.y) : 0;
-            cover.scoredist = proximity ? scoredist(cz, cover.distance, cover.score) : cover.score;
+            cover.distance = proximity ? tileDist(cx, cy, cover.x, cover.y, cz) : 0;
+            cover.scoredist = proximity ? scoredist(cover.distance, cover.score) : cover.score;
 
             // short circuit based on relevMax thres
             if (relevMax - cover.relev >= 0.25) continue;
@@ -1184,8 +1178,8 @@ void coalesceMulti(uv_work_t* req) {
                 cover.relev = cover.relev * subq.weight;
                 if (proximity) {
                     ZXY dxy = pxy2zxy(z, cover.x, cover.y, cz);
-                    cover.distance = tileDist(cx, cy, dxy.x, dxy.y);
-                    cover.scoredist = scoredist(cz, cover.distance, cover.score);
+                    cover.distance = tileDist(cx, cy, dxy.x, dxy.y, cz);
+                    cover.scoredist = scoredist(cover.distance, cover.score);
                 } else {
                     cover.distance = 0;
                     cover.scoredist = cover.score;
