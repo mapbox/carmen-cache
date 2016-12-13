@@ -1062,7 +1062,7 @@ void coalesceSingle(uv_work_t* req) {
 
         // sort grids by distance to proximity point
         Cache::intarray grids = (proximity || bbox) ?
-            __get(subq.cache, type, shardId, subq.phrase) :
+            __getTruncated(subq.cache, type, shardId, subq.phrase, 500000) :
             __getTruncated(subq.cache, type, shardId, subq.phrase, 40);
 
         unsigned long m = grids.size();
@@ -1201,7 +1201,7 @@ void coalesceMulti(uv_work_t* req) {
 
             std::string shardId = shard(4, subq.phrase);
 
-            Cache::intarray grids = __get(subq.cache, type, shardId, subq.phrase);
+            Cache::intarray grids = __getTruncated(subq.cache, type, shardId, subq.phrase, 500000);
 
             unsigned short z = subq.zoom;
             auto const& zCache = zoomCache[z];
