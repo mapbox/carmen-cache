@@ -134,6 +134,51 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string const
     }
 }
 
+Cache::intarray __getTruncated(Cache const* c, std::string const& type, std::string const& shard, uint64_t id, uint64_t truncate) {
+    std::string key = type + "-" + shard;
+    Cache::memcache const& mem = c->cache_;
+    Cache::memcache::const_iterator itr = mem.find(key);
+    Cache::intarray array;
+    if (itr == mem.end()) {
+        if (!cacheHas(c, key)) return array;
+
+        std::string ref = cacheGet(c, key);
+        protozero::pbf_reader message(ref);
+        while (message.next(CACHE_MESSAGE)) {
+            protozero::pbf_reader item = message.get_message();
+            while (item.next(CACHE_ITEM)) {
+                uint64_t key_id = item.get_uint64();
+                if (key_id != id) break;
+                item.next();
+                auto vals = item.get_packed_uint64();
+                uint64_t lastval = 0;
+                uint64_t length = 0;
+                // delta decode values.
+                for (auto it = vals.first; it != vals.second; ++it) {
+                    if (lastval == 0) {
+                        lastval = *it;
+                        array.emplace_back(lastval);
+                    } else {
+                        lastval = lastval - *it;
+                        array.emplace_back(lastval);
+                    }
+                    length++;
+                    if (length >= truncate) break;
+                }
+                return array;
+            }
+        }
+        return array;
+    } else {
+        Cache::arraycache::const_iterator aitr = itr->second.find(id);
+        if (aitr == itr->second.end()) {
+            return array;
+        } else {
+            return aitr->second;
+        }
+    }
+}
+
 void Cache::Initialize(Handle<Object> target) {
     Nan::HandleScope scope;
     Local<FunctionTemplate> t = Nan::New<FunctionTemplate>(Cache::New);
@@ -1016,7 +1061,9 @@ void coalesceSingle(uv_work_t* req) {
         }
 
         // sort grids by distance to proximity point
-        Cache::intarray grids = __get(subq.cache, type, shardId, subq.phrase);
+        Cache::intarray grids = (proximity || bbox) ?
+            __get(subq.cache, type, shardId, subq.phrase) :
+            __getTruncated(subq.cache, type, shardId, subq.phrase, 40);
 
         unsigned long m = grids.size();
         double relevMax = 0;
