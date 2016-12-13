@@ -1,7 +1,7 @@
 {
   "name": "carmen-cache",
   "description": "C++ protobuf cache used by carmen",
-  "version": "0.13.1-trie-harder-1",
+  "version": "0.13.2-trie-harder-1",
   "url": "http://github.com/mapbox/carmen-cache",
   "author": "Mapbox (https://www.mapbox.com)",
   "license": "BSD",
