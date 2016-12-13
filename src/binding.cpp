@@ -1063,7 +1063,7 @@ void coalesceSingle(uv_work_t* req) {
         // sort grids by distance to proximity point
         Cache::intarray grids = (proximity || bbox) ?
             __getTruncated(subq.cache, type, shardId, subq.phrase, 500000) :
-            __getTruncated(subq.cache, type, shardId, subq.phrase, 40);
+            __getTruncated(subq.cache, type, shardId, subq.phrase, 100000);
 
         unsigned long m = grids.size();
         double relevMax = 0;
