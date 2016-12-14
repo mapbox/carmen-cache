@@ -16,12 +16,12 @@ if (!fs.existsSync(megashard)) {
     var writer = new Cache('writer');
     var ids = [];
     for (var i = 0; i < 100; i++) ids.push(i);
-    for (var i = 0; i < Math.pow(2,18); i++) writer._set('grid', Cache.shard('....'), "...." + i, ids);
-    writer.pack('grid', +Cache.shard('....'), megashard);
+    for (var i = 0; i < Math.pow(2,18); i++) writer._set('grid', "...." + i, ids);
+    writer.pack(megashard, 'grid');
 }
 
 var c = new Cache('cache');
-c.loadSync(megashard, 'grid', +Cache.shard('....'));
+c.loadSync(megashard, 'grid');
 
 // Benchmark loading many phrases
 var phrases = [];

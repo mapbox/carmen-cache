@@ -15,23 +15,6 @@ using namespace v8;
 
 Nan::Persistent<FunctionTemplate> Cache::constructor;
 
-inline std::string shard(std::string id) {
-    const char* data_p = id.c_str();
-    int length = id.length();
-    if (length > SHARD_PREFIX_LENGTH) length = SHARD_PREFIX_LENGTH;
-
-    // crc16 of the first three bytes, or all bytes if length is < 3
-    unsigned char x;
-    uint16_t crc = 0xFFFF;
-
-    while (length--){
-        x = crc >> 8 ^ *data_p++;
-        x ^= x>>4;
-        crc = (crc << 8) ^ ((uint16_t)(x << 12)) ^ ((uint16_t)(x <<5)) ^ ((uint16_t)x);
-    }
-    return std::to_string(crc);
-}
-
 inline std::vector<uint64_t> arrayToVector(Local<Array> const& array) {
     std::vector<uint64_t> cpp_array;
     cpp_array.reserve(array->Length());
@@ -113,15 +96,14 @@ inline bool cacheRemove(Cache * c, std::string const& key) {
     }
 }
 
-Cache::intarray __get(Cache const* c, std::string const& type, std::string const& shard, std::string id, bool ignorePrefixFlag) {
-    std::string key = type + "-" + shard;
+Cache::intarray __get(Cache const* c, std::string const& type, std::string id, bool ignorePrefixFlag) {
     Cache::memcache const& mem = c->cache_;
-    Cache::memcache::const_iterator itr = mem.find(key);
+    Cache::memcache::const_iterator itr = mem.find(type);
     Cache::intarray array;
     if (itr == mem.end()) {
-        if (!cacheHas(c, key)) return array;
+        if (!cacheHas(c, type)) return array;
 
-        rocksdb::DB* db = cacheGet(c, key);
+        rocksdb::DB* db = cacheGet(c, type);
 
         std::string search_id = id;
         for (uint32_t i = 0; i < 2; i++) {
@@ -170,23 +152,15 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string const
     }
 }
 
-Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::vector<uint64_t> const& shards, std::string const& prefix) {
-    std::vector<std::string> keys;
-
+Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::string const& prefix) {
     Cache::intarray array;
     uint64_t prefix_length = prefix.length();
     const char* prefix_cstr = prefix.c_str();
 
-    std::string prevShard;
-    for (auto const& shard : shards) {
-        keys.emplace_back(type + "-" + std::to_string(shard));
-    }
-
     // Load values from memory cache
     Cache::memcache const& mem = c->cache_;
-    for (auto const& key : keys) {
-        Cache::memcache::const_iterator memshard = mem.find(key);
-        if (memshard == mem.end()) break;
+    Cache::memcache::const_iterator memshard = mem.find(type);
+    if (memshard != mem.end()) {
         for (auto const& item : memshard->second) {
             const char* item_cstr = item.first.c_str();
             size_t item_length = item.first.length();
@@ -208,10 +182,8 @@ Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::vect
     }
 
     // Load values from message cache
-    for (auto const& key : keys) {
-        if (!cacheHas(c, key)) continue;
-
-        rocksdb::DB* db = cacheGet(c, key);
+    if (cacheHas(c, type)) {
+        rocksdb::DB* db = cacheGet(c, type);
 
         rocksdb::Iterator* rit = db->NewIterator(rocksdb::ReadOptions());
         for (rit->Seek(prefix); rit->Valid() && rit->key().ToString().compare(0, prefix.size(), prefix); rit->Next()) {
@@ -261,8 +233,6 @@ void Cache::Initialize(Handle<Object> target) {
     Nan::SetPrototypeMethod(t, "_get", _get);
     Nan::SetPrototypeMethod(t, "unload", unload);
     Nan::SetMethod(t, "coalesce", coalesce);
-    Nan::SetMethod(t, "shard", _shard);
-    target->Set(Nan::New("SHARD_PREFIX_LENGTH").ToLocalChecked(), Nan::New(SHARD_PREFIX_LENGTH));
     target->Set(Nan::New("Cache").ToLocalChecked(), t->GetFunction());
     constructor.Reset(t);
 }
@@ -274,43 +244,23 @@ Cache::Cache()
 
 Cache::~Cache() { }
 
-NAN_METHOD(Cache::_shard)
-{
-    if (info.Length() != 1) {
-        return Nan::ThrowTypeError("expected at exactly one arg: 'id'");
-    }
-    if (!info[0]->IsString()) {
-        return Nan::ThrowTypeError("first argument must be a String");
-    }
-
-    std::string id = *String::Utf8Value(info[0]->ToString());
-
-    info.GetReturnValue().Set(Nan::New(shard(id)).ToLocalChecked());
-    return;
-}
-
 NAN_METHOD(Cache::pack)
 {
-    if (info.Length() < 3) {
-        return Nan::ThrowTypeError("expected three info: 'type', 'shard', 'filename'");
+    if (info.Length() < 2) {
+        return Nan::ThrowTypeError("expected two info: 'filename', 'type'");
     }
     if (!info[0]->IsString()) {
         return Nan::ThrowTypeError("first argument must be a String");
     }
-    if (!info[1]->IsNumber()) {
-        return Nan::ThrowTypeError("second arg must be an Integer");
-    }
-    if (!info[2]->IsString()) {
-        return Nan::ThrowTypeError("third arg must be a String");
+    if (!info[1]->IsString()) {
+        return Nan::ThrowTypeError("second arg must be a String");
     }
     try {
-        std::string type = *String::Utf8Value(info[0]->ToString());
-        std::string shard = *String::Utf8Value(info[1]->ToString());
-        std::string filename = *String::Utf8Value(info[2]->ToString());
-        std::string key = type + "-" + shard;
+        std::string filename = *String::Utf8Value(info[0]->ToString());
+        std::string type = *String::Utf8Value(info[1]->ToString());
         Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
         Cache::memcache const& mem = c->cache_;
-        Cache::memcache::const_iterator itr = mem.find(key);
+        Cache::memcache::const_iterator itr = mem.find(type);
         if (itr != mem.end()) {
             rocksdb::DB* db;
             rocksdb::Options options;
@@ -356,7 +306,7 @@ NAN_METHOD(Cache::pack)
             info.GetReturnValue().Set(true);
             return;
         } else {
-            if (!cacheHas(c, key)) {
+            if (!cacheHas(c, type)) {
                 return Nan::ThrowTypeError("pack: cannot pack empty data");
             } else {
                 info.GetReturnValue().Set(true);
@@ -584,7 +534,7 @@ void mergeAfter(uv_work_t* req) {
 NAN_METHOD(Cache::list)
 {
     if (info.Length() < 1) {
-        return Nan::ThrowTypeError("expected at least one arg: 'type' and optional a 'shard'");
+        return Nan::ThrowTypeError("expected one arg: 'type'");
     }
     if (!info[0]->IsString()) {
         return Nan::ThrowTypeError("first argument must be a String");
@@ -595,50 +545,28 @@ NAN_METHOD(Cache::list)
         Cache::memcache const& mem = c->cache_;
         Cache::message_cache const& messages = c->msg_;
         Local<Array> ids = Nan::New<Array>();
-        if (info.Length() == 1) {
-            unsigned idx = 0;
-            std::size_t type_size = type.size();
-            for (auto const& item : mem) {
-                std::size_t item_size = item.first.size();
-                if (item_size > type_size && item.first.substr(0,type_size) == type) {
-                    std::string shard = item.first.substr(type_size+1,item_size);
-                    ids->Set(idx++, Nan::New(Nan::New(shard.c_str()).ToLocalChecked()->NumberValue()));
-                }
-            }
-            for (auto const& item : messages) {
-                std::size_t item_size = item.first.size();
-                if (item_size > type_size && item.first.substr(0,type_size) == type) {
-                    std::string shard = item.first.substr(type_size+1,item_size);
-                    ids->Set(idx++, Nan::New(Nan::New(shard.c_str()).ToLocalChecked()->NumberValue()));
-                }
-            }
-            info.GetReturnValue().Set(ids);
-            return;
-        } else if (info.Length() == 2) {
-            std::string shard = *String::Utf8Value(info[1]->ToString());
-            std::string key = type + "-" + shard;
-            Cache::memcache::const_iterator itr = mem.find(key);
-            unsigned idx = 0;
-            if (itr != mem.end()) {
-                for (auto const& item : itr->second) {
-                    ids->Set(idx++,Nan::New(item.first).ToLocalChecked());
-                }
-            }
 
-            // parse message for ids
-            if (cacheHas(c, key)) {
-                rocksdb::DB* db = cacheGet(c, key);
-
-                rocksdb::Iterator* it = db->NewIterator(rocksdb::ReadOptions());
-                for (it->SeekToFirst(); it->Valid(); it->Next()) {
-                    std::string key_id = it->key().ToString();
-                    ids->Set(idx++, Nan::New(key_id).ToLocalChecked());
-                }
+        Cache::memcache::const_iterator itr = mem.find(type);
+        unsigned idx = 0;
+        if (itr != mem.end()) {
+            for (auto const& item : itr->second) {
+                ids->Set(idx++,Nan::New(item.first).ToLocalChecked());
             }
-
-            info.GetReturnValue().Set(ids);
-            return;
         }
+
+        // parse message for ids
+        if (cacheHas(c, type)) {
+            rocksdb::DB* db = cacheGet(c, type);
+
+            rocksdb::Iterator* it = db->NewIterator(rocksdb::ReadOptions());
+            for (it->SeekToFirst(); it->Valid(); it->Next()) {
+                std::string key_id = it->key().ToString();
+                ids->Set(idx++, Nan::New(key_id).ToLocalChecked());
+            }
+        }
+
+        info.GetReturnValue().Set(ids);
+        return;
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
     }
@@ -676,40 +604,32 @@ NAN_METHOD(Cache::merge)
 NAN_METHOD(Cache::_set)
 {
     if (info.Length() < 3) {
-        return Nan::ThrowTypeError("expected four info: 'type', 'shard', 'id', 'data'");
+        return Nan::ThrowTypeError("expected three info: 'type', 'id', 'data'");
     }
     if (!info[0]->IsString()) {
         return Nan::ThrowTypeError("first argument must be a String");
     }
-    if (!info[2]->IsString()) {
-        return Nan::ThrowTypeError("third arg must be a String");
+    if (!info[1]->IsString()) {
+        return Nan::ThrowTypeError("second arg must be a String");
     }
-    if (!info[3]->IsArray()) {
-        return Nan::ThrowTypeError("fourth arg must be an Array");
+    if (!info[2]->IsArray()) {
+        return Nan::ThrowTypeError("third arg must be an Array");
     }
-    Local<Array> data = Local<Array>::Cast(info[3]);
+    Local<Array> data = Local<Array>::Cast(info[2]);
     if (data->IsNull() || data->IsUndefined()) {
-        return Nan::ThrowTypeError("an array expected for fourth argument");
+        return Nan::ThrowTypeError("an array expected for third argument");
     }
     try {
         std::string type = *String::Utf8Value(info[0]->ToString());
-        std::string id = *String::Utf8Value(info[2]->ToString());
+        std::string id = *String::Utf8Value(info[1]->ToString());
 
-        std::string shd;
-        if (info[1]->IsNumber() || info[1]->IsString()) {
-            shd = *String::Utf8Value(info[1]->ToString());
-        } else {
-            shd = shard(id);
-        }
-
-        std::string key = type + "-" + shd;
         Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
         Cache::memcache & mem = c->cache_;
-        Cache::memcache::const_iterator itr = mem.find(key);
+        Cache::memcache::const_iterator itr = mem.find(type);
         if (itr == mem.end()) {
-            c->cache_.emplace(key,Cache::arraycache());
+            c->cache_.emplace(type, Cache::arraycache());
         }
-        Cache::arraycache & arrc = c->cache_[key];
+        Cache::arraycache & arrc = c->cache_[type];
         Cache::arraycache::key_type key_id = static_cast<Cache::arraycache::key_type>(id);
         Cache::arraycache::iterator itr2 = arrc.find(key_id);
         if (itr2 == arrc.end()) {
@@ -718,7 +638,7 @@ NAN_METHOD(Cache::_set)
         Cache::intarray & vv = arrc[key_id];
 
         unsigned array_size = data->Length();
-        if (info[4]->IsBoolean() && info[4]->BooleanValue()) {
+        if (info[3]->IsBoolean() && info[3]->BooleanValue()) {
             vv.reserve(vv.size() + array_size);
         } else {
             if (itr2 != arrc.end()) vv.clear();
@@ -737,8 +657,8 @@ NAN_METHOD(Cache::_set)
 
 NAN_METHOD(Cache::loadSync)
 {
-    if (info.Length() < 3) {
-        return Nan::ThrowTypeError("expected at least three info: 'filename', 'type', 'shard'");
+    if (info.Length() < 2) {
+        return Nan::ThrowTypeError("expected two info: 'filename', 'type'");
     }
     if (!info[0]->IsString()) {
         return Nan::ThrowTypeError("first arg 'filename' must be a String");
@@ -746,32 +666,27 @@ NAN_METHOD(Cache::loadSync)
     if (!info[1]->IsString()) {
         return Nan::ThrowTypeError("second arg 'type' must be a String");
     }
-    if (!info[2]->IsNumber()) {
-        return Nan::ThrowTypeError("third arg 'shard' must be an Integer");
-    }
     try {
         std::string filename = *String::Utf8Value(info[0]->ToString());
         std::string type = *String::Utf8Value(info[1]->ToString());
-        std::string shard = *String::Utf8Value(info[2]->ToString());
-        std::string key = type + "-" + shard;
         Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
         Cache::memcache & mem = c->cache_;
-        Cache::memcache::iterator itr = mem.find(key);
+        Cache::memcache::iterator itr = mem.find(type);
         if (itr != mem.end()) {
-            c->cache_.emplace(key,arraycache());
+            c->cache_.emplace(type, arraycache());
         }
-        Cache::memcache::iterator itr2 = mem.find(key);
+        Cache::memcache::iterator itr2 = mem.find(type);
         if (itr2 != mem.end()) {
             mem.erase(itr2);
         }
-        if (!cacheHas(c, key)) {
+        if (!cacheHas(c, type)) {
             rocksdb::DB* db;
             rocksdb::Options options;
             options.create_if_missing = true;
             rocksdb::Status status = rocksdb::DB::Open(options, filename, &db);
             assert(status.ok());
 
-            cacheInsert(c, key, db);
+            cacheInsert(c, type, db);
         }
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
@@ -782,27 +697,22 @@ NAN_METHOD(Cache::loadSync)
 
 NAN_METHOD(Cache::has)
 {
-    if (info.Length() < 2) {
-        return Nan::ThrowTypeError("expected two info: 'type' and 'shard'");
+    if (info.Length() < 1) {
+        return Nan::ThrowTypeError("expected one info: 'type'");
     }
     if (!info[0]->IsString()) {
         return Nan::ThrowTypeError("first arg must be a String");
     }
-    if (!info[1]->IsNumber()) {
-        return Nan::ThrowTypeError("second arg must be an Integer");
-    }
     try {
         std::string type = *String::Utf8Value(info[0]->ToString());
-        std::string shard = *String::Utf8Value(info[1]->ToString());
-        std::string key = type + "-" + shard;
         Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
         Cache::memcache const& mem = c->cache_;
-        Cache::memcache::const_iterator itr = mem.find(key);
+        Cache::memcache::const_iterator itr = mem.find(type);
         if (itr != mem.end()) {
             info.GetReturnValue().Set(Nan::True());
             return;
         } else {
-            if (cacheHas(c, key)) {
+            if (cacheHas(c, type)) {
                 info.GetReturnValue().Set(Nan::True());
                 return;
             } else {
@@ -817,28 +727,21 @@ NAN_METHOD(Cache::has)
 
 NAN_METHOD(Cache::_get)
 {
-    if (info.Length() < 3) {
-        return Nan::ThrowTypeError("expected three info: type, shard, and id");
+    if (info.Length() < 2) {
+        return Nan::ThrowTypeError("expected two info: type and id");
     }
     if (!info[0]->IsString()) {
         return Nan::ThrowTypeError("first arg must be a String");
     }
-    if (!info[2]->IsString()) {
-        return Nan::ThrowTypeError("third arg must be a String");
+    if (!info[1]->IsString()) {
+        return Nan::ThrowTypeError("second arg must be a String");
     }
     try {
         std::string type = *String::Utf8Value(info[0]->ToString());
-        std::string id = *String::Utf8Value(info[2]->ToString());
-
-        std::string shd;
-        if (info[1]->IsNumber() || info[1]->IsString()) {
-            shd = *String::Utf8Value(info[1]->ToString());
-        } else {
-            shd = shard(id);
-        }
+        std::string id = *String::Utf8Value(info[1]->ToString());
 
         Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
-        Cache::intarray vector = __get(c, type, shd, id, false);
+        Cache::intarray vector = __get(c, type, id, false);
         if (!vector.empty()) {
             info.GetReturnValue().Set(vectorToArray(vector));
             return;
@@ -853,28 +756,23 @@ NAN_METHOD(Cache::_get)
 
 NAN_METHOD(Cache::unload)
 {
-    if (info.Length() < 2) {
-        return Nan::ThrowTypeError("expected at least two info: 'type' and 'shard'");
+    if (info.Length() < 1) {
+        return Nan::ThrowTypeError("expected one info: 'type'");
     }
     if (!info[0]->IsString()) {
         return Nan::ThrowTypeError("first arg must be a String");
     }
-    if (!info[1]->IsNumber()) {
-        return Nan::ThrowTypeError("second arg must be an Integer");
-    }
     bool hit = false;
     try {
         std::string type = *String::Utf8Value(info[0]->ToString());
-        std::string shard = *String::Utf8Value(info[1]->ToString());
-        std::string key = type + "-" + shard;
         Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
         Cache::memcache & mem = c->cache_;
-        Cache::memcache::iterator itr = mem.find(key);
+        Cache::memcache::iterator itr = mem.find(type);
         if (itr != mem.end()) {
             hit = true;
             mem.erase(itr);
         }
-        hit = hit || cacheRemove(c, key);
+        hit = hit || cacheRemove(c, type);
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
     }
@@ -936,7 +834,6 @@ struct PhrasematchSubq {
     double weight;
     std::string phrase;
     bool prefix;
-    std::vector<uint64_t> shards;
     unsigned short idx;
     unsigned short zoom;
 };
@@ -1186,18 +1083,9 @@ void coalesceSingle(uv_work_t* req) {
         std::string type = "grid";
         Cache::intarray grids;
         if (subq.prefix) {
-            grids = __getbyprefix(subq.cache, type, subq.shards, subq.phrase);
+            grids = __getbyprefix(subq.cache, type, subq.phrase);
         } else {
-            grids = __get(subq.cache, type, std::to_string(subq.shards[0]), subq.phrase, true);
-            if (subq.shards.size() > 1) {
-                Cache::intarray more_grids;
-                for (size_t i = 1; i < subq.shards.size(); i++) {
-                    more_grids = __get(subq.cache, type, std::to_string(subq.shards[i]), subq.phrase, true);
-                    for (size_t j = 0; j < more_grids.size(); j++) {
-                        grids.emplace_back(more_grids[j]);
-                    }
-                }
-            }
+            grids = __get(subq.cache, type, subq.phrase, true);
         }
 
         unsigned long m = grids.size();
@@ -1339,18 +1227,9 @@ void coalesceMulti(uv_work_t* req) {
             std::string type = "grid";
             Cache::intarray grids;
             if (subq.prefix) {
-                grids = __getbyprefix(subq.cache, type, subq.shards, subq.phrase);
+                grids = __getbyprefix(subq.cache, type, subq.phrase);
             } else {
-                grids = __get(subq.cache, type, std::to_string(subq.shards[0]), subq.phrase, true);
-                if (subq.shards.size() > 1) {
-                    Cache::intarray more_grids;
-                    for (size_t i = 1; i < subq.shards.size(); i++) {
-                        more_grids = __get(subq.cache, type, std::to_string(subq.shards[i]), subq.phrase, true);
-                        for (size_t j = 0; j < more_grids.size(); j++) {
-                            grids.emplace_back(more_grids[j]);
-                        }
-                    }
-                }
+                grids = __get(subq.cache, type, subq.phrase, true);
             }
 
             unsigned short z = subq.zoom;
@@ -1555,12 +1434,6 @@ NAN_METHOD(Cache::coalesce) {
             subq.phrase = *String::Utf8Value(jsStack->Get(Nan::New("phrase").ToLocalChecked())->ToString());
 
             subq.prefix = jsStack->Get(Nan::New("prefix").ToLocalChecked())->BooleanValue();
-
-            if (!jsStack->Has(Nan::New("shards").ToLocalChecked())) {
-                delete baton;
-                return Nan::ThrowTypeError("Subq object must have 'shards' array");
-            }
-            subq.shards = arrayToVector(Local<Array>::Cast(jsStack->Get(Nan::New("shards").ToLocalChecked())));
 
             // JS cache reference => cpp
             Local<Object> cache = Local<Object>::Cast(jsStack->Get(Nan::New("cache").ToLocalChecked()));
