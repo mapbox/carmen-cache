@@ -5,16 +5,23 @@ var test = require('tape');
 var mp36 = Math.pow(2,36);
 var fs = require('fs');
 
-if (!fs.existsSync('/tmp/carmen-cache-megashard.pbf')) {
+var tmpdir = "/tmp/temp." + Math.random().toString(36).substr(2, 5);
+fs.mkdirSync(tmpdir);
+var tmpidx = 0;
+var tmpfile = function() { return tmpdir + "/" + (tmpidx++) + ".dat"; };
+
+var megashard = tmpfile();
+
+if (!fs.existsSync(megashard)) {
     var writer = new Cache('writer');
     var ids = [];
     for (var i = 0; i < 100; i++) ids.push(i);
     for (var i = 0; i < Math.pow(2,18); i++) writer._set('grid', Cache.shard('....'), "...." + i, ids);
-    fs.writeFileSync('/tmp/carmen-cache-megashard.pbf', writer.pack('grid', +Cache.shard('....')));
+    writer.pack('grid', +Cache.shard('....'), megashard);
 }
 
 var c = new Cache('cache');
-c.loadSync(fs.readFileSync('/tmp/carmen-cache-megashard.pbf'), 'grid', +Cache.shard('....'));
+c.loadSync(megashard, 'grid', +Cache.shard('....'));
 
 // Benchmark loading many phrases
 var phrases = [];

@@ -8,7 +8,7 @@ var mp36 = Math.pow(2,36);
     var runs = 50;
     var b = new Cache('b');
     b._set('grid', Cache.shard('3848571113'), '3848571113', require('./fixtures/coalesce-bench-single-3848571113.json'));
-    console.log('# pack size', b.pack('grid', +Cache.shard('3848571113'), '3848571113').length);
+    //console.log('# pack size', b.pack('grid', +Cache.shard('3848571113'), '3848571113').length);
     var stacks = [{
         cache: b,
         idx: 0,

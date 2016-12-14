@@ -23,8 +23,8 @@
 #include <fstream>
 #include <tuple>
 
-#define USE_REDUCED_TRIE 1
-#include "cedar.h"
+#include <cassert>
+#include "rocksdb/db.h"
 
 namespace carmen {
 
@@ -43,9 +43,7 @@ public:
     typedef std::string key_type;
     typedef uint64_t value_type;
     // list + map as simple LRU cache
-    typedef cedar::da<int32_t> shard_trie;
-    typedef std::tuple<std::string,std::string> shard_pair;
-    typedef std::pair<std::string,shard_pair> message_pair;
+    typedef std::pair<std::string,rocksdb::DB*> message_pair;
     typedef std::list<message_pair> message_list;
     typedef std::map<std::string,message_list::iterator> message_cache;
     // fully cached item

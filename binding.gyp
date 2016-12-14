@@ -13,6 +13,9 @@
           "<!(node -p -e \"require('path').dirname(require.resolve('nan'))\")",
           './node_modules/protozero/include/',
       ],
+      "libraries": [
+        '-lrocksdb'
+      ],
       'cflags_cc!': ['-fno-rtti', '-fno-exceptions'],
       'cflags_cc' : [
           '-std=c++11',

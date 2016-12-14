@@ -3,6 +3,11 @@ var tape = require('tape');
 var fs = require('fs');
 var mp53 = Math.pow(2,53);
 
+var tmpdir = "/tmp/temp." + Math.random().toString(36).substr(2, 5);
+fs.mkdirSync(tmpdir);
+var tmpidx = 0;
+var tmpfile = function() { return tmpdir + "/" + (tmpidx++) + ".dat"; };
+
 Cache.prototype.set = function(type, key, data) {
     this._set(type, Cache.shard(key), key, data);
 }
@@ -20,11 +25,14 @@ tape('#merge concat', function(assert) {
     cacheB.set('term', '....1', [10,11,12,13]);
     cacheB.set('term', '....3', [10,11,12,13]);
 
-    var pbfA = cacheA.pack('term', +Cache.shard('....'));
-    var pbfB = cacheB.pack('term', +Cache.shard('....'));
+    var pbfA = tmpfile();
+    cacheA.pack('term', +Cache.shard('....'), pbfA);
+    var pbfB = tmpfile();
+    cacheB.pack('term', +Cache.shard('....'), pbfB);
 
+    var merged = tmpfile();
     var cacheC = new Cache('c');
-    cacheA.merge(pbfA, pbfB, 'concat', function(err, merged) {
+    cacheA.merge(pbfA, pbfB, merged, 'concat', function(err) {
         assert.ifError(err);
         cacheC.loadSync(merged, 'term', +Cache.shard('....'));
         assert.deepEqual(cacheC.get('term', '....2').sort(numSort), [0,1,2,3], 'a-only');
@@ -47,11 +55,14 @@ tape('#merge freq', function(assert) {
     cacheB._set('freq', 0, '__COUNT__', [2]);
     cacheB._set('freq', 0, '4', [2]);
 
-    var pbfA = cacheA.pack('freq', 0);
-    var pbfB = cacheB.pack('freq', 0);
+    var pbfA = tmpfile();
+    cacheA.pack('freq', 0, pbfA);
+    var pbfB = tmpfile();
+    cacheB.pack('freq', 0, pbfB);
 
+    var merged = tmpfile();
     var cacheC = new Cache('c');
-    cacheA.merge(pbfA, pbfB, 'freq', function(err, merged) {
+    cacheA.merge(pbfA, pbfB, merged, 'freq', function(err) {
         assert.ifError(err);
         cacheC.loadSync(merged, 'freq', 0);
         assert.deepEqual(cacheC._get('freq', 0, '__MAX__').sort(numSort), [2], 'a-b-max');

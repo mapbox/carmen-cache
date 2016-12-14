@@ -74,10 +74,10 @@ inline Local<Object> mapToObject(std::map<std::uint64_t,std::uint64_t> const& ma
     return object;
 }
 
-inline Cache::shard_pair* cacheGet(Cache const* c, std::string const& key) {
+inline rocksdb::DB* cacheGet(Cache const* c, std::string const& key) {
     Cache::message_cache const& messages = c->msg_;
     Cache::message_cache::const_iterator mitr = messages.find(key);
-    return &(mitr->second->second);
+    return mitr->second->second;
 }
 
 inline bool cacheHas(Cache const* c, std::string const& key) {
@@ -86,7 +86,7 @@ inline bool cacheHas(Cache const* c, std::string const& key) {
     return mitr != messages.end();
 }
 
-inline void cacheInsert(Cache * c, std::string const& key, Cache::shard_pair const& message) {
+inline void cacheInsert(Cache * c, std::string const& key, rocksdb::DB* const& message) {
     Cache::message_list &list = c->msglist_;
     Cache::message_cache &messages = c->msg_;
     Cache::message_cache::iterator mitr = messages.find(key);
@@ -121,21 +121,13 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string const
     if (itr == mem.end()) {
         if (!cacheHas(c, key)) return array;
 
-        Cache::shard_pair* ref = cacheGet(c, key);
-
-        Cache::shard_trie trie;
-        trie.set_array((void*)(std::get<0>(*ref).c_str()), std::get<0>(*ref).length() / trie.unit_size());
-
-        std::string const & proto = std::get<1>(*ref);
+        rocksdb::DB* db = cacheGet(c, key);
 
         std::string search_id = id;
         for (uint32_t i = 0; i < 2; i++) {
-            auto result = trie.exactMatchSearch<Cache::shard_trie::result_type>(search_id.c_str(), search_id.length(), 0);
-            if (result != Cache::shard_trie::error_code::CEDAR_NO_VALUE) {
-                uint32_t m_len;
-
-                std::memcpy(&m_len, (void*)(proto.data() + result), sizeof(uint32_t));
-                std::string message(proto.data() + result + sizeof(uint32_t), m_len);
+            std::string message;
+            rocksdb::Status s = db->Get(rocksdb::ReadOptions(), search_id, &message);
+            if (s.ok()) {
                 protozero::pbf_reader item(message);
                 item.next(CACHE_ITEM);
                 auto vals = item.get_packed_uint64();
@@ -184,7 +176,6 @@ Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::vect
     Cache::intarray array;
     uint64_t prefix_length = prefix.length();
     const char* prefix_cstr = prefix.c_str();
-    bool startswith;
 
     std::string prevShard;
     for (auto const& shard : shards) {
@@ -220,29 +211,11 @@ Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::vect
     for (auto const& key : keys) {
         if (!cacheHas(c, key)) continue;
 
-        Cache::shard_pair* ref = cacheGet(c, key);
+        rocksdb::DB* db = cacheGet(c, key);
 
-        Cache::shard_trie trie;
-        trie.set_array((void*)(std::get<0>(*ref).c_str()), std::get<0>(*ref).length() / trie.unit_size());
-
-        std::string const & proto = std::get<1>(*ref);
-
-        const char* k = prefix.c_str();
-        size_t len = prefix.length();
-        size_t from (0);
-        char trie_key[1024];
-
-        size_t pos (0), p (0);
-        if (trie.traverse(k, from, pos, len) == Cache::shard_trie::error_code::CEDAR_NO_PATH) continue;
-        size_t root = from;
-
-        for (int32_t result = trie.begin (from, p); result != Cache::shard_trie::error_code::CEDAR_NO_PATH; result = trie.next (from, p, root)) {
-            uint32_t m_len;
-
-            // get the key string to check for the suffix
-            trie.suffix(trie_key, p, from);
-            std::string key_id = prefix;
-            key_id.append(trie_key, p);
+        rocksdb::Iterator* rit = db->NewIterator(rocksdb::ReadOptions());
+        for (rit->Seek(prefix); rit->Valid() && rit->key().ToString().compare(0, prefix.size(), prefix); rit->Next()) {
+            std::string key_id = rit->key().ToString();
 
             // same skip operation as for the memory cache; see above
             if (
@@ -252,8 +225,7 @@ Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::vect
                 continue;
             }
 
-            std::memcpy(&m_len, (void*)(proto.data() + result), sizeof(uint32_t));
-            std::string message(proto.data() + result + sizeof(uint32_t), m_len);
+            std::string message(rit->value().ToString());
             protozero::pbf_reader item(message);
             item.next(CACHE_ITEM);
 
@@ -319,8 +291,8 @@ NAN_METHOD(Cache::_shard)
 
 NAN_METHOD(Cache::pack)
 {
-    if (info.Length() < 1) {
-        return Nan::ThrowTypeError("expected two info: 'type', 'shard'");
+    if (info.Length() < 3) {
+        return Nan::ThrowTypeError("expected three info: 'type', 'shard', 'filename'");
     }
     if (!info[0]->IsString()) {
         return Nan::ThrowTypeError("first argument must be a String");
@@ -328,16 +300,23 @@ NAN_METHOD(Cache::pack)
     if (!info[1]->IsNumber()) {
         return Nan::ThrowTypeError("second arg must be an Integer");
     }
+    if (!info[2]->IsString()) {
+        return Nan::ThrowTypeError("third arg must be a String");
+    }
     try {
         std::string type = *String::Utf8Value(info[0]->ToString());
         std::string shard = *String::Utf8Value(info[1]->ToString());
+        std::string filename = *String::Utf8Value(info[2]->ToString());
         std::string key = type + "-" + shard;
         Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
         Cache::memcache const& mem = c->cache_;
         Cache::memcache::const_iterator itr = mem.find(key);
         if (itr != mem.end()) {
-            Cache::shard_trie trie;
-            std::string all_messages;
+            rocksdb::DB* db;
+            rocksdb::Options options;
+            options.create_if_missing = true;
+            rocksdb::Status status = rocksdb::DB::Open(options, filename, &db);
+            assert(status.ok());
 
             // Optimization idea: pre-pass on arrays to assemble guess about
             // how long the final message will be in order to be able to call
@@ -370,58 +349,17 @@ NAN_METHOD(Cache::pack)
                         }
                     }
 
-                    int32_t m_pos = all_messages.length();
-
-                    uint32_t m_len = message.length();
-                    all_messages.append(reinterpret_cast<const char*>(&m_len), sizeof(uint32_t));
-                    all_messages.append(message);
-
-                    trie.update(item.first.c_str(), item.first.length(), m_pos);
+                    db->Put(rocksdb::WriteOptions(), item.first, message);
                 }
             }
-            if (all_messages.empty()) {
-                return Nan::ThrowTypeError("pack: invalid message ByteSize encountered");
-            } else {
-                const char* trie_arr = static_cast<const char*>(trie.array());
-
-                uint32_t trie_size = trie.size() * trie.unit_size();
-                uint32_t proto_size = all_messages.length();
-
-                Local<Object> buf = (Nan::NewBuffer((sizeof(uint32_t) * 2) + trie_size + proto_size)).ToLocalChecked();
-
-                char* data = node::Buffer::Data(buf);
-
-                std::memcpy(data, &trie_size, sizeof(uint32_t));
-                std::memcpy(data + sizeof(uint32_t), &proto_size, sizeof(uint32_t));
-                std::memcpy(data + (2 * sizeof(uint32_t)), trie_arr, trie_size);
-                std::memcpy(data + (2 * sizeof(uint32_t)) + trie_size, all_messages.c_str(), proto_size);
-
-                info.GetReturnValue().Set(buf);
-                return;
-            }
+            delete db;
+            info.GetReturnValue().Set(true);
+            return;
         } else {
             if (!cacheHas(c, key)) {
                 return Nan::ThrowTypeError("pack: cannot pack empty data");
             } else {
-                Cache::shard_pair* ref = cacheGet(c, key);
-
-                Cache::shard_trie trie;
-                trie.set_array((void*)(std::get<0>(*ref).c_str()), std::get<0>(*ref).length() / trie.unit_size());
-
-                std::string const & proto = std::get<1>(*ref);
-
-                uint32_t trie_size = trie.size() * sizeof(cedar::da<uint32_t>::node);
-                uint32_t proto_size = proto.length();
-
-                Local<Object> buf = (Nan::NewBuffer((sizeof(uint32_t) * 2) + trie_size + proto_size)).ToLocalChecked();
-                char* data = node::Buffer::Data(buf);
-
-                std::memcpy(data, &trie_size, sizeof(uint32_t));
-                std::memcpy(data + sizeof(uint32_t), &proto_size, sizeof(uint32_t));
-                std::memcpy(data + (2 * sizeof(uint32_t)), static_cast<const char*>(trie.array()), trie_size);
-                std::memcpy(data + (2 * sizeof(uint32_t)) + trie_size, proto.c_str(), proto_size);
-
-                info.GetReturnValue().Set(buf);
+                info.GetReturnValue().Set(true);
                 return;
             }
         }
@@ -434,9 +372,9 @@ NAN_METHOD(Cache::pack)
 
 struct MergeBaton : carmen::noncopyable {
     uv_work_t request;
-    std::string pbf1;
-    std::string pbf2;
-    std::string pbf3;
+    std::string filename1;
+    std::string filename2;
+    std::string filename3;
     std::string method;
     std::string error;
     Nan::Persistent<v8::Function> callback;
@@ -444,69 +382,59 @@ struct MergeBaton : carmen::noncopyable {
 
 void mergeQueue(uv_work_t* req) {
     MergeBaton *baton = static_cast<MergeBaton *>(req->data);
-    std::string const& pbf1 = baton->pbf1;
-    std::string const& pbf2 = baton->pbf2;
+    std::string const& filename1 = baton->filename1;
+    std::string const& filename2 = baton->filename2;
+    std::string const& filename3 = baton->filename3;
     std::string const& method = baton->method;
 
-    const char* data1 = pbf1.data();
-    const char* data2 = pbf2.data();
+    // input 1
+    rocksdb::DB* db1;
+    rocksdb::Options options1;
+    options1.create_if_missing = true;
+    rocksdb::Status status1 = rocksdb::DB::Open(options1, filename1, &db1);
+    assert(status1.ok());
 
-    uint32_t trie_size, proto_size;
+    // input 2
+    rocksdb::DB* db2;
+    rocksdb::Options options2;
+    options2.create_if_missing = true;
+    rocksdb::Status status2 = rocksdb::DB::Open(options2, filename2, &db2);
+    assert(status2.ok());
 
-    memcpy(&trie_size, data1, sizeof(uint32_t));
-    memcpy(&proto_size, data1 + sizeof(uint32_t), sizeof(uint32_t));
-    std::string trie_data1(data1 + (2 * sizeof(uint32_t)), trie_size);
-    std::string proto_data1(data1 + (2 * sizeof(uint32_t)) + trie_size, proto_size);
-    Cache::shard_trie trie1;
-    trie1.set_array((void*)(trie_data1.data()), trie_data1.length() / trie1.unit_size());
-
-    memcpy(&trie_size, data2, sizeof(uint32_t));
-    memcpy(&proto_size, data2 + sizeof(uint32_t), sizeof(uint32_t));
-    std::string trie_data2(data2 + (2 * sizeof(uint32_t)), trie_size);
-    std::string proto_data2(data2 + (2 * sizeof(uint32_t)) + trie_size, proto_size);
-    Cache::shard_trie trie2;
-    trie2.set_array((void*)(trie_data2.data()), trie_data2.length() / trie2.unit_size());
+    // output
+    rocksdb::DB* db3;
+    rocksdb::Options options3;
+    options3.create_if_missing = true;
+    rocksdb::Status status3 = rocksdb::DB::Open(options3, filename3, &db3);
+    assert(status3.ok());
 
     // Ids that have been seen
     std::map<Cache::key_type,bool> ids1;
     std::map<Cache::key_type,bool> ids2;
 
     try {
-        // output
-        Cache::shard_trie out_trie;
-        std::string out_messages;
-
         // Store ids from 1
-        size_t from (0), p (0);
-        char trie_key[1024];
-        for (int32_t i = trie1.begin (from, p); i != Cache::shard_trie::error_code::CEDAR_NO_PATH; i = trie1.next (from, p)) {
-            trie1.suffix(trie_key, p, from);
-            std::string key_id(trie_key, p);
-            ids1.emplace(key_id, true);
+        rocksdb::Iterator* it1 = db1->NewIterator(rocksdb::ReadOptions());
+        for (it1->SeekToFirst(); it1->Valid(); it1->Next()) {
+            ids1.emplace(it1->key().ToString(), true);
         }
 
         // Store ids from 2
-        from = 0; p = 0;
-        for (int32_t i = trie2.begin (from, p); i != Cache::shard_trie::error_code::CEDAR_NO_PATH; i = trie2.next (from, p)) {
-            trie2.suffix(trie_key, p, from);
-            std::string key_id(trie_key, p);
-            ids2.emplace(key_id, true);
+        rocksdb::Iterator* it2 = db2->NewIterator(rocksdb::ReadOptions());
+        for (it2->SeekToFirst(); it2->Valid(); it2->Next()) {
+            ids2.emplace(it2->key().ToString(), true);
         }
 
         // No delta writes from message1
-        from = 0; p = 0;
-        for (int32_t i = trie1.begin (from, p); i != Cache::shard_trie::error_code::CEDAR_NO_PATH; i = trie1.next (from, p)) {
-            trie1.suffix(trie_key, p, from);
-            std::string key_id(trie_key, p);
+        it1 = db1->NewIterator(rocksdb::ReadOptions());
+        for (it1->SeekToFirst(); it1->Valid(); it1->Next()) {
+            std::string key_id = it1->key().ToString();
 
             // Skip this id if also in message 2
             if (ids2.find(key_id) != ids2.end()) continue;
 
             // get input proto
-            uint32_t m_len;
-            std::memcpy(&m_len, (void*)(proto_data1.data() + i), sizeof(uint32_t));
-            std::string in_message(proto_data1.data() + i + sizeof(uint32_t), m_len);
-            protozero::pbf_reader item(in_message);
+            protozero::pbf_reader item(it1->value().ToString());
             item.next(CACHE_ITEM);
 
             std::string message;
@@ -521,29 +449,20 @@ void mergeQueue(uv_work_t* req) {
                 }
             }
 
-            int32_t m_pos = out_messages.length();
-
-            uint32_t om_len = message.length();
-            out_messages.append(reinterpret_cast<const char*>(&om_len), sizeof(uint32_t));
-            out_messages.append(message);
-
-            out_trie.update(key_id.c_str(), key_id.length(), m_pos);
+            db3->Put(rocksdb::WriteOptions(), key_id, message);
         }
 
         // No delta writes from message2
-        from = 0; p = 0;
-        for (int32_t i = trie2.begin (from, p); i != Cache::shard_trie::error_code::CEDAR_NO_PATH; i = trie2.next (from, p)) {
-            trie2.suffix(trie_key, p, from);
-            std::string key_id(trie_key, p);
+        it2 = db2->NewIterator(rocksdb::ReadOptions());
+        for (it2->SeekToFirst(); it2->Valid(); it2->Next()) {
+            std::string key_id = it2->key().ToString();
+
 
             // Skip this id if also in message 1
             if (ids1.find(key_id) != ids1.end()) continue;
 
             // get input proto
-            uint32_t m_len;
-            std::memcpy(&m_len, (void*)(proto_data2.data() + i), sizeof(uint32_t));
-            std::string in_message(proto_data2.data() + i + sizeof(uint32_t), m_len);
-            protozero::pbf_reader item(in_message);
+            protozero::pbf_reader item(it2->value().ToString());
             item.next(CACHE_ITEM);
 
             std::string message;
@@ -558,35 +477,25 @@ void mergeQueue(uv_work_t* req) {
                 }
             }
 
-            int32_t m_pos = out_messages.length();
-
-            uint32_t om_len = message.length();
-            out_messages.append(reinterpret_cast<const char*>(&om_len), sizeof(uint32_t));
-            out_messages.append(message);
-
-            out_trie.update(key_id.c_str(), key_id.length(), m_pos);
+            db3->Put(rocksdb::WriteOptions(), key_id, message);
         }
 
         // Delta writes for ids in both message1 and message2
-        from = 0; p = 0;
-        for (int32_t i = trie1.begin (from, p); i != Cache::shard_trie::error_code::CEDAR_NO_PATH; i = trie1.next (from, p)) {
-            trie1.suffix(trie_key, p, from);
-            std::string key_id(trie_key, p);
+        it1 = db1->NewIterator(rocksdb::ReadOptions());
+        for (it1->SeekToFirst(); it1->Valid(); it1->Next()) {
+            std::string key_id = it1->key().ToString();
 
             // Skip ids that are only in one or the other lists
             if (ids1.find(key_id) == ids1.end() || ids2.find(key_id) == ids2.end()) continue;
 
             // get input proto
-            uint32_t m_len;
-            std::memcpy(&m_len, (void*)(proto_data1.data() + i), sizeof(uint32_t));
-            std::string in_message(proto_data1.data() + i + sizeof(uint32_t), m_len);
-            protozero::pbf_reader item(in_message);
+            protozero::pbf_reader item(it1->value().ToString());
             item.next(CACHE_ITEM);
 
             uint64_t lastval = 0;
             Cache::intarray varr;
 
-            // Add values from pbf1
+            // Add values from filename1
             auto vals = item.get_packed_uint64();
             for (auto it = vals.first; it != vals.second; ++it) {
                 if (method == "freq") {
@@ -601,12 +510,10 @@ void mergeQueue(uv_work_t* req) {
                 }
             }
 
-            auto result = trie2.exactMatchSearch<Cache::shard_trie::result_type>(key_id.c_str(), key_id.length(), 0);
-            if (result != Cache::shard_trie::error_code::CEDAR_NO_VALUE) {
+            std::string in_message2;
+            rocksdb::Status s = db2->Get(rocksdb::ReadOptions(), key_id, &in_message2);
+            if (s.ok()) {
                 // get input proto 2
-                uint32_t m_len2;
-                std::memcpy(&m_len2, (void*)(proto_data2.data() + result), sizeof(uint32_t));
-                std::string in_message2(proto_data2.data() + result + sizeof(uint32_t), m_len2);
                 protozero::pbf_reader item2(in_message2);
                 item2.next(CACHE_ITEM);
 
@@ -651,27 +558,10 @@ void mergeQueue(uv_work_t* req) {
                 }
             }
 
-            int32_t m_pos = out_messages.length();
-
-            uint32_t om_len = message.length();
-            out_messages.append(reinterpret_cast<const char*>(&om_len), sizeof(uint32_t));
-            out_messages.append(message);
-
-            out_trie.update(key_id.c_str(), key_id.length(), m_pos);
+            db3->Put(rocksdb::WriteOptions(), key_id, message);
         }
 
-        uint32_t out_trie_size = out_trie.size() * out_trie.unit_size();
-        uint32_t out_proto_size = out_messages.length();
-
-        std::string merged("");
-        merged.reserve((sizeof(uint32_t) * 2) + out_trie_size + out_proto_size);
-
-        merged.append(reinterpret_cast<const char*>(&out_trie_size), sizeof(uint32_t));
-        merged.append(reinterpret_cast<const char*>(&out_proto_size), sizeof(uint32_t));
-        merged.append(static_cast<const char*>(out_trie.array()), out_trie_size);
-        merged.append(out_messages);
-
-        baton->pbf3 = merged;
+        delete db3;
     } catch (std::exception const& ex) {
         baton->error = ex.what();
     }
@@ -684,10 +574,8 @@ void mergeAfter(uv_work_t* req) {
         v8::Local<v8::Value> argv[1] = { Nan::Error(baton->error.c_str()) };
         Nan::MakeCallback(Nan::GetCurrentContext()->Global(), Nan::New(baton->callback), 1, argv);
     } else {
-        std::string const& merged = baton->pbf3;
-        Local<Object> buf = Nan::CopyBuffer((char*)merged.data(), merged.size()).ToLocalChecked();
-        Local<Value> argv[2] = { Nan::Null(), buf };
-        Nan::MakeCallback(Nan::GetCurrentContext()->Global(), Nan::New(baton->callback), 2, argv);
+        Local<Value> argv[2] = { Nan::Null() };
+        Nan::MakeCallback(Nan::GetCurrentContext()->Global(), Nan::New(baton->callback), 1, argv);
     }
     baton->callback.Reset();
     delete baton;
@@ -739,16 +627,11 @@ NAN_METHOD(Cache::list)
 
             // parse message for ids
             if (cacheHas(c, key)) {
-                Cache::shard_pair* ref = cacheGet(c, key);
+                rocksdb::DB* db = cacheGet(c, key);
 
-                Cache::shard_trie trie;
-                trie.set_array((void*)(std::get<0>(*ref).c_str()), std::get<0>(*ref).length() / trie.unit_size());
-
-                size_t from (0), p (0);
-                char trie_key[1024];
-                for (int32_t i = trie.begin (from, p); i != Cache::shard_trie::error_code::CEDAR_NO_PATH; i = trie.next (from, p)) {
-                    trie.suffix(trie_key, p, from);
-                    std::string key_id(trie_key, p);
+                rocksdb::Iterator* it = db->NewIterator(rocksdb::ReadOptions());
+                for (it->SeekToFirst(); it->Valid(); it->Next()) {
+                    std::string key_id = it->key().ToString();
                     ids->Set(idx++, Nan::New(key_id).ToLocalChecked());
                 }
             }
@@ -765,22 +648,22 @@ NAN_METHOD(Cache::list)
 
 NAN_METHOD(Cache::merge)
 {
-    if (!info[0]->IsObject()) return Nan::ThrowTypeError("argument 1 must be a Buffer");
-    if (!info[1]->IsObject()) return Nan::ThrowTypeError("argument 2 must be a Buffer");
-    if (!info[2]->IsString()) return Nan::ThrowTypeError("argument 3 must be a String");
-    if (!info[3]->IsFunction()) return Nan::ThrowTypeError("argument 3 must be a callback function");
+    if (!info[0]->IsString()) return Nan::ThrowTypeError("argument 1 must be a String (infile 1)");
+    if (!info[1]->IsString()) return Nan::ThrowTypeError("argument 2 must be a String (infile 2)");
+    if (!info[2]->IsString()) return Nan::ThrowTypeError("argument 3 must be a String (outfile)");
+    if (!info[3]->IsString()) return Nan::ThrowTypeError("argument 4 must be a String (method)");
+    if (!info[4]->IsFunction()) return Nan::ThrowTypeError("argument 5 must be a callback function");
 
-    Local<Object> obj1 = info[0]->ToObject();
-    Local<Object> obj2 = info[1]->ToObject();
-    Local<Value> callback = info[3];
-    std::string method = *String::Utf8Value(info[2]->ToString());
-
-    if (obj1->IsNull() || obj1->IsUndefined() || !node::Buffer::HasInstance(obj1)) return Nan::ThrowTypeError("argument 1 must be a Buffer");
-    if (obj2->IsNull() || obj2->IsUndefined() || !node::Buffer::HasInstance(obj2)) return Nan::ThrowTypeError("argument 2 must be a Buffer");
+    std::string in1 = *String::Utf8Value(info[0]->ToString());
+    std::string in2 = *String::Utf8Value(info[1]->ToString());
+    std::string out = *String::Utf8Value(info[2]->ToString());
+    Local<Value> callback = info[4];
+    std::string method = *String::Utf8Value(info[3]->ToString());
 
     MergeBaton *baton = new MergeBaton();
-    baton->pbf1 = std::string(node::Buffer::Data(obj1),node::Buffer::Length(obj1));
-    baton->pbf2 = std::string(node::Buffer::Data(obj2),node::Buffer::Length(obj2));
+    baton->filename1 = in1;
+    baton->filename2 = in2;
+    baton->filename3 = out;
     baton->method = method;
     baton->callback.Reset(callback.As<Function>());
     baton->request.data = baton;
@@ -854,18 +737,11 @@ NAN_METHOD(Cache::_set)
 
 NAN_METHOD(Cache::loadSync)
 {
-    if (info.Length() < 2) {
-        return Nan::ThrowTypeError("expected at three info: 'buffer', 'type', and 'shard'");
+    if (info.Length() < 3) {
+        return Nan::ThrowTypeError("expected at least three info: 'filename', 'type', 'shard'");
     }
-    if (!info[0]->IsObject()) {
-        return Nan::ThrowTypeError("first argument must be a Buffer");
-    }
-    Local<Object> obj = info[0]->ToObject();
-    if (obj->IsNull() || obj->IsUndefined()) {
-        return Nan::ThrowTypeError("a buffer expected for first argument");
-    }
-    if (!node::Buffer::HasInstance(obj)) {
-        return Nan::ThrowTypeError("first argument must be a Buffer");
+    if (!info[0]->IsString()) {
+        return Nan::ThrowTypeError("first arg 'filename' must be a String");
     }
     if (!info[1]->IsString()) {
         return Nan::ThrowTypeError("second arg 'type' must be a String");
@@ -874,6 +750,7 @@ NAN_METHOD(Cache::loadSync)
         return Nan::ThrowTypeError("third arg 'shard' must be an Integer");
     }
     try {
+        std::string filename = *String::Utf8Value(info[0]->ToString());
         std::string type = *String::Utf8Value(info[1]->ToString());
         std::string shard = *String::Utf8Value(info[2]->ToString());
         std::string key = type + "-" + shard;
@@ -888,16 +765,13 @@ NAN_METHOD(Cache::loadSync)
             mem.erase(itr2);
         }
         if (!cacheHas(c, key)) {
-            char* data = node::Buffer::Data(obj);
-            Cache::shard_trie trie;
+            rocksdb::DB* db;
+            rocksdb::Options options;
+            options.create_if_missing = true;
+            rocksdb::Status status = rocksdb::DB::Open(options, filename, &db);
+            assert(status.ok());
 
-            uint32_t trie_size, proto_size;
-            memcpy(&trie_size, data, sizeof(uint32_t));
-            memcpy(&proto_size, data + sizeof(uint32_t), sizeof(uint32_t));
-
-            Cache::shard_pair tpl = std::make_pair(std::string(data + (2 * sizeof(uint32_t)), trie_size), std::string(data + (2 * sizeof(uint32_t)) + trie_size, proto_size));
-
-            cacheInsert(c, key, tpl);
+            cacheInsert(c, key, db);
         }
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());

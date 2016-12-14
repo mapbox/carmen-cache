@@ -3,6 +3,11 @@ var tape = require('tape');
 var fs = require('fs');
 var mp53 = Math.pow(2,53);
 
+var tmpdir = "/tmp/temp." + Math.random().toString(36).substr(2, 5);
+fs.mkdirSync(tmpdir);
+var tmpidx = 0;
+var tmpfile = function() { return tmpdir + "/" + (tmpidx++) + ".dat"; };
+
 tape('#list', function(assert) {
     var cache = new Cache('a', 1);
     cache._set('term', 0, '5', [0,1,2]);
@@ -43,11 +48,12 @@ tape('#get + #set', function(assert) {
 tape('#pack', function(assert) {
     var cache = new Cache('a', 1);
     cache._set('term', 0, '5', [0,1,2]);
-    b = cache.pack('term', 0);
-    assert.deepEqual(cache.pack('term', 0).length, 2065);
+    b = tmpfile();
+    cache.pack('term', 0, b);
+    //assert.deepEqual(cache.pack('term', 0).length, 2065);
     // set should replace data
     cache._set('term', 0, '5', [0,1,2,4]);
-    assert.deepEqual(cache.pack('term', 0).length, 2066);
+    //assert.deepEqual(cache.pack('term', 0).length, 2066);
     assert.throws(cache._set.bind(null, 'term', 0, 5, []), 'can\'t set empty term');
 
     // fake data
@@ -74,13 +80,17 @@ tape('#pack', function(assert) {
     assert.throws(function() { loader.loadSync(new Buffer('a'),'term','foo') });
 
     // grab data right back out
-    loader.loadSync(packer.pack('term',0), 'term', 0);
-    assert.deepEqual(loader.pack('term', 0).length, 12063);
+    var directLoad = tmpfile();
+    packer.pack('term',0, directLoad)
+    loader.loadSync(directLoad, 'term', 0);
+    //assert.deepEqual(loader.pack('term', 0).length, 12063);
     assert.deepEqual(loader._get('term', 0, '5'), array);
 
     // grab data right back out
-    loader.loadSync(packer.pack('term', 1), 'term', 1);
-    assert.deepEqual(loader.pack('term', 1).length, 12063);
+    var directLoad2 = tmpfile();
+    packer.pack('term', 1, directLoad2);
+    loader.loadSync(directLoad2, 'term', 1);
+    //assert.deepEqual(loader.pack('term', 1).length, 12063);
     assert.deepEqual(loader._get('term', 1, '6'), array);
 
     // try to grab data that does not exist
@@ -110,7 +120,8 @@ tape('#load', function(assert) {
     assert.deepEqual(cache.list('term', 0), ['21', '5'], 'keys in shard');
 
     // cache A serializes data, cache B loads serialized data.
-    var pack = cache.pack('term', 0);
+    var pack = tmpfile();
+    cache.pack('term', 0, pack);
     var loader = new Cache('b', 1);
     loader.loadSync(pack, 'term', 0);
     assert.deepEqual(loader._get('term', 0, '21'), [6,5]);
@@ -142,7 +153,8 @@ tape('#unload after load', function(assert) {
         array.push(0);
     }
     cache._set('term', 0, '5', array);
-    var pack = cache.pack('term', 0);
+    var pack = tmpfile();
+    cache.pack('term', 0, pack);
     var loader = new Cache('b', 1);
     loader.loadSync(pack, 'term', 0);
     assert.deepEqual(loader._get('term', 0, '5'), array);
