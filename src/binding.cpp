@@ -4,6 +4,7 @@
 #include <sstream>
 #include <cmath>
 #include <cassert>
+#include <limits>
 
 #include <protozero/pbf_writer.hpp>
 #include <protozero/pbf_reader.hpp>
@@ -1070,16 +1071,29 @@ void coalesceSingle(uv_work_t* req) {
         std::vector<Cover> covers;
         covers.reserve(m);
 
+        uint32_t length = 0;
+        uint32_t lastId = 0;
+        double lastRelev = 0;
+        double lastScoredist = 0;
+        double minScoredist = std::numeric_limits<double>::max();
         for (unsigned long j = 0; j < m; j++) {
             Cover cover = numToCover(grids[j]);
+
             cover.idx = subq.idx;
             cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
             cover.relev = cover.relev * subq.weight;
             cover.distance = proximity ? tileDist(cx, cover.x, cy, cover.y) : 0;
             cover.scoredist = proximity ? scoredist(cz, cover.distance, cover.score) : cover.score;
 
+            // only add cover id if it's got a higer scoredist
+            if (lastId == cover.id && cover.scoredist <= lastScoredist) continue;
+
             // short circuit based on relevMax thres
-            if (relevMax - cover.relev >= 0.25) continue;
+            if (length > 40) {
+                if (cover.scoredist < minScoredist) continue;
+                if (cover.relev < lastRelev) break;
+            }
+            if (relevMax - cover.relev >= 0.25) break;
             if (cover.relev > relevMax) relevMax = cover.relev;
 
             if (bbox) {
@@ -1087,6 +1101,12 @@ void coalesceSingle(uv_work_t* req) {
             }
 
             covers.emplace_back(cover);
+            if (lastId != cover.id) length++;
+            if (!proximity && length > 40) break;
+            if (cover.scoredist < minScoredist) minScoredist = cover.scoredist;
+            lastId = cover.id;
+            lastRelev = cover.relev;
+            lastScoredist = cover.scoredist;
         }
 
         std::sort(covers.begin(), covers.end(), coverSortByRelev);
