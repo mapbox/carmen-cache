@@ -16,12 +16,18 @@
       "libraries": [
         '-lrocksdb'
       ],
+      'ldflags': [
+        '-Wl,-z,now',
+      ],
       'cflags_cc!': ['-fno-rtti', '-fno-exceptions'],
       'cflags_cc' : [
           '-std=c++11',
           '-Wconversion'
       ],
       'xcode_settings': {
+        'OTHER_LDFLAGS':[
+          '-Wl,-bind_at_load'
+        ],
         'OTHER_CPLUSPLUSFLAGS':[
            '-Wshadow',
            '-Wconversion'
