@@ -12,9 +12,11 @@
           '<(SHARED_INTERMEDIATE_DIR)/',
           "<!(node -p -e \"require('path').dirname(require.resolve('nan'))\")",
           './node_modules/protozero/include/',
+          './mason_packages/.link/include/'
       ],
       "libraries": [
-        '-lrocksdb'
+        '<(module_root_dir)/mason_packages/.link/lib/libbz2.a',
+        '<(module_root_dir)/mason_packages/.link/lib/librocksdb.a'
       ],
       'ldflags': [
         '-Wl,-z,now',
