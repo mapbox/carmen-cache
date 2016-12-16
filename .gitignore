@@ -3,3 +3,5 @@ src/index.pb.cc
 src/index.pb.h
 lib/carmen.node
 build
+mason
+mason_packages
