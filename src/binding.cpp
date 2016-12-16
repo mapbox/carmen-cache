@@ -393,7 +393,8 @@ void mergeQueue(uv_work_t* req) {
             if (ids2.find(key_id) != ids2.end()) continue;
 
             // get input proto
-            protozero::pbf_reader item(it1->value().ToString());
+            std::string in_message = it1->value().ToString();
+            protozero::pbf_reader item(in_message);
             item.next(CACHE_ITEM);
 
             std::string message;
@@ -408,7 +409,8 @@ void mergeQueue(uv_work_t* req) {
                 }
             }
 
-            db3->Put(rocksdb::WriteOptions(), key_id, message);
+            rocksdb::Status putStatus = db3->Put(rocksdb::WriteOptions(), key_id, message);
+            assert(putStatus.ok());
         }
 
         // No delta writes from message2
@@ -421,7 +423,8 @@ void mergeQueue(uv_work_t* req) {
             if (ids1.find(key_id) != ids1.end()) continue;
 
             // get input proto
-            protozero::pbf_reader item(it2->value().ToString());
+            std::string in_message = it2->value().ToString();
+            protozero::pbf_reader item(in_message);
             item.next(CACHE_ITEM);
 
             std::string message;
@@ -436,7 +439,8 @@ void mergeQueue(uv_work_t* req) {
                 }
             }
 
-            db3->Put(rocksdb::WriteOptions(), key_id, message);
+            rocksdb::Status putStatus = db3->Put(rocksdb::WriteOptions(), key_id, message);
+            assert(putStatus.ok());
         }
 
         // Delta writes for ids in both message1 and message2
@@ -448,7 +452,8 @@ void mergeQueue(uv_work_t* req) {
             if (ids1.find(key_id) == ids1.end() || ids2.find(key_id) == ids2.end()) continue;
 
             // get input proto
-            protozero::pbf_reader item(it1->value().ToString());
+            std::string in_message1 = it1->value().ToString();
+            protozero::pbf_reader item(in_message1);
             item.next(CACHE_ITEM);
 
             uint64_t lastval = 0;
@@ -517,7 +522,8 @@ void mergeQueue(uv_work_t* req) {
                 }
             }
 
-            db3->Put(rocksdb::WriteOptions(), key_id, message);
+            rocksdb::Status putStatus = db3->Put(rocksdb::WriteOptions(), key_id, message);
+            assert(putStatus.ok());
         }
 
         delete db3;
