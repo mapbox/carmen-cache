@@ -15,8 +15,8 @@
           './mason_packages/.link/include/'
       ],
       "libraries": [
-        '<(module_root_dir)/mason_packages/.link/lib/libbz2.a',
-        '<(module_root_dir)/mason_packages/.link/lib/librocksdb.a'
+        '<(module_root_dir)/mason_packages/.link/lib/librocksdb.a',
+        '<(module_root_dir)/mason_packages/.link/lib/libbz2.a'
       ],
       'ldflags': [
         '-Wl,-z,now',
