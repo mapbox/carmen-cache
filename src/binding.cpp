@@ -266,7 +266,10 @@ NAN_METHOD(Cache::pack)
             rocksdb::Options options;
             options.create_if_missing = true;
             rocksdb::Status status = rocksdb::DB::Open(options, filename, &db);
-            assert(status.ok());
+
+            if (!status.ok()) {
+                return Nan::ThrowTypeError("unable to open rocksdb file for packing");
+            }
 
             // Optimization idea: pre-pass on arrays to assemble guess about
             // how long the final message will be in order to be able to call
@@ -342,21 +345,27 @@ void mergeQueue(uv_work_t* req) {
     rocksdb::Options options1;
     options1.create_if_missing = true;
     rocksdb::Status status1 = rocksdb::DB::Open(options1, filename1, &db1);
-    assert(status1.ok());
+    if (!status1.ok()) {
+        return Nan::ThrowTypeError("unable to open rocksdb input file #1");
+    }
 
     // input 2
     rocksdb::DB* db2;
     rocksdb::Options options2;
     options2.create_if_missing = true;
     rocksdb::Status status2 = rocksdb::DB::Open(options2, filename2, &db2);
-    assert(status2.ok());
+    if (!status2.ok()) {
+        return Nan::ThrowTypeError("unable to open rocksdb input file #2");
+    }
 
     // output
     rocksdb::DB* db3;
     rocksdb::Options options3;
     options3.create_if_missing = true;
     rocksdb::Status status3 = rocksdb::DB::Open(options3, filename3, &db3);
-    assert(status3.ok());
+    if (!status1.ok()) {
+        return Nan::ThrowTypeError("unable to open rocksdb output file");
+    }
 
     // Ids that have been seen
     std::map<Cache::key_type,bool> ids1;
@@ -684,7 +693,10 @@ NAN_METHOD(Cache::loadSync)
             rocksdb::Options options;
             options.create_if_missing = true;
             rocksdb::Status status = rocksdb::DB::Open(options, filename, &db);
-            assert(status.ok());
+
+            if (!status.ok()) {
+                return Nan::ThrowTypeError("unable to open rocksdb file for loading");
+            }
 
             cacheInsert(c, type, db);
         }
