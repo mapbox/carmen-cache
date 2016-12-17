@@ -50,12 +50,6 @@ env:
    - secure: lmfuNtK0/ubV4ZZobgfeKY6DzG41ZciS4a00yCe29jHLxAg+EEmB/qpsW5d1//cC94OKsAySW08xp2uX5wBVvtryaaoiwU7fdKF9DOxHRHieGw/3+m8NNjELkd5hKMKiqDj7l4QPMchzBQR2PQkoG0UMCGUFe+RmzZ2/iCdGHXU=
 
 before_install:
- # TODO: after https://github.com/mapbox/mason/pull/305 merges point at official mason release
- - git clone --branch rocksdb-4.13 --single-branch https://github.com/mapbox/mason.git
- - ./mason/mason install bzip2 1.0.6
- - ./mason/mason link bzip2 1.0.6
- - ./mason/mason install rocksdb 4.13
- - ./mason/mason link rocksdb 4.13
  - export COVERAGE=${COVERAGE:-false}
  - mkdir -p $(pwd)/.local
  - if [[ $(uname -s) == 'Linux' ]]; then
