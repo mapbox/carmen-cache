@@ -833,6 +833,7 @@ struct Cover {
 
 struct Context {
     std::vector<Cover> coverList;
+    unsigned mask;
     double relev;
 };
 
@@ -1172,9 +1173,9 @@ void coalesceMulti(uv_work_t* req) {
         // z5 inherits relev of overlapping tiles at z4.
         // @TODO assumes sources are in zoom ascending order.
         std::string type = "grid";
-        std::map<uint64_t,std::vector<Cover>> coalesced;
-        std::map<uint64_t,std::vector<Cover>>::iterator cit;
-        std::map<uint64_t,std::vector<Cover>>::iterator pit;
+        std::map<uint64_t,std::vector<Context>> coalesced;
+        std::map<uint64_t,std::vector<Context>>::iterator cit;
+        std::map<uint64_t,std::vector<Context>>::iterator pit;
         std::map<uint64_t,bool> done;
         std::map<uint64_t,bool>::iterator dit;
 
@@ -1251,84 +1252,65 @@ void coalesceMulti(uv_work_t* req) {
                 }
 
                 uint64_t zxy = (z * POW2_28) + (cover.x * POW2_14) + (cover.y);
+                unsigned mask = 1 << cover.subq;
+
+                Context context;
+                context.coverList.emplace_back(cover);
+                context.relev = cover.relev;
+                context.mask = mask;
+
+                for (unsigned a = 0; a < zCacheSize; a++) {
+                    uint64_t p = zCache[a];
+                    double s = static_cast<double>(1 << (z-p));
+                    uint64_t pxy = static_cast<uint64_t>(p * POW2_28) +
+                        static_cast<uint64_t>(std::floor(cover.x/s) * POW2_14) +
+                        static_cast<uint64_t>(std::floor(cover.y/s));
+                    // Set a flag to ensure coalesce occurs only once per zxy.
+                    pit = coalesced.find(pxy);
+                    if (pit != coalesced.end()) {
+                        unsigned lastMask = 0;
+                        double lastRelev = 0.0;
+                        for (auto const& parents : pit->second) {
+                            for (auto const& parent : parents.coverList) {
+                                unsigned parentMask = 1 << parent.subq;
+                                // this cover is functionally identical with previous and
+                                // is more relevant, replace the previous.
+                                if (parentMask == lastMask && parent.relev > lastRelev) {
+                                    context.coverList.pop_back();
+                                    context.coverList.emplace_back(parent);
+                                    context.relev -= lastRelev;
+                                    context.relev += parent.relev;
+                                    lastMask = parentMask;
+                                    lastRelev = parent.relev;
+                                // this cover doesn't overlap with used mask.
+                                } else if (!(context.mask & parentMask)) {
+                                    context.coverList.emplace_back(parent);
+                                    context.relev += parent.relev;
+                                    context.mask = context.mask | parentMask;
+                                    lastMask = parentMask;
+                                    lastRelev = parent.relev;
+                                }
+                            }
+                        }
+                    }
+                }
 
                 cit = coalesced.find(zxy);
                 if (cit == coalesced.end()) {
-                    std::vector<Cover> coverList;
-                    coverList.push_back(cover);
-                    coalesced.emplace(zxy, coverList);
+                    std::vector<Context> contexts;
+                    contexts.push_back(context);
+                    coalesced.emplace(zxy, contexts);
                 } else {
-                    cit->second.push_back(cover);
-                }
-
-                dit = done.find(zxy);
-                if (dit == done.end()) {
-                    for (unsigned a = 0; a < zCacheSize; a++) {
-                        uint64_t p = zCache[a];
-                        double s = static_cast<double>(1 << (z-p));
-                        uint64_t pxy = static_cast<uint64_t>(p * POW2_28) +
-                            static_cast<uint64_t>(std::floor(cover.x/s) * POW2_14) +
-                            static_cast<uint64_t>(std::floor(cover.y/s));
-                        // Set a flag to ensure coalesce occurs only once per zxy.
-                        pit = coalesced.find(pxy);
-                        if (pit != coalesced.end()) {
-                            cit = coalesced.find(zxy);
-                            for (auto const& pArray : pit->second) {
-                                cit->second.emplace_back(pArray);
-                            }
-                            done.emplace(zxy, true);
-                            break;
-                        }
-                    }
+                    cit->second.push_back(context);
                 }
             }
         }
 
         std::vector<Context> contexts;
         for (auto const& matched : coalesced) {
-            std::vector<Cover> const& coverList = matched.second;
-            size_t coverSize = coverList.size();
-            for (unsigned i = 0; i < coverSize; i++) {
-                unsigned used = 1 << coverList[i].subq;
-                unsigned lastMask = 0;
-                double lastRelev = 0.0;
-                double stacky = 0.0;
-
-                unsigned coverPos = 0;
-
-                Context context;
-                context.coverList.emplace_back(coverList[i]);
-                context.relev = coverList[i].relev;
-                for (unsigned j = i+1; j < coverSize; j++) {
-                    unsigned mask = 1 << coverList[j].subq;
-
-                    // this cover is functionally identical with previous and
-                    // is more relevant, replace the previous.
-                    if (mask == lastMask && coverList[j].relev > lastRelev) {
-                        context.relev -= lastRelev;
-                        context.relev += coverList[j].relev;
-                        context.coverList[coverPos] = coverList[j];
-
-                        stacky = 1.0;
-                        used = used | mask;
-                        lastMask = mask;
-                        lastRelev = coverList[j].relev;
-                        coverPos++;
-                    // this cover doesn't overlap with used mask.
-                    } else if (!(used & mask)) {
-                        context.coverList.emplace_back(coverList[j]);
-                        context.relev += coverList[j].relev;
-
-                        stacky = 1.0;
-                        used = used | mask;
-                        lastMask = mask;
-                        lastRelev = coverList[j].relev;
-                        coverPos++;
-                    }
-                    // all other cases conflict with existing mask. skip.
-                }
-                context.relev -= 0.01;
-                context.relev += 0.01 * stacky;
+            for (auto const& context : matched.second) {
+                // context.relev -= 0.01;
+                // context.relev += 0.01 * stacky;
                 contexts.emplace_back(context);
             }
         }
