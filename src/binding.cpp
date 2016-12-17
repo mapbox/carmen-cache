@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cassert>
 #include <limits>
+#include <algorithm>
 
 #include <protozero/pbf_writer.hpp>
 #include <protozero/pbf_reader.hpp>
@@ -951,6 +952,12 @@ inline bool coverSortByRelev(Cover const& a, Cover const& b) noexcept {
     else return (b.y > a.y);
 }
 
+inline bool subqSortByZoom(PhrasematchSubq const& a, PhrasematchSubq const& b) noexcept {
+    if (a.zoom < b.zoom) return true;
+    if (a.zoom > b.zoom) return false;
+    return (a.idx < b.idx);
+}
+
 inline bool contextSortByRelev(Context const& a, Context const& b) noexcept {
     if (b.relev > a.relev) return false;
     else if (b.relev < a.relev) return true;
@@ -1143,30 +1150,21 @@ void coalesceMulti(uv_work_t* req) {
     CoalesceBaton *baton = static_cast<CoalesceBaton *>(req->data);
 
     try {
-        std::vector<PhrasematchSubq> const& stack = baton->stack;
-
-        size_t size;
+        std::vector<PhrasematchSubq> &stack = baton->stack;
+        std::sort(stack.begin(), stack.end(), subqSortByZoom);
 
         // Cache zoom levels to iterate over as coalesce occurs.
-        Cache::intarray zoom;
-        std::vector<bool> zoomUniq(22);
-        std::vector<Cache::intarray> zoomCache(22);
-        size = stack.size();
-        for (unsigned short i = 0; i < size; i++) {
-            if (zoomUniq[stack[i].zoom]) continue;
-            zoomUniq[stack[i].zoom] = true;
-            zoom.emplace_back(stack[i].zoom);
-        }
-
-        size = zoom.size();
-        for (unsigned short i = 0; i < size; i++) {
-            Cache::intarray sliced;
-            sliced.reserve(i);
-            for (unsigned short j = 0; j < i; j++) {
-                sliced.emplace_back(zoom[j]);
+        std::vector<Cache::intarray> zoomCache;
+        for (auto const& subq : stack) {
+            Cache::intarray zooms;
+            std::vector<bool> zoomUniq(22);
+            for (auto const& subqB : stack) {
+                if (subq.idx == subqB.idx) continue;
+                if (zoomUniq[subqB.zoom]) continue;
+                zoomUniq[subqB.zoom] = true;
+                zooms.emplace_back(subqB.zoom);
             }
-            std::reverse(sliced.begin(), sliced.end());
-            zoomCache[zoom[i]] = sliced;
+            zoomCache.emplace_back(zooms);
         }
 
         // Coalesce relevs into higher zooms, e.g.
@@ -1178,8 +1176,6 @@ void coalesceMulti(uv_work_t* req) {
         std::map<uint64_t,std::vector<Context>>::iterator pit;
         std::map<uint64_t,bool> done;
         std::map<uint64_t,bool>::iterator dit;
-
-        size = stack.size();
 
         // proximity (optional)
         bool proximity = baton->centerzxy.size() > 0;
@@ -1217,15 +1213,14 @@ void coalesceMulti(uv_work_t* req) {
             maxy = 0;
         }
 
-        for (unsigned short i = 0; i < size; i++) {
-            PhrasematchSubq const& subq = stack[i];
-
+        unsigned short i = 0;
+        for (auto const& subq : stack) {
             std::string shardId = shard(4, subq.phrase);
 
             Cache::intarray grids = __getTruncated(subq.cache, type, shardId, subq.phrase, 500000);
 
             unsigned short z = subq.zoom;
-            auto const& zCache = zoomCache[z];
+            auto const& zCache = zoomCache[i];
             std::size_t zCacheSize = zCache.size();
 
             unsigned long m = grids.size();
@@ -1295,6 +1290,9 @@ void coalesceMulti(uv_work_t* req) {
                     }
                 }
 
+                // Slightly penalize contexts that have no stacking
+                if (context.coverList.size() == 1) context.relev -= 0.01;
+
                 cit = coalesced.find(zxy);
                 if (cit == coalesced.end()) {
                     std::vector<Context> contexts;
@@ -1304,16 +1302,18 @@ void coalesceMulti(uv_work_t* req) {
                     cit->second.push_back(context);
                 }
             }
+
+            i++;
         }
 
+
         std::vector<Context> contexts;
-        for (auto const& matched : coalesced) {
-            for (auto const& context : matched.second) {
-                // context.relev -= 0.01;
-                // context.relev += 0.01 * stacky;
+        for (auto &matched : coalesced) {
+            for (auto &context : matched.second) {
                 contexts.emplace_back(context);
             }
         }
+
         std::sort(contexts.begin(), contexts.end(), contextSortByRelev);
         coalesceFinalize(baton, contexts);
     } catch (std::exception const& ex) {
