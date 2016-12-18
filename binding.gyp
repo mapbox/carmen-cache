@@ -2,7 +2,21 @@
   'includes': [ 'common.gypi' ],
   'targets': [
     {
+      'target_name': 'action_before_build',
+      'type': 'none',
+      'hard_dependency': 1,
+      'actions': [
+        {
+          'action_name': 'install_mason',
+          'inputs': ['./install_mason.sh'],
+          'outputs': ['./mason_packages'],
+          'action': ['./install_mason.sh']
+        }
+      ]
+    },
+    {
       'target_name': '<(module_name)',
+      'dependencies': [ 'action_before_build' ],
       'product_dir': '<(module_path)',
       'sources': [
         "./src/binding.cpp"
