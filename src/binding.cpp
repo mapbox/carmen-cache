@@ -817,6 +817,7 @@ struct PhrasematchSubq {
     uint64_t phrase;
     unsigned short idx;
     unsigned short zoom;
+    unsigned short mask;
 };
 
 struct Cover {
@@ -827,7 +828,7 @@ struct Cover {
     unsigned short y;
     unsigned short score;
     unsigned short idx;
-    unsigned short subq;
+    unsigned short mask;
     unsigned distance;
     double scoredist;
 };
@@ -860,7 +861,7 @@ Cover numToCover(uint64_t num) {
     // These are not derived from decoding the input num but by
     // external values after initialization.
     cover.idx = 0;
-    cover.subq = 0;
+    cover.mask = 0;
     cover.tmpid = 0;
     cover.distance = 0;
 
@@ -1213,12 +1214,14 @@ void coalesceMulti(uv_work_t* req) {
             maxy = 0;
         }
 
+        std::vector<Context> contexts;
         unsigned short i = 0;
         for (auto const& subq : stack) {
             std::string shardId = shard(4, subq.phrase);
 
             Cache::intarray grids = __getTruncated(subq.cache, type, shardId, subq.phrase, 500000);
 
+            bool last = i == (stack.size() - 1);
             unsigned short z = subq.zoom;
             auto const& zCache = zoomCache[i];
             std::size_t zCacheSize = zCache.size();
@@ -1228,7 +1231,7 @@ void coalesceMulti(uv_work_t* req) {
             for (unsigned long j = 0; j < m; j++) {
                 Cover cover = numToCover(grids[j]);
                 cover.idx = subq.idx;
-                cover.subq = i;
+                cover.mask = subq.mask;
                 cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
                 cover.relev = cover.relev * subq.weight;
                 if (proximity) {
@@ -1247,12 +1250,11 @@ void coalesceMulti(uv_work_t* req) {
                 }
 
                 uint64_t zxy = (z * POW2_28) + (cover.x * POW2_14) + (cover.y);
-                unsigned mask = 1 << cover.subq;
 
                 Context context;
                 context.coverList.emplace_back(cover);
                 context.relev = cover.relev;
-                context.mask = mask;
+                context.mask = cover.mask;
 
                 for (unsigned a = 0; a < zCacheSize; a++) {
                     uint64_t p = zCache[a];
@@ -1260,29 +1262,27 @@ void coalesceMulti(uv_work_t* req) {
                     uint64_t pxy = static_cast<uint64_t>(p * POW2_28) +
                         static_cast<uint64_t>(std::floor(cover.x/s) * POW2_14) +
                         static_cast<uint64_t>(std::floor(cover.y/s));
-                    // Set a flag to ensure coalesce occurs only once per zxy.
                     pit = coalesced.find(pxy);
                     if (pit != coalesced.end()) {
                         unsigned lastMask = 0;
                         double lastRelev = 0.0;
                         for (auto const& parents : pit->second) {
                             for (auto const& parent : parents.coverList) {
-                                unsigned parentMask = 1 << parent.subq;
                                 // this cover is functionally identical with previous and
                                 // is more relevant, replace the previous.
-                                if (parentMask == lastMask && parent.relev > lastRelev) {
+                                if (parent.mask == lastMask && parent.relev > lastRelev) {
                                     context.coverList.pop_back();
                                     context.coverList.emplace_back(parent);
                                     context.relev -= lastRelev;
                                     context.relev += parent.relev;
-                                    lastMask = parentMask;
+                                    lastMask = parent.mask;
                                     lastRelev = parent.relev;
                                 // this cover doesn't overlap with used mask.
-                                } else if (!(context.mask & parentMask)) {
+                                } else if (!(context.mask & parent.mask)) {
                                     context.coverList.emplace_back(parent);
                                     context.relev += parent.relev;
-                                    context.mask = context.mask | parentMask;
-                                    lastMask = parentMask;
+                                    context.mask = context.mask | parent.mask;
+                                    lastMask = parent.mask;
                                     lastRelev = parent.relev;
                                 }
                             }
@@ -1290,24 +1290,30 @@ void coalesceMulti(uv_work_t* req) {
                     }
                 }
 
-                // Slightly penalize contexts that have no stacking
-                if (context.coverList.size() == 1) context.relev -= 0.01;
-
-                cit = coalesced.find(zxy);
-                if (cit == coalesced.end()) {
-                    std::vector<Context> contexts;
-                    contexts.push_back(context);
-                    coalesced.emplace(zxy, contexts);
+                if (last) {
+                    // Slightly penalize contexts that have no stacking
+                    if (context.coverList.size() == 1) {
+                        context.relev -= 0.01;
+                    // Slightly penalize contexts in ascending order
+                    } else if (context.coverList[0].mask > context.coverList[1].mask) {
+                        context.relev -= 0.01;
+                    }
+                    contexts.emplace_back(context);
                 } else {
-                    cit->second.push_back(context);
+                    cit = coalesced.find(zxy);
+                    if (cit == coalesced.end()) {
+                        std::vector<Context> contexts;
+                        contexts.push_back(context);
+                        coalesced.emplace(zxy, contexts);
+                    } else {
+                        cit->second.push_back(context);
+                    }
                 }
             }
 
             i++;
         }
 
-
-        std::vector<Context> contexts;
         for (auto &matched : coalesced) {
             for (auto &context : matched.second) {
                 contexts.emplace_back(context);
@@ -1405,6 +1411,7 @@ NAN_METHOD(Cache::coalesce) {
 
             subq.weight = jsStack->Get(Nan::New("weight").ToLocalChecked())->NumberValue();
             subq.phrase = jsStack->Get(Nan::New("phrase").ToLocalChecked())->IntegerValue();
+            subq.mask = jsStack->Get(Nan::New("mask").ToLocalChecked())->IntegerValue();
 
             // JS cache reference => cpp
             Local<Object> cache = Local<Object>::Cast(jsStack->Get(Nan::New("cache").ToLocalChecked()));
