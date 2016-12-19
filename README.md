@@ -5,3 +5,8 @@
 carmen-cache
 ------------
 Protobuf-based cache. Written originally for use in [carmen](https://github.com/mapbox/carmen) geocoder.
+
+### Docs (incomplete)
+
+![coalescemulti](https://cloud.githubusercontent.com/assets/83384/21327650/3588be54-c5fe-11e6-894e-cdaa68ecfa5f.jpg)
+
