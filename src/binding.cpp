@@ -309,9 +309,33 @@ NAN_METHOD(Cache::pack)
             info.GetReturnValue().Set(true);
             return;
         } else {
-            if (!cacheHas(c, type)) {
-                return Nan::ThrowTypeError("pack: cannot pack empty data");
+            if (cacheHas(c, type)) {
+                // if what we have now is already a rocksdb, and it's a different
+                // one from what we're being asked to pack into, copy from one to the other
+                rocksdb::DB* source = cacheGet(c, type);
+                if (source->GetName() != filename) {
+                    rocksdb::DB* db;
+                    rocksdb::Options options;
+                    options.create_if_missing = true;
+                    rocksdb::Status status = rocksdb::DB::Open(options, filename, &db);
+
+                    rocksdb::Iterator* sourceIt = source->NewIterator(rocksdb::ReadOptions());
+                    for (sourceIt->SeekToFirst(); sourceIt->Valid(); sourceIt->Next()) {
+                        db->Put(rocksdb::WriteOptions(), sourceIt->key(), sourceIt->value());
+                    }
+
+                    delete db;
+                    info.GetReturnValue().Set(true);
+                    return;
+                }
             } else {
+                // ensure that an empty rocksdb at least exists, so future operations on it don't fail
+                rocksdb::DB* db;
+                rocksdb::Options options;
+                options.create_if_missing = true;
+                rocksdb::Status status = rocksdb::DB::Open(options, filename, &db);
+
+                delete db;
                 info.GetReturnValue().Set(true);
                 return;
             }
