@@ -186,7 +186,7 @@ Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::stri
         rocksdb::DB* db = cacheGet(c, type);
 
         rocksdb::Iterator* rit = db->NewIterator(rocksdb::ReadOptions());
-        for (rit->Seek(prefix); rit->Valid() && rit->key().ToString().compare(0, prefix.size(), prefix); rit->Next()) {
+        for (rit->Seek(prefix); rit->Valid() && rit->key().ToString().compare(0, prefix.size(), prefix) == 0; rit->Next()) {
             std::string key_id = rit->key().ToString();
 
             // same skip operation as for the memory cache; see above
