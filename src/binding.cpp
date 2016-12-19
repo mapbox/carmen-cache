@@ -1160,7 +1160,7 @@ void coalesceMulti(uv_work_t* req) {
         zoomCache.reserve(stackSize);
         for (auto const& subq : stack) {
             Cache::intarray zooms;
-            std::vector<bool> zoomUniq(22);
+            std::vector<bool> zoomUniq(22, false);
             for (auto const& subqB : stack) {
                 if (subq.idx == subqB.idx) continue;
                 if (zoomUniq[subqB.zoom]) continue;
