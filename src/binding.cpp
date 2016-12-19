@@ -1164,6 +1164,7 @@ void coalesceMulti(uv_work_t* req) {
             for (auto const& subqB : stack) {
                 if (subq.idx == subqB.idx) continue;
                 if (zoomUniq[subqB.zoom]) continue;
+                if (subq.zoom < subqB.zoom) continue;
                 zoomUniq[subqB.zoom] = true;
                 zooms.emplace_back(subqB.zoom);
             }
