@@ -1153,9 +1153,11 @@ void coalesceMulti(uv_work_t* req) {
     try {
         std::vector<PhrasematchSubq> &stack = baton->stack;
         std::sort(stack.begin(), stack.end(), subqSortByZoom);
+        unsigned short stackSize = stack.size();
 
         // Cache zoom levels to iterate over as coalesce occurs.
         std::vector<Cache::intarray> zoomCache;
+        zoomCache.reserve(stackSize);
         for (auto const& subq : stack) {
             Cache::intarray zooms;
             std::vector<bool> zoomUniq(22);
@@ -1252,6 +1254,10 @@ void coalesceMulti(uv_work_t* req) {
                 uint64_t zxy = (z * POW2_28) + (cover.x * POW2_14) + (cover.y);
 
                 Context context;
+                // Reserve stackSize for the coverList. The vector
+                // will grow no larger that the size of the input
+                // subqueries that are being coalesced.
+                context.coverList.reserve(stackSize);
                 context.coverList.push_back(std::move(cover));
                 context.relev = cover.relev;
                 context.mask = cover.mask;
