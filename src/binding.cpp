@@ -19,7 +19,7 @@ Nan::Persistent<FunctionTemplate> Cache::constructor;
 inline std::string shard(uint64_t level, uint64_t id) {
     if (level == 0) return "0";
     unsigned int bits = 52 - (static_cast<unsigned int>(level) * 4);
-    unsigned int shard_id = static_cast<unsigned int>(std::floor(id / std::pow(2, bits)));
+    unsigned int shard_id = static_cast<unsigned int>(std::floor(id / static_cast<double>(std::pow(2, bits))));
     return std::to_string(shard_id);
 }
 
@@ -1165,7 +1165,7 @@ void coalesceMulti(uv_work_t* req) {
                 zoomUniq[subqB.zoom] = true;
                 zooms.emplace_back(subqB.zoom);
             }
-            zoomCache.emplace_back(zooms);
+            zoomCache.push_back(std::move(zooms));
         }
 
         // Coalesce relevs into higher zooms, e.g.
@@ -1252,7 +1252,7 @@ void coalesceMulti(uv_work_t* req) {
                 uint64_t zxy = (z * POW2_28) + (cover.x * POW2_14) + (cover.y);
 
                 Context context;
-                context.coverList.emplace_back(cover);
+                context.coverList.push_back(std::move(cover));
                 context.relev = cover.relev;
                 context.mask = cover.mask;
 
@@ -1298,15 +1298,15 @@ void coalesceMulti(uv_work_t* req) {
                     } else if (context.coverList[0].mask > context.coverList[1].mask) {
                         context.relev -= 0.01;
                     }
-                    contexts.emplace_back(context);
+                    contexts.push_back(std::move(context));
                 } else {
                     cit = coalesced.find(zxy);
                     if (cit == coalesced.end()) {
                         std::vector<Context> contexts;
-                        contexts.push_back(context);
+                        contexts.push_back(std::move(context));
                         coalesced.emplace(zxy, contexts);
                     } else {
-                        cit->second.push_back(context);
+                        cit->second.push_back(std::move(context));
                     }
                 }
             }
@@ -1411,7 +1411,7 @@ NAN_METHOD(Cache::coalesce) {
 
             subq.weight = jsStack->Get(Nan::New("weight").ToLocalChecked())->NumberValue();
             subq.phrase = jsStack->Get(Nan::New("phrase").ToLocalChecked())->IntegerValue();
-            subq.mask = jsStack->Get(Nan::New("mask").ToLocalChecked())->IntegerValue();
+            subq.mask = static_cast<unsigned short>(jsStack->Get(Nan::New("mask").ToLocalChecked())->IntegerValue());
 
             // JS cache reference => cpp
             Local<Object> cache = Local<Object>::Cast(jsStack->Get(Nan::New("cache").ToLocalChecked()));
