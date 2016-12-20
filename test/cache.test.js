@@ -67,7 +67,6 @@ tape('#pack', function(assert) {
     assert.throws(function() { loader.pack() });
     assert.throws(function() { loader.pack('term') });
     assert.throws(function() { loader.pack(1) });
-    assert.throws(function() { loader.pack('term','foo') });
     assert.throws(function() { loader.loadSync() });
     assert.throws(function() { loader.loadSync(1) });
     assert.throws(function() { loader.loadSync(null) });
