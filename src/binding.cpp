@@ -263,12 +263,16 @@ NAN_METHOD(Cache::pack)
         Cache::memcache::const_iterator itr = mem.find(type);
         if (itr != mem.end()) {
             rocksdb::DB* db;
-            rocksdb::Options options;
-            options.create_if_missing = true;
-            rocksdb::Status status = rocksdb::DB::Open(options, filename, &db);
+            if (cacheHas(c, type)) {
+                db = cacheGet(c, type);
+            } else {
+                rocksdb::Options options;
+                options.create_if_missing = true;
+                rocksdb::Status status = rocksdb::DB::Open(options, filename, &db);
 
-            if (!status.ok()) {
-                return Nan::ThrowTypeError("unable to open rocksdb file for packing");
+                if (!status.ok()) {
+                    return Nan::ThrowTypeError("unable to open rocksdb file for packing");
+                }
             }
 
             // Optimization idea: pre-pass on arrays to assemble guess about
