@@ -259,22 +259,27 @@ NAN_METHOD(Cache::pack)
         std::string filename = *String::Utf8Value(info[0]->ToString());
         std::string type = *String::Utf8Value(info[1]->ToString());
         Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
+
+        rocksdb::DB* existing = NULL;
+        if (cacheHas(c, type)) {
+            existing = cacheGet(c, type);
+            if (existing->GetName() == filename) {
+                return Nan::ThrowTypeError("rocksdb file is already loaded read-only; unload first");
+            }
+        }
+
+        rocksdb::DB* db;
+        rocksdb::Options options;
+        options.create_if_missing = true;
+        rocksdb::Status status = rocksdb::DB::Open(options, filename, &db);
+
+        if (!status.ok()) {
+            return Nan::ThrowTypeError("unable to open rocksdb file for packing");
+        }
+
         Cache::memcache const& mem = c->cache_;
         Cache::memcache::const_iterator itr = mem.find(type);
         if (itr != mem.end()) {
-            rocksdb::DB* db;
-            if (cacheHas(c, type)) {
-                db = cacheGet(c, type);
-            } else {
-                rocksdb::Options options;
-                options.create_if_missing = true;
-                rocksdb::Status status = rocksdb::DB::Open(options, filename, &db);
-
-                if (!status.ok()) {
-                    return Nan::ThrowTypeError("unable to open rocksdb file for packing");
-                }
-            }
-
             // Optimization idea: pre-pass on arrays to assemble guess about
             // how long the final message will be in order to be able to call
             // message.reserve(<length>)
@@ -288,6 +293,29 @@ NAN_METHOD(Cache::pack)
                     // make copy of intarray so we can sort without
                     // modifying the original array
                     Cache::intarray varr = item.second;
+
+                    // we may be merging values from both the lazy and mem databases together
+                    if (existing != NULL) {
+                        std::string mergeMessage;
+                        rocksdb::Status s = existing->Get(rocksdb::ReadOptions(), item.first, &mergeMessage);
+                        if (s.ok()) {
+                            protozero::pbf_reader mergeItem(mergeMessage);
+                            mergeItem.next(CACHE_ITEM);
+                            auto vals = mergeItem.get_packed_uint64();
+                            uint64_t lastval = 0;
+                            // delta decode values.
+                            for (auto it = vals.first; it != vals.second; ++it) {
+                                if (lastval == 0) {
+                                    lastval = *it;
+                                    varr.emplace_back(lastval);
+                                } else {
+                                    lastval = lastval - *it;
+                                    varr.emplace_back(lastval);
+                                }
+                            }
+                        }
+                    }
+
                     // delta-encode values, sorted in descending order.
                     std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
 
@@ -309,41 +337,27 @@ NAN_METHOD(Cache::pack)
                     db->Put(rocksdb::WriteOptions(), item.first, message);
                 }
             }
-            delete db;
-            info.GetReturnValue().Set(true);
-            return;
-        } else {
-            if (cacheHas(c, type)) {
-                // if what we have now is already a rocksdb, and it's a different
-                // one from what we're being asked to pack into, copy from one to the other
-                rocksdb::DB* source = cacheGet(c, type);
-                if (source->GetName() != filename) {
-                    rocksdb::DB* db;
-                    rocksdb::Options options;
-                    options.create_if_missing = true;
-                    rocksdb::Status status = rocksdb::DB::Open(options, filename, &db);
-
-                    rocksdb::Iterator* sourceIt = source->NewIterator(rocksdb::ReadOptions());
-                    for (sourceIt->SeekToFirst(); sourceIt->Valid(); sourceIt->Next()) {
-                        db->Put(rocksdb::WriteOptions(), sourceIt->key(), sourceIt->value());
-                    }
-
-                    delete db;
-                    info.GetReturnValue().Set(true);
-                    return;
+        }
+        if (existing != NULL) {
+            // if what we have now is already a rocksdb, and it's a different
+            // one from what we're being asked to pack into, copy from one to the other
+            rocksdb::Iterator* existingIt = existing->NewIterator(rocksdb::ReadOptions());
+            for (existingIt->SeekToFirst(); existingIt->Valid(); existingIt->Next()) {
+                // check if we've already written this key from the memcache
+                // and if so, error
+                std::string tmp;
+                rocksdb::Status s = db->Get(rocksdb::ReadOptions(), existingIt->key(), &tmp);
+                if (s.ok()) {
+                    // we've already gotten this key before and merged it
+                    continue;
                 }
-            } else {
-                // ensure that an empty rocksdb at least exists, so future operations on it don't fail
-                rocksdb::DB* db;
-                rocksdb::Options options;
-                options.create_if_missing = true;
-                rocksdb::Status status = rocksdb::DB::Open(options, filename, &db);
 
-                delete db;
-                info.GetReturnValue().Set(true);
-                return;
+                db->Put(rocksdb::WriteOptions(), existingIt->key(), existingIt->value());
             }
         }
+        delete db;
+        info.GetReturnValue().Set(true);
+        return;
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
     }
@@ -372,7 +386,7 @@ void mergeQueue(uv_work_t* req) {
     rocksdb::DB* db1;
     rocksdb::Options options1;
     options1.create_if_missing = true;
-    rocksdb::Status status1 = rocksdb::DB::Open(options1, filename1, &db1);
+    rocksdb::Status status1 = rocksdb::DB::OpenForReadOnly(options1, filename1, &db1);
     if (!status1.ok()) {
         return Nan::ThrowTypeError("unable to open rocksdb input file #1");
     }
@@ -381,7 +395,7 @@ void mergeQueue(uv_work_t* req) {
     rocksdb::DB* db2;
     rocksdb::Options options2;
     options2.create_if_missing = true;
-    rocksdb::Status status2 = rocksdb::DB::Open(options2, filename2, &db2);
+    rocksdb::Status status2 = rocksdb::DB::OpenForReadOnly(options2, filename2, &db2);
     if (!status2.ok()) {
         return Nan::ThrowTypeError("unable to open rocksdb input file #2");
     }
@@ -586,7 +600,6 @@ NAN_METHOD(Cache::list)
         std::string type = *String::Utf8Value(info[0]->ToString());
         Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
         Cache::memcache const& mem = c->cache_;
-        Cache::message_cache const& messages = c->msg_;
         Local<Array> ids = Nan::New<Array>();
 
         Cache::memcache::const_iterator itr = mem.find(type);
@@ -726,7 +739,7 @@ NAN_METHOD(Cache::loadSync)
             rocksdb::DB* db;
             rocksdb::Options options;
             options.create_if_missing = true;
-            rocksdb::Status status = rocksdb::DB::Open(options, filename, &db);
+            rocksdb::Status status = rocksdb::DB::OpenForReadOnly(options, filename, &db);
 
             if (!status.ok()) {
                 return Nan::ThrowTypeError("unable to open rocksdb file for loading");
@@ -808,17 +821,34 @@ NAN_METHOD(Cache::unload)
     if (!info[0]->IsString()) {
         return Nan::ThrowTypeError("first arg must be a String");
     }
+
+    std::string toRemove = "both";
+    if (info.Length() > 1) {
+        if (!info[1]->IsString()) {
+            return Nan::ThrowTypeError("second arg, if supplied, must be a String");
+        }
+        toRemove = *String::Utf8Value(info[1]->ToString());
+        if (toRemove != "mem" && toRemove != "lazy" && toRemove != "both") {
+            return Nan::ThrowTypeError("second arg, if supplied, must be one of 'mem', 'lazy', or 'both'");
+        }
+    }
+
     bool hit = false;
     try {
         std::string type = *String::Utf8Value(info[0]->ToString());
         Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
-        Cache::memcache & mem = c->cache_;
-        Cache::memcache::iterator itr = mem.find(type);
-        if (itr != mem.end()) {
-            hit = true;
-            mem.erase(itr);
+
+        if (toRemove == "mem" || toRemove == "both") {
+            Cache::memcache & mem = c->cache_;
+            Cache::memcache::iterator itr = mem.find(type);
+            if (itr != mem.end()) {
+                hit = hit || true;
+                mem.erase(itr);
+            }
         }
-        hit = hit || cacheRemove(c, type);
+        if (toRemove == "lazy" || toRemove == "both") {
+            hit = hit || cacheRemove(c, type);
+        }
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
     }
