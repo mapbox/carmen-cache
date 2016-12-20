@@ -12,6 +12,7 @@ test('coalesce args', function(assert) {
         coalesce([
             {
                 cache: new Cache('a'),
+                mask: 1 << 0,
                 idx: 0,
                 zoom: 0,
                 weight: 0.5,
@@ -19,6 +20,7 @@ test('coalesce args', function(assert) {
             },
             {
                 cache: new Cache('b'),
+                mask: 1 << 1,
                 idx: 1,
                 zoom: 1,
                 weight: 0.5,
@@ -90,6 +92,7 @@ test('coalesce args', function(assert) {
     test('coalesceSingle', function(assert) {
         coalesce([{
             cache: cache,
+            mask: 1 << 0,
             idx: 0,
             zoom: 2,
             weight: 1,
@@ -108,6 +111,7 @@ test('coalesce args', function(assert) {
     test('coalesceSingle proximity', function(assert) {
         coalesce([{
             cache: cache,
+            mask: 1 << 0,
             idx: 0,
             zoom: 2,
             weight: 1,
@@ -129,6 +133,7 @@ test('coalesce args', function(assert) {
     test('coalesceSingle bbox', function(assert) {
         coalesce([{
             cache: cache,
+            mask: 1 << 0,
             idx: 0,
             zoom: 2,
             weight: 1,
@@ -169,6 +174,7 @@ test('coalesce args', function(assert) {
     test('coalesceSingle', function(assert) {
         coalesce([{
             cache: cache,
+            mask: 1 << 0,
             idx: 0,
             zoom: 2,
             weight: 1,
@@ -230,12 +236,14 @@ test('coalesce args', function(assert) {
     test('coalesceUV', function(assert) {
         coalesce([{
             cache: a,
+            mask: 1 << 1,
             idx: 0,
             zoom: 1,
             weight: 0.5,
             phrase: 1
         }, {
             cache: b,
+            mask: 1 << 0,
             idx: 1,
             zoom: 2,
             weight: 0.5,
@@ -255,12 +263,14 @@ test('coalesce args', function(assert) {
     test('coalesceUV proximity', function(assert) {
         coalesce([{
             cache: a,
+            mask: 1 << 1,
             idx: 0,
             zoom: 1,
             weight: 0.5,
             phrase: 1
         }, {
             cache: b,
+            mask: 1 << 0,
             idx: 1,
             zoom: 2,
             weight: 0.5,
@@ -312,12 +322,14 @@ test('coalesce args', function(assert) {
     test('coalesce scoredist (close proximity)', function(assert) {
         coalesce([{
             cache: a,
+            mask: 1 << 1,
             idx: 0,
             zoom: 0,
             weight: 0.5,
             phrase: 1
         }, {
             cache: b,
+            mask: 1 << 0,
             idx: 1,
             zoom: 14,
             weight: 0.5,
@@ -335,12 +347,14 @@ test('coalesce args', function(assert) {
     test('coalesce scoredist (far proximity)', function(assert) {
         coalesce([{
             cache: a,
+            mask: 1 << 1,
             idx: 0,
             zoom: 0,
             weight: 0.5,
             phrase: 1
         }, {
             cache: b,
+            mask: 1 << 0,
             idx: 1,
             zoom: 14,
             weight: 0.5,
@@ -388,12 +402,14 @@ test('coalesce args', function(assert) {
     test('coalesceMulti (higher relev wins)', function(assert) {
         coalesce([{
             cache: a,
+            mask: 1 << 1,
             idx: 0,
             zoom: 1,
             weight: 0.5,
             phrase: 1
         }, {
             cache: b,
+            mask: 1 << 0,
             idx: 1,
             zoom: 2,
             weight: 0.5,
@@ -467,12 +483,14 @@ test('coalesce args', function(assert) {
     test('coalesceMulti bbox', function(assert) {
         coalesce([{
             cache: a,
+            mask: 1 << 1,
             idx: 0,
             zoom: 1,
             weight: 0.5,
             phrase: 1
         }, {
             cache: b,
+            mask: 1 << 0,
             idx: 1,
             zoom: 2,
             weight: 0.5,
@@ -488,12 +506,14 @@ test('coalesce args', function(assert) {
     test('coalesceMulti bbox', function(assert) {
         coalesce([{
             cache: a,
+            mask: 1 << 1,
             idx: 0,
             zoom: 1,
             weight: 0.5,
             phrase: 1
         }, {
             cache: b,
+            mask: 1 << 0,
             idx: 1,
             zoom: 2,
             weight: 0.5,
@@ -509,12 +529,14 @@ test('coalesce args', function(assert) {
     test('coalesceMulti bbox', function(assert) {
         coalesce([{
             cache: a,
+            mask: 1 << 1,
             idx: 0,
             zoom: 1,
             weight: 0.5,
             phrase: 1
         }, {
             cache: b,
+            mask: 1 << 0,
             idx: 1,
             zoom: 2,
             weight: 0.5,
@@ -530,12 +552,14 @@ test('coalesce args', function(assert) {
     test('coalesceMulti bbox', function(assert) {
         coalesce([{
             cache: b,
+            mask: 1 << 1,
             idx: 0,
             zoom: 2,
             weight: 0.5,
             phrase: 1
         }, {
             cache: c,
+            mask: 1 << 0,
             idx: 1,
             zoom: 5,
             weight: 0.5,
@@ -590,23 +614,24 @@ test('coalesce args', function(assert) {
     test('coalesceMulti sandwich', function(assert) {
         coalesce([{
             cache: a,
+            mask: 1 << 1,
             idx: 0,
             zoom: 0,
             weight: 0.5,
             phrase: 1
         }, {
             cache: b,
+            mask: 1 << 0,
             idx: 1,
             zoom: 1,
             weight: 0.5,
             phrase: 1
         }], {}, function(err, res) {
             assert.ifError(err);
-            assert.equal(res.length, 3, 'res length = 3');
+            assert.equal(res.length, 2, 'res length = 2');
             // sorts by relev, score
-            assert.deepEqual(res[0].map(function(f) { return f.id; }), [3,2], '0.relev = 1');
-            assert.deepEqual(res[1].map(function(f) { return f.id; }), [4,2], '0.relev = 1');
-            assert.deepEqual(res[2].map(function(f) { return f.id; }), [1,3], '0.relev = 1');
+            assert.deepEqual(res[0].map(function(f) { return f.id; }), [1,3], '0.relev = 1');
+            assert.deepEqual(res[1].map(function(f) { return f.id; }), [2,3], '0.relev = 1');
             assert.end();
         });
     });
@@ -644,12 +669,14 @@ test('coalesce args', function(assert) {
     test('coalesceMulti sandwich', function(assert) {
         coalesce([{
             cache: a,
+            mask: 1 << 1,
             idx: 25,
             zoom: 0,
             weight: 0.5,
             phrase: 1
         }, {
             cache: b,
+            mask: 1 << 0,
             idx: 20,
             zoom: 0,
             weight: 0.5,
