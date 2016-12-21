@@ -294,28 +294,6 @@ NAN_METHOD(Cache::pack)
                     // modifying the original array
                     Cache::intarray varr = item.second;
 
-                    // we may be merging values from both the lazy and mem databases together
-                    if (existing != NULL) {
-                        std::string mergeMessage;
-                        rocksdb::Status s = existing->Get(rocksdb::ReadOptions(), item.first, &mergeMessage);
-                        if (s.ok()) {
-                            protozero::pbf_reader mergeItem(mergeMessage);
-                            mergeItem.next(CACHE_ITEM);
-                            auto vals = mergeItem.get_packed_uint64();
-                            uint64_t lastval = 0;
-                            // delta decode values.
-                            for (auto it = vals.first; it != vals.second; ++it) {
-                                if (lastval == 0) {
-                                    lastval = *it;
-                                    varr.emplace_back(lastval);
-                                } else {
-                                    lastval = lastval - *it;
-                                    varr.emplace_back(lastval);
-                                }
-                            }
-                        }
-                    }
-
                     // delta-encode values, sorted in descending order.
                     std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
 
@@ -695,6 +673,34 @@ NAN_METHOD(Cache::_set)
 
         unsigned array_size = data->Length();
         if (info[3]->IsBoolean() && info[3]->BooleanValue()) {
+            // if we're merging and we don't currently have anything in the memcache
+            // but we do have stuff in a loaded rocksdb, merge onto that instead
+            // FIXME: is this a terrible idea?
+            if (vv.size() == 0) {
+                if (cacheHas(c, type)) {
+                    rocksdb::DB* db = cacheGet(c, type);
+
+                    std::string search_id = id;
+                    std::string message;
+                    rocksdb::Status s = db->Get(rocksdb::ReadOptions(), search_id, &message);
+                    if (s.ok()) {
+                        protozero::pbf_reader item(message);
+                        item.next(CACHE_ITEM);
+                        auto vals = item.get_packed_uint64();
+                        uint64_t lastval = 0;
+                        // delta decode values.
+                        for (auto it = vals.first; it != vals.second; ++it) {
+                            if (lastval == 0) {
+                                lastval = *it;
+                                vv.emplace_back(lastval);
+                            } else {
+                                lastval = lastval - *it;
+                                vv.emplace_back(lastval);
+                            }
+                        }
+                    }
+                }
+            }
             vv.reserve(vv.size() + array_size);
         } else {
             if (itr2 != arrc.end()) vv.clear();
