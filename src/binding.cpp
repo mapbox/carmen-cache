@@ -199,7 +199,7 @@ Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::stri
     if (cacheHas(c, type)) {
         std::shared_ptr<rocksdb::DB> db = cacheGet(c, type);
 
-        rocksdb::Iterator* rit = db->NewIterator(rocksdb::ReadOptions());
+        std::unique_ptr<rocksdb::Iterator> rit(db->NewIterator(rocksdb::ReadOptions()));
         for (rit->Seek(prefix); rit->Valid() && rit->key().ToString().compare(0, prefix.size(), prefix) == 0; rit->Next()) {
             std::string key_id = rit->key().ToString();
 
@@ -333,7 +333,7 @@ NAN_METHOD(Cache::pack)
         if (existing != NULL) {
             // if what we have now is already a rocksdb, and it's a different
             // one from what we're being asked to pack into, copy from one to the other
-            rocksdb::Iterator* existingIt = existing->NewIterator(rocksdb::ReadOptions());
+            std::unique_ptr<rocksdb::Iterator> existingIt(existing->NewIterator(rocksdb::ReadOptions()));
             for (existingIt->SeekToFirst(); existingIt->Valid(); existingIt->Next()) {
                 // check if we've already written this key from the memcache
                 // and if so, error
@@ -406,19 +406,19 @@ void mergeQueue(uv_work_t* req) {
 
     try {
         // Store ids from 1
-        rocksdb::Iterator* it1 = db1->NewIterator(rocksdb::ReadOptions());
+        std::unique_ptr<rocksdb::Iterator> it1(db1->NewIterator(rocksdb::ReadOptions()));
         for (it1->SeekToFirst(); it1->Valid(); it1->Next()) {
             ids1.emplace(it1->key().ToString(), true);
         }
 
         // Store ids from 2
-        rocksdb::Iterator* it2 = db2->NewIterator(rocksdb::ReadOptions());
+        std::unique_ptr<rocksdb::Iterator> it2(db2->NewIterator(rocksdb::ReadOptions()));
         for (it2->SeekToFirst(); it2->Valid(); it2->Next()) {
             ids2.emplace(it2->key().ToString(), true);
         }
 
         // No delta writes from message1
-        it1 = db1->NewIterator(rocksdb::ReadOptions());
+        it1 = std::unique_ptr<rocksdb::Iterator>(db1->NewIterator(rocksdb::ReadOptions()));
         for (it1->SeekToFirst(); it1->Valid(); it1->Next()) {
             std::string key_id = it1->key().ToString();
 
@@ -447,7 +447,7 @@ void mergeQueue(uv_work_t* req) {
         }
 
         // No delta writes from message2
-        it2 = db2->NewIterator(rocksdb::ReadOptions());
+        it2 = std::unique_ptr<rocksdb::Iterator>(db2->NewIterator(rocksdb::ReadOptions()));
         for (it2->SeekToFirst(); it2->Valid(); it2->Next()) {
             std::string key_id = it2->key().ToString();
 
@@ -477,7 +477,7 @@ void mergeQueue(uv_work_t* req) {
         }
 
         // Delta writes for ids in both message1 and message2
-        it1 = db1->NewIterator(rocksdb::ReadOptions());
+        it1 = std::unique_ptr<rocksdb::Iterator>(db1->NewIterator(rocksdb::ReadOptions()));
         for (it1->SeekToFirst(); it1->Valid(); it1->Next()) {
             std::string key_id = it1->key().ToString();
 
@@ -604,7 +604,7 @@ NAN_METHOD(Cache::list)
         if (cacheHas(c, type)) {
             std::shared_ptr<rocksdb::DB> db = cacheGet(c, type);
 
-            rocksdb::Iterator* it = db->NewIterator(rocksdb::ReadOptions());
+            std::unique_ptr<rocksdb::Iterator> it(db->NewIterator(rocksdb::ReadOptions()));
             for (it->SeekToFirst(); it->Valid(); it->Next()) {
                 std::string key_id = it->key().ToString();
                 ids->Set(idx++, Nan::New(key_id).ToLocalChecked());
