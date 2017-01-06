@@ -22,3 +22,7 @@ Then you can build carmen-cache from source like:
 ```
 npm install --build-from-source
 ```
+
+### Coalesce docs (incomplete)
+
+![coalescemulti](https://cloud.githubusercontent.com/assets/83384/21327650/3588be54-c5fe-11e6-894e-cdaa68ecfa5f.jpg)
