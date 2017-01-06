@@ -15,6 +15,20 @@ namespace carmen {
 
 using namespace v8;
 
+rocksdb::Status OpenDB(const rocksdb::Options& options, const std::string& name, std::unique_ptr<rocksdb::DB>& dbptr) {
+    rocksdb::DB* db;
+    rocksdb::Status status = rocksdb::DB::Open(options, name, &db);
+    dbptr = std::move(std::unique_ptr<rocksdb::DB>(db));
+    return status;
+}
+
+rocksdb::Status OpenForReadOnlyDB(const rocksdb::Options& options, const std::string& name, std::unique_ptr<rocksdb::DB>& dbptr) {
+    rocksdb::DB* db;
+    rocksdb::Status status = rocksdb::DB::OpenForReadOnly(options, name, &db);
+    dbptr = std::move(std::unique_ptr<rocksdb::DB>(db));
+    return status;
+}
+
 Nan::Persistent<FunctionTemplate> Cache::constructor;
 
 
@@ -60,7 +74,7 @@ inline Local<Object> mapToObject(std::map<std::uint64_t,std::uint64_t> const& ma
     return object;
 }
 
-inline rocksdb::DB* cacheGet(Cache const* c, std::string const& key) {
+inline std::shared_ptr<rocksdb::DB> cacheGet(Cache const* c, std::string const& key) {
     Cache::message_cache const& messages = c->msg_;
     Cache::message_cache::const_iterator mitr = messages.find(key);
     return mitr->second->second;
@@ -72,12 +86,12 @@ inline bool cacheHas(Cache const* c, std::string const& key) {
     return mitr != messages.end();
 }
 
-inline void cacheInsert(Cache * c, std::string const& key, rocksdb::DB* const& message) {
+inline void cacheInsert(Cache * c, std::string const& key, std::shared_ptr<rocksdb::DB> message) {
     Cache::message_list &list = c->msglist_;
     Cache::message_cache &messages = c->msg_;
     Cache::message_cache::iterator mitr = messages.find(key);
     if (mitr == messages.end()) {
-        list.emplace_front(std::make_pair(key, message));
+        list.emplace_front(std::make_pair(key, std::move(message)));
         messages.emplace(key, list.begin());
         if (list.size() > c->cachesize) {
             messages.erase(list.back().first);
@@ -106,7 +120,7 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string id, b
     if (itr == mem.end()) {
         if (!cacheHas(c, type)) return array;
 
-        rocksdb::DB* db = cacheGet(c, type);
+        std::shared_ptr<rocksdb::DB> db = cacheGet(c, type);
 
         std::string search_id = id;
         for (uint32_t i = 0; i < 2; i++) {
@@ -186,9 +200,9 @@ Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::stri
 
     // Load values from message cache
     if (cacheHas(c, type)) {
-        rocksdb::DB* db = cacheGet(c, type);
+        std::shared_ptr<rocksdb::DB> db = cacheGet(c, type);
 
-        rocksdb::Iterator* rit = db->NewIterator(rocksdb::ReadOptions());
+        std::unique_ptr<rocksdb::Iterator> rit(db->NewIterator(rocksdb::ReadOptions()));
         for (rit->Seek(prefix); rit->Valid() && rit->key().ToString().compare(0, prefix.size(), prefix) == 0; rit->Next()) {
             std::string key_id = rit->key().ToString();
 
@@ -263,7 +277,7 @@ NAN_METHOD(Cache::pack)
         std::string type = *String::Utf8Value(info[1]->ToString());
         Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
 
-        rocksdb::DB* existing = NULL;
+        std::shared_ptr<rocksdb::DB> existing = NULL;
         if (cacheHas(c, type)) {
             existing = cacheGet(c, type);
             if (existing->GetName() == filename) {
@@ -271,10 +285,10 @@ NAN_METHOD(Cache::pack)
             }
         }
 
-        rocksdb::DB* db;
+        std::unique_ptr<rocksdb::DB> db;
         rocksdb::Options options;
         options.create_if_missing = true;
-        rocksdb::Status status = rocksdb::DB::Open(options, filename, &db);
+        rocksdb::Status status = OpenDB(options, filename, db);
 
         if (!status.ok()) {
             return Nan::ThrowTypeError("unable to open rocksdb file for packing");
@@ -322,7 +336,7 @@ NAN_METHOD(Cache::pack)
         if (existing != NULL) {
             // if what we have now is already a rocksdb, and it's a different
             // one from what we're being asked to pack into, copy from one to the other
-            rocksdb::Iterator* existingIt = existing->NewIterator(rocksdb::ReadOptions());
+            std::unique_ptr<rocksdb::Iterator> existingIt(existing->NewIterator(rocksdb::ReadOptions()));
             for (existingIt->SeekToFirst(); existingIt->Valid(); existingIt->Next()) {
                 // check if we've already written this key from the memcache
                 // and if so, error
@@ -336,7 +350,6 @@ NAN_METHOD(Cache::pack)
                 db->Put(rocksdb::WriteOptions(), existingIt->key(), existingIt->value());
             }
         }
-        delete db;
         info.GetReturnValue().Set(true);
         return;
     } catch (std::exception const& ex) {
@@ -364,28 +377,28 @@ void mergeQueue(uv_work_t* req) {
     std::string const& method = baton->method;
 
     // input 1
-    rocksdb::DB* db1;
+    std::unique_ptr<rocksdb::DB> db1;
     rocksdb::Options options1;
     options1.create_if_missing = true;
-    rocksdb::Status status1 = rocksdb::DB::OpenForReadOnly(options1, filename1, &db1);
+    rocksdb::Status status1 = OpenForReadOnlyDB(options1, filename1, db1);
     if (!status1.ok()) {
         return Nan::ThrowTypeError("unable to open rocksdb input file #1");
     }
 
     // input 2
-    rocksdb::DB* db2;
+    std::unique_ptr<rocksdb::DB> db2;
     rocksdb::Options options2;
     options2.create_if_missing = true;
-    rocksdb::Status status2 = rocksdb::DB::OpenForReadOnly(options2, filename2, &db2);
+    rocksdb::Status status2 = OpenForReadOnlyDB(options2, filename2, db2);
     if (!status2.ok()) {
         return Nan::ThrowTypeError("unable to open rocksdb input file #2");
     }
 
     // output
-    rocksdb::DB* db3;
+    std::unique_ptr<rocksdb::DB> db3;
     rocksdb::Options options3;
     options3.create_if_missing = true;
-    rocksdb::Status status3 = rocksdb::DB::Open(options3, filename3, &db3);
+    rocksdb::Status status3 = OpenDB(options3, filename3, db3);
     if (!status1.ok()) {
         return Nan::ThrowTypeError("unable to open rocksdb output file");
     }
@@ -396,19 +409,19 @@ void mergeQueue(uv_work_t* req) {
 
     try {
         // Store ids from 1
-        rocksdb::Iterator* it1 = db1->NewIterator(rocksdb::ReadOptions());
+        std::unique_ptr<rocksdb::Iterator> it1(db1->NewIterator(rocksdb::ReadOptions()));
         for (it1->SeekToFirst(); it1->Valid(); it1->Next()) {
             ids1.emplace(it1->key().ToString(), true);
         }
 
         // Store ids from 2
-        rocksdb::Iterator* it2 = db2->NewIterator(rocksdb::ReadOptions());
+        std::unique_ptr<rocksdb::Iterator> it2(db2->NewIterator(rocksdb::ReadOptions()));
         for (it2->SeekToFirst(); it2->Valid(); it2->Next()) {
             ids2.emplace(it2->key().ToString(), true);
         }
 
         // No delta writes from message1
-        it1 = db1->NewIterator(rocksdb::ReadOptions());
+        it1 = std::unique_ptr<rocksdb::Iterator>(db1->NewIterator(rocksdb::ReadOptions()));
         for (it1->SeekToFirst(); it1->Valid(); it1->Next()) {
             std::string key_id = it1->key().ToString();
 
@@ -437,7 +450,7 @@ void mergeQueue(uv_work_t* req) {
         }
 
         // No delta writes from message2
-        it2 = db2->NewIterator(rocksdb::ReadOptions());
+        it2 = std::unique_ptr<rocksdb::Iterator>(db2->NewIterator(rocksdb::ReadOptions()));
         for (it2->SeekToFirst(); it2->Valid(); it2->Next()) {
             std::string key_id = it2->key().ToString();
 
@@ -467,7 +480,7 @@ void mergeQueue(uv_work_t* req) {
         }
 
         // Delta writes for ids in both message1 and message2
-        it1 = db1->NewIterator(rocksdb::ReadOptions());
+        it1 = std::unique_ptr<rocksdb::Iterator>(db1->NewIterator(rocksdb::ReadOptions()));
         for (it1->SeekToFirst(); it1->Valid(); it1->Next()) {
             std::string key_id = it1->key().ToString();
 
@@ -549,7 +562,6 @@ void mergeQueue(uv_work_t* req) {
             assert(putStatus.ok());
         }
 
-        delete db3;
     } catch (std::exception const& ex) {
         baton->error = ex.what();
     }
@@ -593,9 +605,9 @@ NAN_METHOD(Cache::list)
 
         // parse message for ids
         if (cacheHas(c, type)) {
-            rocksdb::DB* db = cacheGet(c, type);
+            std::shared_ptr<rocksdb::DB> db = cacheGet(c, type);
 
-            rocksdb::Iterator* it = db->NewIterator(rocksdb::ReadOptions());
+            std::unique_ptr<rocksdb::Iterator> it(db->NewIterator(rocksdb::ReadOptions()));
             for (it->SeekToFirst(); it->Valid(); it->Next()) {
                 std::string key_id = it->key().ToString();
                 ids->Set(idx++, Nan::New(key_id).ToLocalChecked());
@@ -681,7 +693,7 @@ NAN_METHOD(Cache::_set)
             // FIXME: is this a terrible idea?
             if (vv.size() == 0) {
                 if (cacheHas(c, type)) {
-                    rocksdb::DB* db = cacheGet(c, type);
+                    std::shared_ptr<rocksdb::DB> db = cacheGet(c, type);
 
                     std::string search_id = id;
                     std::string message;
@@ -745,16 +757,16 @@ NAN_METHOD(Cache::loadSync)
             mem.erase(itr2);
         }
         if (!cacheHas(c, type)) {
-            rocksdb::DB* db;
+            std::unique_ptr<rocksdb::DB> db;
             rocksdb::Options options;
             options.create_if_missing = true;
-            rocksdb::Status status = rocksdb::DB::OpenForReadOnly(options, filename, &db);
+            rocksdb::Status status = OpenForReadOnlyDB(options, filename, db);
 
             if (!status.ok()) {
                 return Nan::ThrowTypeError("unable to open rocksdb file for loading");
             }
 
-            cacheInsert(c, type, db);
+            cacheInsert(c, type, std::move(db));
         }
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
