@@ -233,6 +233,7 @@ Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::stri
         }
     }
 
+    std::sort(array.begin(), array.end(), std::greater<uint64_t>());
     return array;
 }
 
