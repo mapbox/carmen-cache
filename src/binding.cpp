@@ -483,7 +483,7 @@ void mergeAfter(uv_work_t* req) {
         std::string & merged = *baton->pbf3.get();
         baton->pbf3.release();
         v8::Local<v8::Value> argv[2] = { Nan::Null(),
-                                         Nan::NewBuffer(const_cast<char *>(merged.data()),
+                                         Nan::NewBuffer(&merged[0],
                                             merged.size(),
                                             [](char *, void * hint) {
                                                 delete reinterpret_cast<std::string*>(hint);
