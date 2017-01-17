@@ -306,6 +306,8 @@ struct MergeBaton : carmen::noncopyable {
         callback.Reset(cb.As<Function>());
         buffer1.Reset(obj1);
         buffer2.Reset(obj2);
+        // Reserve memory at least at pbf1_size. TODO: should we reserve more?
+        pbf3.get()->reserve(pbf1_size);
       }
     ~MergeBaton() {
         callback.Reset();
