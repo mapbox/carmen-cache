@@ -15,6 +15,7 @@ matrix:
      - os: osx
        compiler: clang
        env: NODE_VERSION="4" COVERAGE=true
+       osx_image: xcode8.2
      # Linux
      - os: linux
        compiler: clang
@@ -28,13 +29,16 @@ matrix:
      # OS X
      - os: osx
        compiler: clang
-       env: NODE_VERSION="0.10.38" # node abi 11
+       env: NODE_VERSION="0.10" # node abi 11
+       osx_image: xcode8.2
      - os: osx
        compiler: clang
        env: NODE_VERSION="4" # node abi 46
+       osx_image: xcode8.2
      - os: osx
        compiler: clang
        env: NODE_VERSION="6" # node abi 48
+       osx_image: xcode8.2
 
 env:
   global:
