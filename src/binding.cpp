@@ -4,6 +4,8 @@
 #include <sstream>
 #include <cmath>
 #include <cassert>
+#include <limits>
+#include <algorithm>
 
 #include <protozero/pbf_writer.hpp>
 #include <protozero/pbf_reader.hpp>
@@ -17,7 +19,7 @@ Nan::Persistent<FunctionTemplate> Cache::constructor;
 inline std::string shard(uint64_t level, uint64_t id) {
     if (level == 0) return "0";
     unsigned int bits = 52 - (static_cast<unsigned int>(level) * 4);
-    unsigned int shard_id = static_cast<unsigned int>(std::floor(id / std::pow(2, bits)));
+    unsigned int shard_id = static_cast<unsigned int>(std::floor(id / static_cast<double>(std::pow(2, bits))));
     return std::to_string(shard_id);
 }
 
@@ -129,6 +131,51 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string const
                         lastval = lastval - *it;
                         array.emplace_back(lastval);
                     }
+                }
+                return array;
+            }
+        }
+        return array;
+    } else {
+        Cache::arraycache::const_iterator aitr = itr->second.find(id);
+        if (aitr == itr->second.end()) {
+            return array;
+        } else {
+            return aitr->second;
+        }
+    }
+}
+
+Cache::intarray __getTruncated(Cache const* c, std::string const& type, std::string const& shard, uint64_t id, uint64_t truncate) {
+    std::string key = type + "-" + shard;
+    Cache::memcache const& mem = c->cache_;
+    Cache::memcache::const_iterator itr = mem.find(key);
+    Cache::intarray array;
+    if (itr == mem.end()) {
+        if (!cacheHas(c, key)) return array;
+
+        std::string ref = cacheGet(c, key);
+        protozero::pbf_reader message(ref);
+        while (message.next(CACHE_MESSAGE)) {
+            protozero::pbf_reader item = message.get_message();
+            while (item.next(CACHE_ITEM)) {
+                uint64_t key_id = item.get_uint64();
+                if (key_id != id) break;
+                item.next();
+                auto vals = item.get_packed_uint64();
+                uint64_t lastval = 0;
+                uint64_t length = 0;
+                // delta decode values.
+                for (auto it = vals.first; it != vals.second; ++it) {
+                    if (lastval == 0) {
+                        lastval = *it;
+                        array.emplace_back(lastval);
+                    } else {
+                        lastval = lastval - *it;
+                        array.emplace_back(lastval);
+                    }
+                    length++;
+                    if (length >= truncate) break;
                 }
                 return array;
             }
@@ -780,6 +827,7 @@ struct PhrasematchSubq {
     uint64_t phrase;
     unsigned short idx;
     unsigned short zoom;
+    unsigned short mask;
 };
 
 struct Cover {
@@ -790,13 +838,14 @@ struct Cover {
     unsigned short y;
     unsigned short score;
     unsigned short idx;
-    unsigned short subq;
+    unsigned short mask;
     double distance;
     double scoredist;
 };
 
 struct Context {
     std::vector<Cover> coverList;
+    unsigned mask;
     double relev;
 };
 
@@ -822,7 +871,7 @@ Cover numToCover(uint64_t num) {
     // These are not derived from decoding the input num but by
     // external values after initialization.
     cover.idx = 0;
-    cover.subq = 0;
+    cover.mask = 0;
     cover.tmpid = 0;
     cover.distance = 0;
 
@@ -912,6 +961,12 @@ inline bool coverSortByRelev(Cover const& a, Cover const& b) noexcept {
     else if (b.x < a.x) return false;
     else if (b.x > a.x) return true;
     else return (b.y > a.y);
+}
+
+inline bool subqSortByZoom(PhrasematchSubq const& a, PhrasematchSubq const& b) noexcept {
+    if (a.zoom < b.zoom) return true;
+    if (a.zoom > b.zoom) return false;
+    return (a.idx < b.idx);
 }
 
 inline bool contextSortByRelev(Context const& a, Context const& b) noexcept {
@@ -1024,23 +1079,38 @@ void coalesceSingle(uv_work_t* req) {
         }
 
         // sort grids by distance to proximity point
-        Cache::intarray grids = __get(subq.cache, type, shardId, subq.phrase);
+        Cache::intarray grids = (proximity || bbox) ?
+            __getTruncated(subq.cache, type, shardId, subq.phrase, 500000) :
+            __getTruncated(subq.cache, type, shardId, subq.phrase, 100000);
 
         unsigned long m = grids.size();
         double relevMax = 0;
         std::vector<Cover> covers;
         covers.reserve(m);
 
+        uint32_t length = 0;
+        uint32_t lastId = 0;
+        double lastRelev = 0;
+        double lastScoredist = 0;
+        double minScoredist = std::numeric_limits<double>::max();
         for (unsigned long j = 0; j < m; j++) {
             Cover cover = numToCover(grids[j]);
+
             cover.idx = subq.idx;
             cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
             cover.relev = cover.relev * subq.weight;
             cover.distance = proximity ? tileDist(cx, cy, cover.x, cover.y, cz) : 0;
             cover.scoredist = proximity ? scoredist(cover.distance, cover.score) : cover.score;
 
+            // only add cover id if it's got a higer scoredist
+            if (lastId == cover.id && cover.scoredist <= lastScoredist) continue;
+
             // short circuit based on relevMax thres
-            if (relevMax - cover.relev >= 0.25) continue;
+            if (length > 40) {
+                if (cover.scoredist < minScoredist) continue;
+                if (cover.relev < lastRelev) break;
+            }
+            if (relevMax - cover.relev >= 0.25) break;
             if (cover.relev > relevMax) relevMax = cover.relev;
 
             if (bbox) {
@@ -1048,6 +1118,12 @@ void coalesceSingle(uv_work_t* req) {
             }
 
             covers.emplace_back(cover);
+            if (lastId != cover.id) length++;
+            if (!proximity && length > 40) break;
+            if (cover.scoredist < minScoredist) minScoredist = cover.scoredist;
+            lastId = cover.id;
+            lastRelev = cover.relev;
+            lastScoredist = cover.scoredist;
         }
 
         std::sort(covers.begin(), covers.end(), coverSortByRelev);
@@ -1083,43 +1159,35 @@ void coalesceMulti(uv_work_t* req) {
     CoalesceBaton *baton = static_cast<CoalesceBaton *>(req->data);
 
     try {
-        std::vector<PhrasematchSubq> const& stack = baton->stack;
-
-        size_t size;
+        std::vector<PhrasematchSubq> &stack = baton->stack;
+        std::sort(stack.begin(), stack.end(), subqSortByZoom);
+        unsigned short stackSize = stack.size();
 
         // Cache zoom levels to iterate over as coalesce occurs.
-        Cache::intarray zoom;
-        std::vector<bool> zoomUniq(22);
-        std::vector<Cache::intarray> zoomCache(22);
-        size = stack.size();
-        for (unsigned short i = 0; i < size; i++) {
-            if (zoomUniq[stack[i].zoom]) continue;
-            zoomUniq[stack[i].zoom] = true;
-            zoom.emplace_back(stack[i].zoom);
-        }
-
-        size = zoom.size();
-        for (unsigned short i = 0; i < size; i++) {
-            Cache::intarray sliced;
-            sliced.reserve(i);
-            for (unsigned short j = 0; j < i; j++) {
-                sliced.emplace_back(zoom[j]);
+        std::vector<Cache::intarray> zoomCache;
+        zoomCache.reserve(stackSize);
+        for (auto const& subq : stack) {
+            Cache::intarray zooms;
+            std::vector<bool> zoomUniq(22, false);
+            for (auto const& subqB : stack) {
+                if (subq.idx == subqB.idx) continue;
+                if (zoomUniq[subqB.zoom]) continue;
+                if (subq.zoom < subqB.zoom) continue;
+                zoomUniq[subqB.zoom] = true;
+                zooms.emplace_back(subqB.zoom);
             }
-            std::reverse(sliced.begin(), sliced.end());
-            zoomCache[zoom[i]] = sliced;
+            zoomCache.push_back(std::move(zooms));
         }
 
         // Coalesce relevs into higher zooms, e.g.
         // z5 inherits relev of overlapping tiles at z4.
         // @TODO assumes sources are in zoom ascending order.
         std::string type = "grid";
-        std::map<uint64_t,std::vector<Cover>> coalesced;
-        std::map<uint64_t,std::vector<Cover>>::iterator cit;
-        std::map<uint64_t,std::vector<Cover>>::iterator pit;
+        std::map<uint64_t,std::vector<Context>> coalesced;
+        std::map<uint64_t,std::vector<Context>>::iterator cit;
+        std::map<uint64_t,std::vector<Context>>::iterator pit;
         std::map<uint64_t,bool> done;
         std::map<uint64_t,bool>::iterator dit;
-
-        size = stack.size();
 
         // proximity (optional)
         bool proximity = baton->centerzxy.size() > 0;
@@ -1157,15 +1225,16 @@ void coalesceMulti(uv_work_t* req) {
             maxy = 0;
         }
 
-        for (unsigned short i = 0; i < size; i++) {
-            PhrasematchSubq const& subq = stack[i];
-
+        std::vector<Context> contexts;
+        unsigned short i = 0;
+        for (auto const& subq : stack) {
             std::string shardId = shard(4, subq.phrase);
 
-            Cache::intarray grids = __get(subq.cache, type, shardId, subq.phrase);
+            Cache::intarray grids = __getTruncated(subq.cache, type, shardId, subq.phrase, 500000);
 
+            bool last = i == (stack.size() - 1);
             unsigned short z = subq.zoom;
-            auto const& zCache = zoomCache[z];
+            auto const& zCache = zoomCache[i];
             std::size_t zCacheSize = zCache.size();
 
             unsigned long m = grids.size();
@@ -1173,7 +1242,7 @@ void coalesceMulti(uv_work_t* req) {
             for (unsigned long j = 0; j < m; j++) {
                 Cover cover = numToCover(grids[j]);
                 cover.idx = subq.idx;
-                cover.subq = i;
+                cover.mask = subq.mask;
                 cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
                 cover.relev = cover.relev * subq.weight;
                 if (proximity) {
@@ -1193,86 +1262,79 @@ void coalesceMulti(uv_work_t* req) {
 
                 uint64_t zxy = (z * POW2_28) + (cover.x * POW2_14) + (cover.y);
 
-                cit = coalesced.find(zxy);
-                if (cit == coalesced.end()) {
-                    std::vector<Cover> coverList;
-                    coverList.push_back(cover);
-                    coalesced.emplace(zxy, coverList);
-                } else {
-                    cit->second.push_back(cover);
-                }
+                Context context;
+                // Reserve stackSize for the coverList. The vector
+                // will grow no larger that the size of the input
+                // subqueries that are being coalesced.
+                context.coverList.reserve(stackSize);
+                context.coverList.push_back(std::move(cover));
+                context.relev = cover.relev;
+                context.mask = cover.mask;
 
-                dit = done.find(zxy);
-                if (dit == done.end()) {
-                    for (unsigned a = 0; a < zCacheSize; a++) {
-                        uint64_t p = zCache[a];
-                        double s = static_cast<double>(1 << (z-p));
-                        uint64_t pxy = static_cast<uint64_t>(p * POW2_28) +
-                            static_cast<uint64_t>(std::floor(cover.x/s) * POW2_14) +
-                            static_cast<uint64_t>(std::floor(cover.y/s));
-                        // Set a flag to ensure coalesce occurs only once per zxy.
-                        pit = coalesced.find(pxy);
-                        if (pit != coalesced.end()) {
-                            cit = coalesced.find(zxy);
-                            for (auto const& pArray : pit->second) {
-                                cit->second.emplace_back(pArray);
+                for (unsigned a = 0; a < zCacheSize; a++) {
+                    uint64_t p = zCache[a];
+                    double s = static_cast<double>(1 << (z-p));
+                    uint64_t pxy = static_cast<uint64_t>(p * POW2_28) +
+                        static_cast<uint64_t>(std::floor(cover.x/s) * POW2_14) +
+                        static_cast<uint64_t>(std::floor(cover.y/s));
+                    pit = coalesced.find(pxy);
+                    if (pit != coalesced.end()) {
+                        unsigned lastMask = 0;
+                        double lastRelev = 0.0;
+                        for (auto const& parents : pit->second) {
+                            for (auto const& parent : parents.coverList) {
+                                // this cover is functionally identical with previous and
+                                // is more relevant, replace the previous.
+                                if (parent.mask == lastMask && parent.relev > lastRelev) {
+                                    context.coverList.pop_back();
+                                    context.coverList.emplace_back(parent);
+                                    context.relev -= lastRelev;
+                                    context.relev += parent.relev;
+                                    lastMask = parent.mask;
+                                    lastRelev = parent.relev;
+                                // this cover doesn't overlap with used mask.
+                                } else if (!(context.mask & parent.mask)) {
+                                    context.coverList.emplace_back(parent);
+                                    context.relev += parent.relev;
+                                    context.mask = context.mask | parent.mask;
+                                    lastMask = parent.mask;
+                                    lastRelev = parent.relev;
+                                }
                             }
-                            done.emplace(zxy, true);
-                            break;
                         }
                     }
                 }
+
+                if (last) {
+                    // Slightly penalize contexts that have no stacking
+                    if (context.coverList.size() == 1) {
+                        context.relev -= 0.01;
+                    // Slightly penalize contexts in ascending order
+                    } else if (context.coverList[0].mask > context.coverList[1].mask) {
+                        context.relev -= 0.01;
+                    }
+                    contexts.push_back(std::move(context));
+                } else {
+                    cit = coalesced.find(zxy);
+                    if (cit == coalesced.end()) {
+                        std::vector<Context> contexts;
+                        contexts.push_back(std::move(context));
+                        coalesced.emplace(zxy, contexts);
+                    } else {
+                        cit->second.push_back(std::move(context));
+                    }
+                }
             }
+
+            i++;
         }
 
-        std::vector<Context> contexts;
-        for (auto const& matched : coalesced) {
-            std::vector<Cover> const& coverList = matched.second;
-            size_t coverSize = coverList.size();
-            for (unsigned i = 0; i < coverSize; i++) {
-                unsigned used = 1 << coverList[i].subq;
-                unsigned lastMask = 0;
-                double lastRelev = 0.0;
-                double stacky = 0.0;
-
-                unsigned coverPos = 0;
-
-                Context context;
-                context.coverList.emplace_back(coverList[i]);
-                context.relev = coverList[i].relev;
-                for (unsigned j = i+1; j < coverSize; j++) {
-                    unsigned mask = 1 << coverList[j].subq;
-
-                    // this cover is functionally identical with previous and
-                    // is more relevant, replace the previous.
-                    if (mask == lastMask && coverList[j].relev > lastRelev) {
-                        context.relev -= lastRelev;
-                        context.relev += coverList[j].relev;
-                        context.coverList[coverPos] = coverList[j];
-
-                        stacky = 1.0;
-                        used = used | mask;
-                        lastMask = mask;
-                        lastRelev = coverList[j].relev;
-                        coverPos++;
-                    // this cover doesn't overlap with used mask.
-                    } else if (!(used & mask)) {
-                        context.coverList.emplace_back(coverList[j]);
-                        context.relev += coverList[j].relev;
-
-                        stacky = 1.0;
-                        used = used | mask;
-                        lastMask = mask;
-                        lastRelev = coverList[j].relev;
-                        coverPos++;
-                    }
-                    // all other cases conflict with existing mask. skip.
-                }
-                context.relev -= 0.01;
-                context.relev += 0.01 * stacky;
+        for (auto &matched : coalesced) {
+            for (auto &context : matched.second) {
                 contexts.emplace_back(context);
             }
         }
+
         std::sort(contexts.begin(), contexts.end(), contextSortByRelev);
         coalesceFinalize(baton, contexts);
     } catch (std::exception const& ex) {
@@ -1364,6 +1426,7 @@ NAN_METHOD(Cache::coalesce) {
 
             subq.weight = jsStack->Get(Nan::New("weight").ToLocalChecked())->NumberValue();
             subq.phrase = jsStack->Get(Nan::New("phrase").ToLocalChecked())->IntegerValue();
+            subq.mask = static_cast<unsigned short>(jsStack->Get(Nan::New("mask").ToLocalChecked())->IntegerValue());
 
             // JS cache reference => cpp
             Local<Object> cache = Local<Object>::Cast(jsStack->Get(Nan::New("cache").ToLocalChecked()));

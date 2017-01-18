@@ -29,7 +29,7 @@ var mp36 = Math.pow(2,36);
             }
             coalesce(stacks, {}, function(err, res) {
                 var checks = true;
-                checks = checks && res.length === 40;
+                checks = checks && res.length === 37;
                 checks = checks && res[0][0].tmpid === 129900;
                 if (!checks) {
                     assert.fail('Failed checks');
@@ -54,7 +54,7 @@ var mp36 = Math.pow(2,36);
             }
             coalesce(stacks, { centerzxy: [14,4893,6001] }, function(err, res) {
                 var checks = true;
-                checks = checks && res.length === 38;
+                checks = checks && res.length === 39;
                 checks = checks && res[0][0].x === 4893;
                 checks = checks && res[0][0].y === 6001;
                 checks = checks && res[0][0].tmpid === 446213;
@@ -78,12 +78,14 @@ var mp36 = Math.pow(2,36);
     b._set('grid', Math.floor(3848571113/mp36), 3848571113, require('./fixtures/coalesce-bench-multi-3848571113.json'));
     var stacks = [{
         cache: a,
+        mask: 1 << 0,
         idx: 0,
         zoom: 12,
         weight: 0.25,
         phrase: 1965155344
     }, {
         cache: b,
+        mask: 1 << 1,
         idx: 1,
         zoom: 14,
         weight: 0.75,
