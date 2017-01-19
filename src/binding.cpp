@@ -837,6 +837,33 @@ struct Context {
     std::vector<Cover> coverList;
     unsigned mask;
     double relev;
+
+    Context(Cover && cov,
+            unsigned mask,
+            double relev)
+     : coverList(),
+       mask(mask),
+       relev(relev) {
+          coverList.emplace_back(std::move(cov));
+       }
+    Context& operator=(Context && c) {
+        coverList = std::move(c.coverList);
+        mask = std::move(c.mask);
+        relev = std::move(c.relev);
+        return *this;
+    }
+    Context(std::vector<Cover> && cl,
+            unsigned mask,
+            double relev)
+     : coverList(std::move(cl)),
+       mask(mask),
+       relev(relev) {}
+
+    Context(Context && c)
+     : coverList(std::move(c.coverList)),
+       mask(std::move(c.mask)),
+       relev(std::move(c.relev)) {}
+
 };
 
 Cover numToCover(uint64_t num) {
@@ -1000,7 +1027,7 @@ double scoredist(unsigned zoom, double distance, double score) {
     return score > scoredist ? score : scoredist;
 }
 
-void coalesceFinalize(CoalesceBaton* baton, std::vector<Context> const& contexts) {
+void coalesceFinalize(CoalesceBaton* baton, std::vector<Context> && contexts) {
     if (contexts.size() > 0) {
         // Coalesce stack, generate relevs.
         double relevMax = contexts[0].relev;
@@ -1023,7 +1050,7 @@ void coalesceFinalize(CoalesceBaton* baton, std::vector<Context> const& contexts
             if (sit != sets.end()) continue;
 
             sets.emplace(feature.coverList[0].tmpid, true);
-            baton->features.emplace_back(feature);
+            baton->features.emplace_back(std::move(contexts[i]));
             total++;
         }
     }
@@ -1135,13 +1162,11 @@ void coalesceSingle(uv_work_t* req) {
             lastid = covers[j].id;
             added++;
 
-            Context context;
-            context.coverList.emplace_back(covers[j]);
-            context.relev = covers[j].relev;
-            contexts.emplace_back(context);
+            // TODO default mask value?
+            contexts.emplace_back(std::move(covers[j]),0,covers[j].relev);
         }
 
-        coalesceFinalize(baton, contexts);
+        coalesceFinalize(baton, std::move(contexts));
     } catch (std::exception const& ex) {
         baton->error = ex.what();
     }
@@ -1254,14 +1279,14 @@ void coalesceMulti(uv_work_t* req) {
 
                 uint64_t zxy = (z * POW2_28) + (cover.x * POW2_14) + (cover.y);
 
-                Context context;
                 // Reserve stackSize for the coverList. The vector
                 // will grow no larger that the size of the input
                 // subqueries that are being coalesced.
-                context.coverList.reserve(stackSize);
-                context.coverList.push_back(std::move(cover));
-                context.relev = cover.relev;
-                context.mask = cover.mask;
+                std::vector<Cover> covers;
+                covers.reserve(stackSize);
+                covers.push_back(std::move(cover));
+                unsigned context_mask = cover.mask;
+                double context_relev = cover.relev;
 
                 for (unsigned a = 0; a < zCacheSize; a++) {
                     uint64_t p = zCache[a];
@@ -1278,17 +1303,17 @@ void coalesceMulti(uv_work_t* req) {
                                 // this cover is functionally identical with previous and
                                 // is more relevant, replace the previous.
                                 if (parent.mask == lastMask && parent.relev > lastRelev) {
-                                    context.coverList.pop_back();
-                                    context.coverList.emplace_back(parent);
-                                    context.relev -= lastRelev;
-                                    context.relev += parent.relev;
+                                    covers.pop_back();
+                                    covers.emplace_back(parent);
+                                    context_relev -= lastRelev;
+                                    context_relev += parent.relev;
                                     lastMask = parent.mask;
                                     lastRelev = parent.relev;
                                 // this cover doesn't overlap with used mask.
-                                } else if (!(context.mask & parent.mask)) {
-                                    context.coverList.emplace_back(parent);
-                                    context.relev += parent.relev;
-                                    context.mask = context.mask | parent.mask;
+                                } else if (!(context_mask & parent.mask)) {
+                                    covers.emplace_back(parent);
+                                    context_relev += parent.relev;
+                                    context_mask = context_mask | parent.mask;
                                     lastMask = parent.mask;
                                     lastRelev = parent.relev;
                                 }
@@ -1299,21 +1324,21 @@ void coalesceMulti(uv_work_t* req) {
 
                 if (last) {
                     // Slightly penalize contexts that have no stacking
-                    if (context.coverList.size() == 1) {
-                        context.relev -= 0.01;
+                    if (covers.size() == 1) {
+                        context_relev -= 0.01;
                     // Slightly penalize contexts in ascending order
-                    } else if (context.coverList[0].mask > context.coverList[1].mask) {
-                        context.relev -= 0.01;
+                    } else if (covers[0].mask > covers[1].mask) {
+                        context_relev -= 0.01;
                     }
-                    contexts.push_back(std::move(context));
+                    contexts.emplace_back(std::move(covers),context_mask,context_relev);
                 } else {
                     cit = coalesced.find(zxy);
                     if (cit == coalesced.end()) {
-                        std::vector<Context> contexts;
-                        contexts.push_back(std::move(context));
-                        coalesced.emplace(zxy, contexts);
+                        std::vector<Context> local_contexts;
+                        local_contexts.emplace_back(std::move(covers),context_mask,context_relev);
+                        coalesced.emplace(zxy, std::move(local_contexts));
                     } else {
-                        cit->second.push_back(std::move(context));
+                        cit->second.emplace_back(std::move(covers),context_mask,context_relev);
                     }
                 }
             }
@@ -1323,12 +1348,12 @@ void coalesceMulti(uv_work_t* req) {
 
         for (auto &matched : coalesced) {
             for (auto &context : matched.second) {
-                contexts.emplace_back(context);
+                contexts.emplace_back(std::move(context));
             }
         }
 
         std::sort(contexts.begin(), contexts.end(), contextSortByRelev);
-        coalesceFinalize(baton, contexts);
+        coalesceFinalize(baton, std::move(contexts));
     } catch (std::exception const& ex) {
        baton->error = ex.what();
     }
