@@ -1360,6 +1360,10 @@ void coalesceAfter(uv_work_t* req) {
     Nan::HandleScope scope;
     CoalesceBaton *baton = static_cast<CoalesceBaton *>(req->data);
 
+    for (auto & phrase_match : baton->stack) {
+        phrase_match.cache->_unref();
+    }
+
     if (!baton->error.empty()) {
         v8::Local<v8::Value> argv[1] = { Nan::Error(baton->error.c_str()) };
         Nan::MakeCallback(Nan::GetCurrentContext()->Global(), Nan::New(baton->callback), 1, argv);
@@ -1422,8 +1426,9 @@ NAN_METHOD(Cache::coalesce) {
 
             // JS cache reference => cpp
             Local<Object> cache = Local<Object>::Cast(jsStack->Get(Nan::New("cache").ToLocalChecked()));
-            subq.cache = node::ObjectWrap::Unwrap<Cache>(cache);
-
+            Cache * cache_ptr = node::ObjectWrap::Unwrap<Cache>(cache);
+            cache_ptr->_ref();
+            subq.cache = cache_ptr;
             stack.push_back(subq);
         }
         baton->stack = stack;

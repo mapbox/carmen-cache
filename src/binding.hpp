@@ -58,6 +58,8 @@ public:
     static NAN_METHOD(unload);
     static NAN_METHOD(coalesce);
     explicit Cache();
+    void _ref() { Ref(); }
+    void _unref() { Unref(); }
     memcache cache_;
     message_cache msg_;
     message_list msglist_;
