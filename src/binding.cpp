@@ -6,6 +6,7 @@
 #include <cassert>
 #include <limits>
 #include <algorithm>
+#include <memory>
 
 #include <protozero/pbf_writer.hpp>
 #include <protozero/pbf_reader.hpp>
@@ -280,31 +281,58 @@ NAN_METHOD(Cache::pack)
 
 struct MergeBaton : carmen::noncopyable {
     uv_work_t request;
-    std::string pbf1;
-    std::string pbf2;
-    std::string pbf3;
+    std::unique_ptr<std::string> pbf3;
+    const char * pbf1_data;
+    const char * pbf2_data;
     std::string method;
     std::string error;
     Nan::Persistent<v8::Function> callback;
+    Nan::Persistent<v8::Object> buffer1;
+    Nan::Persistent<v8::Object> buffer2;
+    std::size_t pbf1_size;
+    std::size_t pbf2_size;
+    MergeBaton(Local<Object> obj1,
+               Local<Object> obj2,
+               Local<Value> cb,
+               std::string const& meth)
+      : pbf1_data(node::Buffer::Data(obj1)),
+        pbf1_size(node::Buffer::Length(obj1)),
+        pbf2_data(node::Buffer::Data(obj2)),
+        pbf2_size(node::Buffer::Length(obj2)),
+        pbf3(std::make_unique<std::string>()),
+        method(meth)
+      {
+        this->request.data = this;
+        callback.Reset(cb.As<Function>());
+        buffer1.Reset(obj1);
+        buffer2.Reset(obj2);
+        // Reserve memory at least at pbf1_size. TODO: should we reserve more?
+        pbf3.get()->reserve(pbf1_size);
+      }
+    ~MergeBaton() {
+        callback.Reset();
+        buffer1.Reset();
+        buffer2.Reset();        
+    }
+
 };
 
 void mergeQueue(uv_work_t* req) {
     MergeBaton *baton = static_cast<MergeBaton *>(req->data);
-    std::string const& pbf1 = baton->pbf1;
-    std::string const& pbf2 = baton->pbf2;
+
     std::string const& method = baton->method;
 
     // Ids that have been seen
     std::map<uint64_t,bool> ids1;
     std::map<uint64_t,bool> ids2;
 
-    std::string merged;
+    std::string & merged = *baton->pbf3.get();
     try {
 
         protozero::pbf_writer writer(merged);
 
         // Store ids from 1
-        protozero::pbf_reader pre1(pbf1);
+        protozero::pbf_reader pre1(baton->pbf1_data,baton->pbf1_size);
         while (pre1.next(CACHE_MESSAGE)) {
             protozero::pbf_reader item = pre1.get_message();
             while (item.next(CACHE_ITEM)) {
@@ -313,7 +341,7 @@ void mergeQueue(uv_work_t* req) {
         }
 
         // Store ids from 2
-        protozero::pbf_reader pre2(pbf2);
+        protozero::pbf_reader pre2(baton->pbf2_data,baton->pbf2_size);
         while (pre2.next(CACHE_MESSAGE)) {
             protozero::pbf_reader item = pre2.get_message();
             while (item.next(CACHE_ITEM)) {
@@ -322,7 +350,7 @@ void mergeQueue(uv_work_t* req) {
         }
 
         // No delta writes from message1
-        protozero::pbf_reader message1(pbf1);
+        protozero::pbf_reader message1(baton->pbf1_data,baton->pbf1_size);
         while (message1.next(CACHE_MESSAGE)) {
             protozero::pbf_writer item_writer(writer,1);
             protozero::pbf_reader item = message1.get_message();
@@ -343,7 +371,7 @@ void mergeQueue(uv_work_t* req) {
         }
 
         // No delta writes from message2
-        protozero::pbf_reader message2(pbf2);
+        protozero::pbf_reader message2(baton->pbf2_data,baton->pbf2_size);
         while (message2.next(CACHE_MESSAGE)) {
             protozero::pbf_writer item_writer(writer,1);
             protozero::pbf_reader item = message2.get_message();
@@ -364,7 +392,7 @@ void mergeQueue(uv_work_t* req) {
         }
 
         // Delta writes for ids in both message1 and message2
-        protozero::pbf_reader overlap1(pbf1);
+        protozero::pbf_reader overlap1(baton->pbf1_data,baton->pbf1_size);
         while (overlap1.next(CACHE_MESSAGE)) {
             protozero::pbf_writer item_writer(writer,1);
             protozero::pbf_reader item = overlap1.get_message();
@@ -396,7 +424,7 @@ void mergeQueue(uv_work_t* req) {
                 }
 
                 // Check pbf2 for this id and merge its items if found
-                protozero::pbf_reader overlap2(pbf2);
+                protozero::pbf_reader overlap2(baton->pbf2_data,baton->pbf2_size);
                 while (overlap2.next(CACHE_MESSAGE)) {
                     protozero::pbf_reader item2 = overlap2.get_message();
                     while (item2.next(CACHE_ITEM)) {
@@ -440,8 +468,6 @@ void mergeQueue(uv_work_t* req) {
                 }
             }
         }
-
-        baton->pbf3 = merged;
     } catch (std::exception const& ex) {
         baton->error = ex.what();
     }
@@ -454,12 +480,19 @@ void mergeAfter(uv_work_t* req) {
         v8::Local<v8::Value> argv[1] = { Nan::Error(baton->error.c_str()) };
         Nan::MakeCallback(Nan::GetCurrentContext()->Global(), Nan::New(baton->callback), 1, argv);
     } else {
-        std::string const& merged = baton->pbf3;
-        Local<Object> buf = Nan::CopyBuffer((char*)merged.data(), merged.size()).ToLocalChecked();
-        Local<Value> argv[2] = { Nan::Null(), buf };
+        std::string & merged = *baton->pbf3.get();
+        baton->pbf3.release();
+        v8::Local<v8::Value> argv[2] = { Nan::Null(),
+                                         Nan::NewBuffer(&merged[0],
+                                            merged.size(),
+                                            [](char *, void * hint) {
+                                                delete reinterpret_cast<std::string*>(hint);
+                                            },
+                                            baton->pbf3.get()
+                                         ).ToLocalChecked()
+                                       };
         Nan::MakeCallback(Nan::GetCurrentContext()->Global(), Nan::New(baton->callback), 2, argv);
     }
-    baton->callback.Reset();
     delete baton;
 }
 
@@ -546,14 +579,8 @@ NAN_METHOD(Cache::merge)
     if (obj1->IsNull() || obj1->IsUndefined() || !node::Buffer::HasInstance(obj1)) return Nan::ThrowTypeError("argument 1 must be a Buffer");
     if (obj2->IsNull() || obj2->IsUndefined() || !node::Buffer::HasInstance(obj2)) return Nan::ThrowTypeError("argument 2 must be a Buffer");
 
-    MergeBaton *baton = new MergeBaton();
-    baton->pbf1 = std::string(node::Buffer::Data(obj1),node::Buffer::Length(obj1));
-    baton->pbf2 = std::string(node::Buffer::Data(obj2),node::Buffer::Length(obj2));
-    baton->method = method;
-    baton->callback.Reset(callback.As<Function>());
-    baton->request.data = baton;
+    MergeBaton *baton = new MergeBaton(obj1,obj2,callback,method);
     uv_queue_work(uv_default_loop(), &baton->request, mergeQueue, (uv_after_work_cb)mergeAfter);
-
     info.GetReturnValue().Set(Nan::Undefined());
     return;
 }

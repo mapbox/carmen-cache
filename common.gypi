@@ -2,7 +2,7 @@
   'target_defaults': {
     'default_configuration': 'Release',
     'cflags_cc' : [
-      '-std=c++11',
+      '-std=c++14',
     ],
     'cflags_cc!': ['-std=gnu++0x','-fno-rtti', '-fno-exceptions'],
     'configurations': {
