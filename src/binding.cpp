@@ -67,14 +67,14 @@ inline bool cacheHas(Cache const* c, std::string const& key) {
     return mitr != messages.end();
 }
 
-inline void cacheInsert(Cache * c, std::string const& key, std::string const& message) {
-    Cache::message_list &list = c->msglist_;
-    Cache::message_cache &messages = c->msg_;
+inline void cacheInsert(Cache & c, std::string const& key, const char * data, std::size_t data_size) {
+    Cache::message_cache &messages = c.msg_;
     Cache::message_cache::iterator mitr = messages.find(key);
     if (mitr == messages.end()) {
-        list.emplace_front(std::make_pair(key, message));
+        Cache::message_list &list = c.msglist_;
+        list.emplace_front(key, std::string(data,data_size));
         messages.emplace(key, list.begin());
-        if (list.size() > c->cachesize) {
+        if (list.size() > c.cachesize) {
             messages.erase(list.back().first);
             list.pop_back();
         }
@@ -615,10 +615,17 @@ NAN_METHOD(Cache::_set)
     return;
 }
 
+/*
+
+Note: This function will not override data for keys already inserted into the cache
+
+*/
+
+
 NAN_METHOD(Cache::loadSync)
 {
     if (info.Length() < 2) {
-        return Nan::ThrowTypeError("expected at three info: 'buffer', 'type', and 'shard'");
+        return Nan::ThrowTypeError("expected at least three args: 'buffer', 'type', and 'shard'");
     }
     if (!info[0]->IsObject()) {
         return Nan::ThrowTypeError("first argument must be a Buffer");
@@ -640,19 +647,8 @@ NAN_METHOD(Cache::loadSync)
         std::string type = *String::Utf8Value(info[1]->ToString());
         std::string shard = *String::Utf8Value(info[2]->ToString());
         std::string key = type + "-" + shard;
-        Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
-        Cache::memcache & mem = c->cache_;
-        Cache::memcache::iterator itr = mem.find(key);
-        if (itr != mem.end()) {
-            c->cache_.emplace(key,arraycache());
-        }
-        Cache::memcache::iterator itr2 = mem.find(key);
-        if (itr2 != mem.end()) {
-            mem.erase(itr2);
-        }
-        if (!cacheHas(c, key)) {
-            cacheInsert(c, key, std::string(node::Buffer::Data(obj),node::Buffer::Length(obj)));
-        }
+        Cache & c = *node::ObjectWrap::Unwrap<Cache>(info.This());
+        cacheInsert(c, key, node::Buffer::Data(obj), node::Buffer::Length(obj));
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
     }
