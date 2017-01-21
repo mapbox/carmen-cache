@@ -61,6 +61,9 @@ public:
     static NAN_METHOD(merge);
     static NAN_METHOD(list);
     static NAN_METHOD(_get);
+    static NAN_METHOD(_getbyprefix);
+    static NAN_METHOD(_benchget);
+    static NAN_METHOD(_benchgetbyprefix);
     static NAN_METHOD(_set);
     static NAN_METHOD(unload);
     static NAN_METHOD(coalesce);

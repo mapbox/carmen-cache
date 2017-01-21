@@ -11,6 +11,9 @@
 #include <protozero/pbf_writer.hpp>
 #include <protozero/pbf_reader.hpp>
 
+#include <chrono>
+typedef std::chrono::high_resolution_clock Clock;
+
 namespace carmen {
 
 using namespace v8;
@@ -249,6 +252,9 @@ void Cache::Initialize(Handle<Object> target) {
     Nan::SetPrototypeMethod(t, "list", list);
     Nan::SetPrototypeMethod(t, "_set", _set);
     Nan::SetPrototypeMethod(t, "_get", _get);
+    Nan::SetPrototypeMethod(t, "_getByPrefix", _getbyprefix);
+    Nan::SetPrototypeMethod(t, "_benchGetByPrefix", _benchgetbyprefix);
+    Nan::SetPrototypeMethod(t, "_benchGet", _benchget);
     Nan::SetPrototypeMethod(t, "unload", unload);
     Nan::SetMethod(t, "coalesce", coalesce);
     target->Set(Nan::New("Cache").ToLocalChecked(), t->GetFunction());
@@ -820,9 +826,10 @@ NAN_METHOD(Cache::_get)
     try {
         std::string type = *String::Utf8Value(info[0]->ToString());
         std::string id = *String::Utf8Value(info[1]->ToString());
+        bool ignorePrefixFlag = info.Length() >= 3 ? info[2]->BooleanValue() : false;
 
         Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
-        Cache::intarray vector = __get(c, type, id, false);
+        Cache::intarray vector = __get(c, type, id, ignorePrefixFlag);
         if (!vector.empty()) {
             info.GetReturnValue().Set(vectorToArray(vector));
             return;
@@ -830,6 +837,92 @@ NAN_METHOD(Cache::_get)
             info.GetReturnValue().Set(Nan::Undefined());
             return;
         }
+    } catch (std::exception const& ex) {
+        return Nan::ThrowTypeError(ex.what());
+    }
+}
+
+NAN_METHOD(Cache::_getbyprefix)
+{
+    if (info.Length() < 2) {
+        return Nan::ThrowTypeError("expected two info: type and id");
+    }
+    if (!info[0]->IsString()) {
+        return Nan::ThrowTypeError("first arg must be a String");
+    }
+    if (!info[1]->IsString()) {
+        return Nan::ThrowTypeError("second arg must be a String");
+    }
+    try {
+        std::string type = *String::Utf8Value(info[0]->ToString());
+        std::string id = *String::Utf8Value(info[1]->ToString());
+
+        Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
+        Cache::intarray vector = __getbyprefix(c, type, id);
+        if (!vector.empty()) {
+            info.GetReturnValue().Set(vectorToArray(vector));
+            return;
+        } else {
+            info.GetReturnValue().Set(Nan::Undefined());
+            return;
+        }
+    } catch (std::exception const& ex) {
+        return Nan::ThrowTypeError(ex.what());
+    }
+}
+
+NAN_METHOD(Cache::_benchget)
+{
+    if (info.Length() < 2) {
+        return Nan::ThrowTypeError("expected two info: type and id");
+    }
+    if (!info[0]->IsString()) {
+        return Nan::ThrowTypeError("first arg must be a String");
+    }
+    if (!info[1]->IsString()) {
+        return Nan::ThrowTypeError("second arg must be a String");
+    }
+    try {
+        std::string type = *String::Utf8Value(info[0]->ToString());
+        std::string id = *String::Utf8Value(info[1]->ToString());
+        bool ignorePrefixFlag = info.Length() >= 3 ? info[2]->BooleanValue() : false;
+
+        Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
+
+        auto t1 = Clock::now();
+        Cache::intarray vector = __get(c, type, id, ignorePrefixFlag);
+        auto t2 = Clock::now();
+
+        info.GetReturnValue().Set(Nan::New(static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count())));
+        return;
+    } catch (std::exception const& ex) {
+        return Nan::ThrowTypeError(ex.what());
+    }
+}
+
+NAN_METHOD(Cache::_benchgetbyprefix)
+{
+    if (info.Length() < 2) {
+        return Nan::ThrowTypeError("expected two info: type and id");
+    }
+    if (!info[0]->IsString()) {
+        return Nan::ThrowTypeError("first arg must be a String");
+    }
+    if (!info[1]->IsString()) {
+        return Nan::ThrowTypeError("second arg must be a String");
+    }
+    try {
+        std::string type = *String::Utf8Value(info[0]->ToString());
+        std::string id = *String::Utf8Value(info[1]->ToString());
+
+        Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
+
+        auto t1 = Clock::now();
+        Cache::intarray vector = __getbyprefix(c, type, id);
+        auto t2 = Clock::now();
+
+        info.GetReturnValue().Set(Nan::New(static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count())));
+        return;
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
     }
