@@ -6,6 +6,7 @@
 #include <cassert>
 #include <limits>
 #include <algorithm>
+#include <memory>
 
 #include <protozero/pbf_writer.hpp>
 #include <protozero/pbf_reader.hpp>
@@ -77,14 +78,14 @@ inline bool cacheHas(Cache const* c, std::string const& key) {
     return mitr != messages.end();
 }
 
-inline void cacheInsert(Cache * c, std::string const& key, std::string const& message) {
-    Cache::message_list &list = c->msglist_;
-    Cache::message_cache &messages = c->msg_;
+inline void cacheInsert(Cache & c, std::string const& key, const char * data, std::size_t data_size) {
+    Cache::message_cache &messages = c.msg_;
     Cache::message_cache::iterator mitr = messages.find(key);
     if (mitr == messages.end()) {
-        list.emplace_front(std::make_pair(key, message));
+        Cache::message_list &list = c.msglist_;
+        list.emplace_front(key, std::string(data,data_size));
         messages.emplace(key, list.begin());
-        if (list.size() > c->cachesize) {
+        if (list.size() > c.cachesize) {
             messages.erase(list.back().first);
             list.pop_back();
         }
@@ -290,31 +291,58 @@ NAN_METHOD(Cache::pack)
 
 struct MergeBaton : carmen::noncopyable {
     uv_work_t request;
-    std::string pbf1;
-    std::string pbf2;
-    std::string pbf3;
+    std::unique_ptr<std::string> pbf3;
+    const char * pbf1_data;
+    const char * pbf2_data;
     std::string method;
     std::string error;
     Nan::Persistent<v8::Function> callback;
+    Nan::Persistent<v8::Object> buffer1;
+    Nan::Persistent<v8::Object> buffer2;
+    std::size_t pbf1_size;
+    std::size_t pbf2_size;
+    MergeBaton(Local<Object> obj1,
+               Local<Object> obj2,
+               Local<Value> cb,
+               std::string const& meth)
+      : pbf1_data(node::Buffer::Data(obj1)),
+        pbf1_size(node::Buffer::Length(obj1)),
+        pbf2_data(node::Buffer::Data(obj2)),
+        pbf2_size(node::Buffer::Length(obj2)),
+        pbf3(std::make_unique<std::string>()),
+        method(meth)
+      {
+        this->request.data = this;
+        callback.Reset(cb.As<Function>());
+        buffer1.Reset(obj1);
+        buffer2.Reset(obj2);
+        // Reserve memory at least at pbf1_size. TODO: should we reserve more?
+        pbf3.get()->reserve(pbf1_size);
+      }
+    ~MergeBaton() {
+        callback.Reset();
+        buffer1.Reset();
+        buffer2.Reset();        
+    }
+
 };
 
 void mergeQueue(uv_work_t* req) {
     MergeBaton *baton = static_cast<MergeBaton *>(req->data);
-    std::string const& pbf1 = baton->pbf1;
-    std::string const& pbf2 = baton->pbf2;
+
     std::string const& method = baton->method;
 
     // Ids that have been seen
     std::map<uint64_t,bool> ids1;
     std::map<uint64_t,bool> ids2;
 
-    std::string merged;
+    std::string & merged = *baton->pbf3.get();
     try {
 
         protozero::pbf_writer writer(merged);
 
         // Store ids from 1
-        protozero::pbf_reader pre1(pbf1);
+        protozero::pbf_reader pre1(baton->pbf1_data,baton->pbf1_size);
         while (pre1.next(CACHE_MESSAGE)) {
             protozero::pbf_reader item = pre1.get_message();
             while (item.next(CACHE_ITEM)) {
@@ -323,7 +351,7 @@ void mergeQueue(uv_work_t* req) {
         }
 
         // Store ids from 2
-        protozero::pbf_reader pre2(pbf2);
+        protozero::pbf_reader pre2(baton->pbf2_data,baton->pbf2_size);
         while (pre2.next(CACHE_MESSAGE)) {
             protozero::pbf_reader item = pre2.get_message();
             while (item.next(CACHE_ITEM)) {
@@ -332,7 +360,7 @@ void mergeQueue(uv_work_t* req) {
         }
 
         // No delta writes from message1
-        protozero::pbf_reader message1(pbf1);
+        protozero::pbf_reader message1(baton->pbf1_data,baton->pbf1_size);
         while (message1.next(CACHE_MESSAGE)) {
             protozero::pbf_writer item_writer(writer,1);
             protozero::pbf_reader item = message1.get_message();
@@ -353,7 +381,7 @@ void mergeQueue(uv_work_t* req) {
         }
 
         // No delta writes from message2
-        protozero::pbf_reader message2(pbf2);
+        protozero::pbf_reader message2(baton->pbf2_data,baton->pbf2_size);
         while (message2.next(CACHE_MESSAGE)) {
             protozero::pbf_writer item_writer(writer,1);
             protozero::pbf_reader item = message2.get_message();
@@ -374,7 +402,7 @@ void mergeQueue(uv_work_t* req) {
         }
 
         // Delta writes for ids in both message1 and message2
-        protozero::pbf_reader overlap1(pbf1);
+        protozero::pbf_reader overlap1(baton->pbf1_data,baton->pbf1_size);
         while (overlap1.next(CACHE_MESSAGE)) {
             protozero::pbf_writer item_writer(writer,1);
             protozero::pbf_reader item = overlap1.get_message();
@@ -406,7 +434,7 @@ void mergeQueue(uv_work_t* req) {
                 }
 
                 // Check pbf2 for this id and merge its items if found
-                protozero::pbf_reader overlap2(pbf2);
+                protozero::pbf_reader overlap2(baton->pbf2_data,baton->pbf2_size);
                 while (overlap2.next(CACHE_MESSAGE)) {
                     protozero::pbf_reader item2 = overlap2.get_message();
                     while (item2.next(CACHE_ITEM)) {
@@ -450,8 +478,6 @@ void mergeQueue(uv_work_t* req) {
                 }
             }
         }
-
-        baton->pbf3 = merged;
     } catch (std::exception const& ex) {
         baton->error = ex.what();
     }
@@ -464,12 +490,19 @@ void mergeAfter(uv_work_t* req) {
         v8::Local<v8::Value> argv[1] = { Nan::Error(baton->error.c_str()) };
         Nan::MakeCallback(Nan::GetCurrentContext()->Global(), Nan::New(baton->callback), 1, argv);
     } else {
-        std::string const& merged = baton->pbf3;
-        Local<Object> buf = Nan::CopyBuffer((char*)merged.data(), merged.size()).ToLocalChecked();
-        Local<Value> argv[2] = { Nan::Null(), buf };
+        std::string & merged = *baton->pbf3.get();
+        baton->pbf3.release();
+        v8::Local<v8::Value> argv[2] = { Nan::Null(),
+                                         Nan::NewBuffer(&merged[0],
+                                            merged.size(),
+                                            [](char *, void * hint) {
+                                                delete reinterpret_cast<std::string*>(hint);
+                                            },
+                                            baton->pbf3.get()
+                                         ).ToLocalChecked()
+                                       };
         Nan::MakeCallback(Nan::GetCurrentContext()->Global(), Nan::New(baton->callback), 2, argv);
     }
-    baton->callback.Reset();
     delete baton;
 }
 
@@ -556,14 +589,8 @@ NAN_METHOD(Cache::merge)
     if (obj1->IsNull() || obj1->IsUndefined() || !node::Buffer::HasInstance(obj1)) return Nan::ThrowTypeError("argument 1 must be a Buffer");
     if (obj2->IsNull() || obj2->IsUndefined() || !node::Buffer::HasInstance(obj2)) return Nan::ThrowTypeError("argument 2 must be a Buffer");
 
-    MergeBaton *baton = new MergeBaton();
-    baton->pbf1 = std::string(node::Buffer::Data(obj1),node::Buffer::Length(obj1));
-    baton->pbf2 = std::string(node::Buffer::Data(obj2),node::Buffer::Length(obj2));
-    baton->method = method;
-    baton->callback.Reset(callback.As<Function>());
-    baton->request.data = baton;
+    MergeBaton *baton = new MergeBaton(obj1,obj2,callback,method);
     uv_queue_work(uv_default_loop(), &baton->request, mergeQueue, (uv_after_work_cb)mergeAfter);
-
     info.GetReturnValue().Set(Nan::Undefined());
     return;
 }
@@ -625,10 +652,17 @@ NAN_METHOD(Cache::_set)
     return;
 }
 
+/*
+
+Note: This function will not override data for keys already inserted into the cache
+
+*/
+
+
 NAN_METHOD(Cache::loadSync)
 {
     if (info.Length() < 2) {
-        return Nan::ThrowTypeError("expected at three info: 'buffer', 'type', and 'shard'");
+        return Nan::ThrowTypeError("expected at least three args: 'buffer', 'type', and 'shard'");
     }
     if (!info[0]->IsObject()) {
         return Nan::ThrowTypeError("first argument must be a Buffer");
@@ -650,19 +684,8 @@ NAN_METHOD(Cache::loadSync)
         std::string type = *String::Utf8Value(info[1]->ToString());
         std::string shard = *String::Utf8Value(info[2]->ToString());
         std::string key = type + "-" + shard;
-        Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
-        Cache::memcache & mem = c->cache_;
-        Cache::memcache::iterator itr = mem.find(key);
-        if (itr != mem.end()) {
-            c->cache_.emplace(key,arraycache());
-        }
-        Cache::memcache::iterator itr2 = mem.find(key);
-        if (itr2 != mem.end()) {
-            mem.erase(itr2);
-        }
-        if (!cacheHas(c, key)) {
-            cacheInsert(c, key, std::string(node::Buffer::Data(obj),node::Buffer::Length(obj)));
-        }
+        Cache & c = *node::ObjectWrap::Unwrap<Cache>(info.This());
+        cacheInsert(c, key, node::Buffer::Data(obj), node::Buffer::Length(obj));
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
     }
@@ -847,6 +870,33 @@ struct Context {
     std::vector<Cover> coverList;
     unsigned mask;
     double relev;
+
+    Context(Cover && cov,
+            unsigned mask,
+            double relev)
+     : coverList(),
+       mask(mask),
+       relev(relev) {
+          coverList.emplace_back(std::move(cov));
+       }
+    Context& operator=(Context && c) {
+        coverList = std::move(c.coverList);
+        mask = std::move(c.mask);
+        relev = std::move(c.relev);
+        return *this;
+    }
+    Context(std::vector<Cover> && cl,
+            unsigned mask,
+            double relev)
+     : coverList(std::move(cl)),
+       mask(mask),
+       relev(relev) {}
+
+    Context(Context && c)
+     : coverList(std::move(c.coverList)),
+       mask(std::move(c.mask)),
+       relev(std::move(c.relev)) {}
+
 };
 
 Cover numToCover(uint64_t num) {
@@ -1008,7 +1058,7 @@ double scoredist(double distance, double score) {
     return (score + 1.0) / (std::pow(distance, 1.1) + 1.0);
 }
 
-void coalesceFinalize(CoalesceBaton* baton, std::vector<Context> const& contexts) {
+void coalesceFinalize(CoalesceBaton* baton, std::vector<Context> && contexts) {
     if (contexts.size() > 0) {
         // Coalesce stack, generate relevs.
         double relevMax = contexts[0].relev;
@@ -1031,7 +1081,7 @@ void coalesceFinalize(CoalesceBaton* baton, std::vector<Context> const& contexts
             if (sit != sets.end()) continue;
 
             sets.emplace(feature.coverList[0].tmpid, true);
-            baton->features.emplace_back(feature);
+            baton->features.emplace_back(std::move(contexts[i]));
             total++;
         }
     }
@@ -1143,13 +1193,11 @@ void coalesceSingle(uv_work_t* req) {
             lastid = covers[j].id;
             added++;
 
-            Context context;
-            context.coverList.emplace_back(covers[j]);
-            context.relev = covers[j].relev;
-            contexts.emplace_back(context);
+            // TODO default mask value?
+            contexts.emplace_back(std::move(covers[j]),0,covers[j].relev);
         }
 
-        coalesceFinalize(baton, contexts);
+        coalesceFinalize(baton, std::move(contexts));
     } catch (std::exception const& ex) {
         baton->error = ex.what();
     }
@@ -1262,14 +1310,14 @@ void coalesceMulti(uv_work_t* req) {
 
                 uint64_t zxy = (z * POW2_28) + (cover.x * POW2_14) + (cover.y);
 
-                Context context;
                 // Reserve stackSize for the coverList. The vector
                 // will grow no larger that the size of the input
                 // subqueries that are being coalesced.
-                context.coverList.reserve(stackSize);
-                context.coverList.push_back(std::move(cover));
-                context.relev = cover.relev;
-                context.mask = cover.mask;
+                std::vector<Cover> covers;
+                covers.reserve(stackSize);
+                covers.push_back(std::move(cover));
+                unsigned context_mask = cover.mask;
+                double context_relev = cover.relev;
 
                 for (unsigned a = 0; a < zCacheSize; a++) {
                     uint64_t p = zCache[a];
@@ -1286,17 +1334,17 @@ void coalesceMulti(uv_work_t* req) {
                                 // this cover is functionally identical with previous and
                                 // is more relevant, replace the previous.
                                 if (parent.mask == lastMask && parent.relev > lastRelev) {
-                                    context.coverList.pop_back();
-                                    context.coverList.emplace_back(parent);
-                                    context.relev -= lastRelev;
-                                    context.relev += parent.relev;
+                                    covers.pop_back();
+                                    covers.emplace_back(parent);
+                                    context_relev -= lastRelev;
+                                    context_relev += parent.relev;
                                     lastMask = parent.mask;
                                     lastRelev = parent.relev;
                                 // this cover doesn't overlap with used mask.
-                                } else if (!(context.mask & parent.mask)) {
-                                    context.coverList.emplace_back(parent);
-                                    context.relev += parent.relev;
-                                    context.mask = context.mask | parent.mask;
+                                } else if (!(context_mask & parent.mask)) {
+                                    covers.emplace_back(parent);
+                                    context_relev += parent.relev;
+                                    context_mask = context_mask | parent.mask;
                                     lastMask = parent.mask;
                                     lastRelev = parent.relev;
                                 }
@@ -1307,21 +1355,21 @@ void coalesceMulti(uv_work_t* req) {
 
                 if (last) {
                     // Slightly penalize contexts that have no stacking
-                    if (context.coverList.size() == 1) {
-                        context.relev -= 0.01;
+                    if (covers.size() == 1) {
+                        context_relev -= 0.01;
                     // Slightly penalize contexts in ascending order
-                    } else if (context.coverList[0].mask > context.coverList[1].mask) {
-                        context.relev -= 0.01;
+                    } else if (covers[0].mask > covers[1].mask) {
+                        context_relev -= 0.01;
                     }
-                    contexts.push_back(std::move(context));
+                    contexts.emplace_back(std::move(covers),context_mask,context_relev);
                 } else {
                     cit = coalesced.find(zxy);
                     if (cit == coalesced.end()) {
-                        std::vector<Context> contexts;
-                        contexts.push_back(std::move(context));
-                        coalesced.emplace(zxy, contexts);
+                        std::vector<Context> local_contexts;
+                        local_contexts.emplace_back(std::move(covers),context_mask,context_relev);
+                        coalesced.emplace(zxy, std::move(local_contexts));
                     } else {
-                        cit->second.push_back(std::move(context));
+                        cit->second.emplace_back(std::move(covers),context_mask,context_relev);
                     }
                 }
             }
@@ -1331,12 +1379,12 @@ void coalesceMulti(uv_work_t* req) {
 
         for (auto &matched : coalesced) {
             for (auto &context : matched.second) {
-                contexts.emplace_back(context);
+                contexts.emplace_back(std::move(context));
             }
         }
 
         std::sort(contexts.begin(), contexts.end(), contextSortByRelev);
-        coalesceFinalize(baton, contexts);
+        coalesceFinalize(baton, std::move(contexts));
     } catch (std::exception const& ex) {
        baton->error = ex.what();
     }
@@ -1367,6 +1415,10 @@ Local<Array> contextToArray(Context const& context) {
 void coalesceAfter(uv_work_t* req) {
     Nan::HandleScope scope;
     CoalesceBaton *baton = static_cast<CoalesceBaton *>(req->data);
+
+    for (auto & phrase_match : baton->stack) {
+        phrase_match.cache->_unref();
+    }
 
     if (!baton->error.empty()) {
         v8::Local<v8::Value> argv[1] = { Nan::Error(baton->error.c_str()) };
@@ -1430,8 +1482,9 @@ NAN_METHOD(Cache::coalesce) {
 
             // JS cache reference => cpp
             Local<Object> cache = Local<Object>::Cast(jsStack->Get(Nan::New("cache").ToLocalChecked()));
-            subq.cache = node::ObjectWrap::Unwrap<Cache>(cache);
-
+            Cache * cache_ptr = node::ObjectWrap::Unwrap<Cache>(cache);
+            cache_ptr->_ref();
+            subq.cache = cache_ptr;
             stack.push_back(subq);
         }
         baton->stack = stack;

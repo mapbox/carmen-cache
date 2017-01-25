@@ -37,7 +37,8 @@
                                     ],
                                     "Effect": "Allow",
                                     "Resource": [
-                                        "arn:aws:s3:::mapbox-node-binary/carmen-cache/*"
+                                        "arn:aws:s3:::mapbox-node-binary/carmen-cache/*",
+                                        "arn:aws:s3:::mapbox-node-binary/@mapbox/carmen-cache/*"
                                     ]
                                 }
                             ]
