@@ -568,7 +568,6 @@ test('coalesce args', function(assert) {
             bboxzxy: [1, 0, 0, 1, 0]
         }, function(err, res) {
             assert.ifError(err);
-            console.log("res", res);
             assert.deepEqual(res.length, 2, '2 results: 5/20/7, 2/3/0');
             assert.end();
         });
