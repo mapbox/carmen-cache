@@ -18,7 +18,7 @@
 #include <map>
 #include <list>
 #include <vector>
-#include <queue>
+#include "radix_max_heap.h"
 #pragma clang diagnostic pop
 #include <iostream>
 #include <fstream>

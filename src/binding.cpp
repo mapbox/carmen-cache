@@ -173,14 +173,9 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string id, b
 }
 
 struct sortableGrid {
-    uint64_t lastval;
     protozero::const_varint_iterator<uint64_t> it;
     protozero::const_varint_iterator<uint64_t> end;
 };
-
-inline bool sortableGridSort(const sortableGrid* a, const sortableGrid* b) noexcept {
-    return (a->lastval < b->lastval);
-}
 
 Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::string const& prefix) {
     Cache::intarray array;
@@ -214,7 +209,7 @@ Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::stri
     // Load values from message cache
     std::vector<std::string> messages;
     std::vector<sortableGrid> grids;
-    std::priority_queue<sortableGrid*, std::vector<sortableGrid*>, bool (*)(const sortableGrid*, const sortableGrid*)> priQ(sortableGridSort);
+    radix_max_heap::pair_radix_max_heap<uint64_t, size_t> rh;
     if (cacheHas(c, type)) {
         std::shared_ptr<rocksdb::DB> db = cacheGet(c, type);
 
@@ -238,22 +233,21 @@ Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::stri
             auto vals = item.get_packed_uint64();
 
             if (vals.first != vals.second) {
-                grids.emplace_back(sortableGrid{*(vals.first), vals.first, vals.second});
+                grids.emplace_back(sortableGrid{vals.first, vals.second});
+                rh.push(*(vals.first), grids.size() - 1);
             }
         }
-        for (sortableGrid& grid : grids) {
-            priQ.push(&grid);
-        }
 
-        while (!priQ.empty() && array.size() < 500000) {
-            sortableGrid* next = priQ.top();
-            priQ.pop();
+        while (!rh.empty() && array.size() < 500000) {
+            size_t gridIdx = rh.top_value();
+            uint64_t lastval = rh.top_key();
+            rh.pop();
 
-            array.emplace_back(next->lastval);
-            next->it++;
-            if (next->it != next->end) {
-                next->lastval = next->lastval - *(next->it);
-                priQ.push(next);
+            array.emplace_back(lastval);
+            grids[gridIdx].it++;
+            if (grids[gridIdx].it != grids[gridIdx].end) {
+                lastval = lastval - *(grids[gridIdx].it);
+                rh.push(lastval, gridIdx);
             }
         }
     }
