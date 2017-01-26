@@ -172,6 +172,16 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string id, b
     }
 }
 
+struct sortableGrid {
+    uint64_t lastval;
+    protozero::const_varint_iterator<uint64_t> it;
+    protozero::const_varint_iterator<uint64_t> end;
+};
+
+inline bool sortableGridSort(const sortableGrid* a, const sortableGrid* b) noexcept {
+    return (a->lastval < b->lastval);
+}
+
 Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::string const& prefix) {
     Cache::intarray array;
     uint64_t prefix_length = prefix.length();
@@ -202,6 +212,9 @@ Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::stri
     }
 
     // Load values from message cache
+    std::vector<std::string> messages;
+    std::vector<sortableGrid> grids;
+    std::priority_queue<sortableGrid*, std::vector<sortableGrid*>, bool (*)(const sortableGrid*, const sortableGrid*)> priQ(sortableGridSort);
     if (cacheHas(c, type)) {
         std::shared_ptr<rocksdb::DB> db = cacheGet(c, type);
 
@@ -217,26 +230,34 @@ Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::stri
                 continue;
             }
 
-            std::string message(rit->value().ToString());
+            messages.emplace_back(rit->value().ToString());
+        }
+        for (std::string& message : messages) {
             protozero::pbf_reader item(message);
             item.next(CACHE_ITEM);
-
             auto vals = item.get_packed_uint64();
-            uint64_t lastval = 0;
-            // delta decode values.
-            for (auto it = vals.first; it != vals.second; ++it) {
-                if (lastval == 0) {
-                    lastval = *it;
-                    array.emplace_back(lastval);
-                } else {
-                    lastval = lastval - *it;
-                    array.emplace_back(lastval);
-                }
+
+            if (vals.first != vals.second) {
+                grids.emplace_back(sortableGrid{*(vals.first), vals.first, vals.second});
+            }
+        }
+        for (sortableGrid& grid : grids) {
+            priQ.push(&grid);
+        }
+
+        while (!priQ.empty() && array.size() < 500000) {
+            sortableGrid* next = priQ.top();
+            priQ.pop();
+
+            array.emplace_back(next->lastval);
+            next->it++;
+            if (next->it != next->end) {
+                next->lastval = next->lastval - *(next->it);
+                priQ.push(next);
             }
         }
     }
 
-    std::sort(array.begin(), array.end(), std::greater<uint64_t>());
     return array;
 }
 
@@ -911,7 +932,7 @@ NAN_METHOD(Cache::_benchgetbyprefix)
     if (!info[1]->IsString()) {
         return Nan::ThrowTypeError("second arg must be a String");
     }
-    try {
+    // try {
         std::string type = *String::Utf8Value(info[0]->ToString());
         std::string id = *String::Utf8Value(info[1]->ToString());
 
@@ -923,9 +944,9 @@ NAN_METHOD(Cache::_benchgetbyprefix)
 
         info.GetReturnValue().Set(Nan::New(static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t1).count())));
         return;
-    } catch (std::exception const& ex) {
-        return Nan::ThrowTypeError(ex.what());
-    }
+    // } catch (std::exception const& ex) {
+    //     return Nan::ThrowTypeError(ex.what());
+    // }
 }
 
 NAN_METHOD(Cache::unload)

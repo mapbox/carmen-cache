@@ -18,6 +18,9 @@ for (var i = 0; i < 10; i++) console.log('xl...', c._benchGetByPrefix('grid', 'x
 // verify that we're getting something useful (do after to make sure caches aren't warm before we start)
 console.log('xkfc length', c._get('grid', 'xkfc').length);
 console.log('xstarbucks length (t)', c._get('grid', 'xstarbucks', true).length);
-console.log('xl... length', c._getByPrefix('grid', 'xl').length);
+var gbf = c._getByPrefix('grid', 'xl');
+console.log('xl... length', gbf.length);
+
+if (process.argv[3]) fs.writeFileSync(process.argv[3], JSON.stringify(gbf));
 
 console.log('done');

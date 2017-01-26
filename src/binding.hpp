@@ -18,6 +18,7 @@
 #include <map>
 #include <list>
 #include <vector>
+#include <queue>
 #pragma clang diagnostic pop
 #include <iostream>
 #include <fstream>
