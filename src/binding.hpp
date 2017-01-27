@@ -78,7 +78,7 @@ public:
 #define CACHE_MESSAGE 1
 #define CACHE_ITEM 1
 
-#define SHARD_PREFIX_LENGTH 4
+#define MEMO_PREFIX_LENGTH 4
 
 }
 
