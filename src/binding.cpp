@@ -1275,6 +1275,7 @@ void coalesceMulti(uv_work_t* req) {
 
             Cache::intarray grids = __getTruncated(subq.cache, type, shardId, subq.phrase, 500000);
 
+            bool first = i == 0;
             bool last = i == (stack.size() - 1);
             unsigned short z = subq.zoom;
             auto const& zCache = zoomCache[i];
@@ -1357,7 +1358,7 @@ void coalesceMulti(uv_work_t* req) {
                         context_relev -= 0.01;
                     }
                     contexts.emplace_back(std::move(covers),context_mask,context_relev);
-                } else {
+                } else if (first || covers.size() > 1) {
                     cit = coalesced.find(zxy);
                     if (cit == coalesced.end()) {
                         std::vector<Context> local_contexts;
