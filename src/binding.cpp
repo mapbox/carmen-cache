@@ -1057,10 +1057,11 @@ void coalesceFinalize(CoalesceBaton* baton, std::vector<Context> && contexts) {
         std::size_t total = 0;
         std::map<uint64_t,bool> sets;
         std::map<uint64_t,bool>::iterator sit;
-
+        std::size_t max_contexts = 40;
+        baton->features.reserve(max_contexts);
         for (auto && context : contexts) {
             // Maximum allowance of coalesced features: 40.
-            if (total >= 40) break;
+            if (total >= max_contexts) break;
 
             // Since `coalesced` is sorted by relev desc at first
             // threshold miss we can break the loop.
@@ -1172,20 +1173,22 @@ void coalesceSingle(uv_work_t* req) {
         uint32_t lastid = 0;
         std::size_t added = 0;
         std::vector<Context> contexts;
-        m = covers.size();
-        contexts.reserve(m);
-        for (unsigned long j = 0; j < m; j++) {
+        std::size_t max_contexts = 40;
+        contexts.reserve(max_contexts);
+        for (auto && cover : covers) {
             // Stop at 40 contexts
-            if (added == 40) break;
+            if (added == max_contexts) break;
 
             // Attempt not to add the same feature but by diff cover twice
-            if (lastid == covers[j].id) continue;
+            if (lastid == cover.id) continue;
 
-            lastid = covers[j].id;
+            lastid = cover.id;
             added++;
 
-            // TODO default mask value?
-            contexts.emplace_back(std::move(covers[j]),0,covers[j].relev);
+            double relev = covers.relev;
+            // TODO correct default mask value?
+            unsigned mask = 0;
+            contexts.emplace_back(std::move(covers),mask,relev);
         }
 
         coalesceFinalize(baton, std::move(contexts));
