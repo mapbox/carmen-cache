@@ -1373,9 +1373,9 @@ void coalesceMulti(uv_work_t* req) {
         }
 
         // append coalesced to contexts by moving memory
-        for (auto const& matched : coalesced) {
-            for (auto const&context : matched.second) {
-                contexts.emplace_back(context);
+        for (auto && matched : coalesced) {
+            for (auto &&context : matched.second) {
+                contexts.emplace_back(std::move(context));
             }
         }
 
