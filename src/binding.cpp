@@ -1051,29 +1051,28 @@ double scoredist(unsigned zoom, double distance, double score) {
 }
 
 void coalesceFinalize(CoalesceBaton* baton, std::vector<Context> && contexts) {
-    if (contexts.size() > 0) {
+    if (!contexts.empty()) {
         // Coalesce stack, generate relevs.
         double relevMax = contexts[0].relev;
-        unsigned short total = 0;
+        std::size_t total = 0;
         std::map<uint64_t,bool> sets;
         std::map<uint64_t,bool>::iterator sit;
 
-        for (unsigned short i = 0; i < contexts.size(); i++) {
+        for (auto && context : contexts) {
             // Maximum allowance of coalesced features: 40.
             if (total >= 40) break;
 
-            Context const& feature = contexts[i];
-
             // Since `coalesced` is sorted by relev desc at first
             // threshold miss we can break the loop.
-            if (relevMax - feature.relev >= 0.25) break;
+            if (relevMax - context.relev >= 0.25) break;
 
             // Only collect each feature once.
-            sit = sets.find(feature.coverList[0].tmpid);
+            uint32_t id = context.coverList[0].tmpid;
+            sit = sets.find(id);
             if (sit != sets.end()) continue;
 
-            sets.emplace(feature.coverList[0].tmpid, true);
-            baton->features.emplace_back(std::move(contexts[i]));
+            sets.emplace(id, true);
+            baton->features.emplace_back(std::move(context));
             total++;
         }
     }
