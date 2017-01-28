@@ -1170,7 +1170,7 @@ void coalesceSingle(uv_work_t* req) {
         std::sort(covers.begin(), covers.end(), coverSortByRelev);
 
         uint32_t lastid = 0;
-        unsigned short added = 0;
+        std::size_t added = 0;
         std::vector<Context> contexts;
         m = covers.size();
         contexts.reserve(m);
@@ -1200,7 +1200,7 @@ void coalesceMulti(uv_work_t* req) {
     try {
         std::vector<PhrasematchSubq> &stack = baton->stack;
         std::sort(stack.begin(), stack.end(), subqSortByZoom);
-        unsigned short stackSize = stack.size();
+        std::size_t stackSize = stack.size();
 
         // Cache zoom levels to iterate over as coalesce occurs.
         std::vector<Cache::intarray> zoomCache;
@@ -1265,7 +1265,7 @@ void coalesceMulti(uv_work_t* req) {
         }
 
         std::vector<Context> contexts;
-        unsigned short i = 0;
+        std::size_t i = 0;
         for (auto const& subq : stack) {
             std::string shardId = shard(4, subq.phrase);
 
@@ -1419,7 +1419,7 @@ void coalesceAfter(uv_work_t* req) {
         std::vector<Context> const& features = baton->features;
 
         Local<Array> jsFeatures = Nan::New<Array>(static_cast<int>(features.size()));
-        for (unsigned short i = 0; i < features.size(); i++) {
+        for (std::size_t i = 0; i < features.size(); i++) {
             jsFeatures->Set(i, contextToArray(features[i]));
         }
 
