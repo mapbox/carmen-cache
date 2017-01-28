@@ -861,6 +861,7 @@ struct Context {
     unsigned mask;
     double relev;
 
+    Context(Context const& c) = default;
     Context(Cover && cov,
             unsigned mask,
             double relev)
@@ -1051,29 +1052,29 @@ double scoredist(unsigned zoom, double distance, double score) {
 }
 
 void coalesceFinalize(CoalesceBaton* baton, std::vector<Context> && contexts) {
-    if (contexts.size() > 0) {
+    if (!contexts.empty()) {
         // Coalesce stack, generate relevs.
         double relevMax = contexts[0].relev;
-        unsigned short total = 0;
+        std::size_t total = 0;
         std::map<uint64_t,bool> sets;
         std::map<uint64_t,bool>::iterator sit;
-
-        for (unsigned short i = 0; i < contexts.size(); i++) {
+        std::size_t max_contexts = 40;
+        baton->features.reserve(max_contexts);
+        for (auto && context : contexts) {
             // Maximum allowance of coalesced features: 40.
-            if (total >= 40) break;
-
-            Context const& feature = contexts[i];
+            if (total >= max_contexts) break;
 
             // Since `coalesced` is sorted by relev desc at first
             // threshold miss we can break the loop.
-            if (relevMax - feature.relev >= 0.25) break;
+            if (relevMax - context.relev >= 0.25) break;
 
             // Only collect each feature once.
-            sit = sets.find(feature.coverList[0].tmpid);
+            uint32_t id = context.coverList[0].tmpid;
+            sit = sets.find(id);
             if (sit != sets.end()) continue;
 
-            sets.emplace(feature.coverList[0].tmpid, true);
-            baton->features.emplace_back(std::move(contexts[i]));
+            sets.emplace(id, true);
+            baton->features.emplace_back(std::move(context));
             total++;
         }
     }
@@ -1171,22 +1172,24 @@ void coalesceSingle(uv_work_t* req) {
         std::sort(covers.begin(), covers.end(), coverSortByRelev);
 
         uint32_t lastid = 0;
-        unsigned short added = 0;
+        std::size_t added = 0;
         std::vector<Context> contexts;
-        m = covers.size();
-        contexts.reserve(m);
-        for (unsigned long j = 0; j < m; j++) {
+        std::size_t max_contexts = 40;
+        contexts.reserve(max_contexts);
+        for (auto && cover : covers) {
             // Stop at 40 contexts
-            if (added == 40) break;
+            if (added == max_contexts) break;
 
             // Attempt not to add the same feature but by diff cover twice
-            if (lastid == covers[j].id) continue;
+            if (lastid == cover.id) continue;
 
-            lastid = covers[j].id;
+            lastid = cover.id;
             added++;
 
-            // TODO default mask value?
-            contexts.emplace_back(std::move(covers[j]),0,covers[j].relev);
+            double relev = cover.relev;
+            // TODO correct default mask value?
+            unsigned mask = 0;
+            contexts.emplace_back(std::move(cover),mask,relev);
         }
 
         coalesceFinalize(baton, std::move(contexts));
@@ -1201,7 +1204,7 @@ void coalesceMulti(uv_work_t* req) {
     try {
         std::vector<PhrasematchSubq> &stack = baton->stack;
         std::sort(stack.begin(), stack.end(), subqSortByZoom);
-        unsigned short stackSize = stack.size();
+        std::size_t stackSize = stack.size();
 
         // Cache zoom levels to iterate over as coalesce occurs.
         std::vector<Cache::intarray> zoomCache;
@@ -1266,12 +1269,13 @@ void coalesceMulti(uv_work_t* req) {
         }
 
         std::vector<Context> contexts;
-        unsigned short i = 0;
+        std::size_t i = 0;
         for (auto const& subq : stack) {
             std::string shardId = shard(4, subq.phrase);
 
             Cache::intarray grids = __getTruncated(subq.cache, type, shardId, subq.phrase, 500000);
 
+            bool first = i == 0;
             bool last = i == (stack.size() - 1);
             unsigned short z = subq.zoom;
             auto const& zCache = zoomCache[i];
@@ -1307,7 +1311,7 @@ void coalesceMulti(uv_work_t* req) {
                 // subqueries that are being coalesced.
                 std::vector<Cover> covers;
                 covers.reserve(stackSize);
-                covers.push_back(std::move(cover));
+                covers.push_back(cover);
                 unsigned context_mask = cover.mask;
                 double context_relev = cover.relev;
 
@@ -1354,7 +1358,7 @@ void coalesceMulti(uv_work_t* req) {
                         context_relev -= 0.01;
                     }
                     contexts.emplace_back(std::move(covers),context_mask,context_relev);
-                } else {
+                } else if (first || covers.size() > 1) {
                     cit = coalesced.find(zxy);
                     if (cit == coalesced.end()) {
                         std::vector<Context> local_contexts;
@@ -1369,8 +1373,9 @@ void coalesceMulti(uv_work_t* req) {
             i++;
         }
 
-        for (auto &matched : coalesced) {
-            for (auto &context : matched.second) {
+        // append coalesced to contexts by moving memory
+        for (auto && matched : coalesced) {
+            for (auto &&context : matched.second) {
                 contexts.emplace_back(std::move(context));
             }
         }
@@ -1420,7 +1425,7 @@ void coalesceAfter(uv_work_t* req) {
         std::vector<Context> const& features = baton->features;
 
         Local<Array> jsFeatures = Nan::New<Array>(static_cast<int>(features.size()));
-        for (unsigned short i = 0; i < features.size(); i++) {
+        for (std::size_t i = 0; i < features.size(); i++) {
             jsFeatures->Set(i, contextToArray(features[i]));
         }
 
