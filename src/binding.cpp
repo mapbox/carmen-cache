@@ -1309,7 +1309,7 @@ void coalesceMulti(uv_work_t* req) {
                 // subqueries that are being coalesced.
                 std::vector<Cover> covers;
                 covers.reserve(stackSize);
-                covers.push_back(std::move(cover));
+                covers.push_back(cover);
                 unsigned context_mask = cover.mask;
                 double context_relev = cover.relev;
 
