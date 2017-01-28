@@ -861,6 +861,7 @@ struct Context {
     unsigned mask;
     double relev;
 
+    Context(Context const& c) = default;
     Context(Cover && cov,
             unsigned mask,
             double relev)
@@ -1185,10 +1186,10 @@ void coalesceSingle(uv_work_t* req) {
             lastid = cover.id;
             added++;
 
-            double relev = covers.relev;
+            double relev = cover.relev;
             // TODO correct default mask value?
             unsigned mask = 0;
-            contexts.emplace_back(std::move(covers),mask,relev);
+            contexts.emplace_back(std::move(cover),mask,relev);
         }
 
         coalesceFinalize(baton, std::move(contexts));
@@ -1371,9 +1372,10 @@ void coalesceMulti(uv_work_t* req) {
             i++;
         }
 
-        for (auto &matched : coalesced) {
-            for (auto &context : matched.second) {
-                contexts.emplace_back(std::move(context));
+        // append coalesced to contexts by moving memory
+        for (auto const& matched : coalesced) {
+            for (auto const&context : matched.second) {
+                contexts.emplace_back(context);
             }
         }
 
