@@ -840,7 +840,7 @@ struct PhrasematchSubq {
     uint64_t phrase;
     unsigned short idx;
     unsigned short zoom;
-    unsigned short mask;
+    uint32_t mask;
 };
 
 struct Cover {
@@ -851,19 +851,19 @@ struct Cover {
     unsigned short y;
     unsigned short score;
     unsigned short idx;
-    unsigned short mask;
+    uint32_t mask;
     unsigned distance;
     double scoredist;
 };
 
 struct Context {
     std::vector<Cover> coverList;
-    unsigned mask;
+    uint32_t mask;
     double relev;
 
     Context(Context const& c) = default;
     Context(Cover && cov,
-            unsigned mask,
+            uint32_t mask,
             double relev)
      : coverList(),
        mask(mask),
@@ -877,7 +877,7 @@ struct Context {
         return *this;
     }
     Context(std::vector<Cover> && cl,
-            unsigned mask,
+            uint32_t mask,
             double relev)
      : coverList(std::move(cl)),
        mask(mask),
@@ -1187,8 +1187,7 @@ void coalesceSingle(uv_work_t* req) {
             added++;
 
             double relev = cover.relev;
-            // TODO correct default mask value?
-            unsigned mask = 0;
+            uint32_t mask = 0;
             contexts.emplace_back(std::move(cover),mask,relev);
         }
 
@@ -1312,7 +1311,7 @@ void coalesceMulti(uv_work_t* req) {
                 std::vector<Cover> covers;
                 covers.reserve(stackSize);
                 covers.push_back(cover);
-                unsigned context_mask = cover.mask;
+                uint32_t context_mask = cover.mask;
                 double context_relev = cover.relev;
 
                 for (unsigned a = 0; a < zCacheSize; a++) {
@@ -1323,7 +1322,7 @@ void coalesceMulti(uv_work_t* req) {
                         static_cast<uint64_t>(std::floor(cover.y/s));
                     pit = coalesced.find(pxy);
                     if (pit != coalesced.end()) {
-                        unsigned lastMask = 0;
+                        uint32_t lastMask = 0;
                         double lastRelev = 0.0;
                         for (auto const& parents : pit->second) {
                             for (auto const& parent : parents.coverList) {
@@ -1475,7 +1474,7 @@ NAN_METHOD(Cache::coalesce) {
 
             subq.weight = jsStack->Get(Nan::New("weight").ToLocalChecked())->NumberValue();
             subq.phrase = jsStack->Get(Nan::New("phrase").ToLocalChecked())->IntegerValue();
-            subq.mask = static_cast<unsigned short>(jsStack->Get(Nan::New("mask").ToLocalChecked())->IntegerValue());
+            subq.mask = static_cast<std::uint32_t>(jsStack->Get(Nan::New("mask").ToLocalChecked())->IntegerValue());
 
             // JS cache reference => cpp
             Local<Object> cache = Local<Object>::Cast(jsStack->Get(Nan::New("cache").ToLocalChecked()));
