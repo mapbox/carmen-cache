@@ -698,7 +698,7 @@ test('coalesce args', function(assert) {
     var c = new Cache('c', 0);
 
     var grids = [];
-    for (var i = 1; i < 50e3; i++) grids.push(Grid.encode({
+    for (var i = 1; i < 10e3; i++) grids.push(Grid.encode({
         id: i,
         x: 0,
         y: 0,
