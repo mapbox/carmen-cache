@@ -690,3 +690,102 @@ test('coalesce args', function(assert) {
         });
     });
 })();
+
+// Mask overflow
+(function() {
+    var a = new Cache('a', 0);
+    var b = new Cache('b', 0);
+    var c = new Cache('c', 0);
+
+    var grids = [];
+    for (var i = 1; i < 50e3; i++) grids.push(Grid.encode({
+        id: i,
+        x: 0,
+        y: 0,
+        relev: 1,
+        score: 1
+    }));
+    a._set('grid', 0, 1, grids);
+
+    b._set('grid', 0, 1, [
+        Grid.encode({
+            id: 1,
+            x: 0,
+            y: 0,
+            relev: 1,
+            score: 1
+        })
+    ]);
+    c._set('grid', 0, 1, [
+        Grid.encode({
+            id: 1,
+            x: 0,
+            y: 0,
+            relev: 1,
+            score: 1
+        })
+    ]);
+
+    test('coalesceMulti mask safe', function(assert) {
+        assert.comment('start coalesce (mask: 2)');
+        coalesce([{
+            cache: a,
+            mask: 1 << 2,
+            idx: 0,
+            zoom: 0,
+            weight: 0.33,
+            phrase: 1
+        }, {
+            cache: b,
+            mask: 1 << 0,
+            idx: 1,
+            zoom: 0,
+            weight: 0.33,
+            phrase: 1
+        }, {
+            cache: c,
+            mask: 1 << 1,
+            idx: 2,
+            zoom: 0,
+            weight: 0.33,
+            phrase: 1
+        }], {}, function(err, res) {
+            assert.ifError(err);
+            assert.equal(res.length, 1, 'res length = 1');
+            assert.deepEqual(res[0].map(function(f) { return f.id; }), [1, 1, 1], '0.relev = 0.99');
+            assert.end();
+        });
+    });
+
+    test('coalesceMulti mask overflow', function(assert) {
+        assert.comment('start coalesce (mask: 18)');
+        coalesce([{
+            cache: a,
+            mask: 1 << 18,
+            idx: 0,
+            zoom: 0,
+            weight: 0.33,
+            phrase: 1
+        }, {
+            cache: b,
+            mask: 1 << 0,
+            idx: 1,
+            zoom: 0,
+            weight: 0.33,
+            phrase: 1
+        }, {
+            cache: c,
+            mask: 1 << 1,
+            idx: 2,
+            zoom: 0,
+            weight: 0.33,
+            phrase: 1
+        }], {}, function(err, res) {
+            assert.ifError(err);
+            assert.equal(res.length, 1, 'res length = 1');
+            assert.deepEqual(res[0].map(function(f) { return f.id; }), [1, 1, 1], '0.relev = 0.99');
+            assert.end();
+        });
+    });
+})();
+
