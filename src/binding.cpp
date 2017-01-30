@@ -1037,9 +1037,7 @@ inline double tileDist(double px, double py, unsigned tileX, unsigned tileY, uns
     const double dy = py - tileCenterY;
     const double distance = std::sqrt(dx * dx + dy * dy);
 
-    // convert distance to approximate miles
-    const double earthCircumferenceMiles = 24901.0;
-    return distance / std::pow(2.0, tileZ) * earthCircumferenceMiles;
+    return distance;
 }
 
 struct CoalesceBaton : carmen::noncopyable {
@@ -1055,8 +1053,18 @@ struct CoalesceBaton : carmen::noncopyable {
     std::string error;
 };
 
-double scoredist(double distance, double score) {
-    return (score + 1.0) / (std::pow(distance, 1.1) + 1.0);
+// 32 tiles is about 40 miles at z14.
+// Simulates 40 mile cutoff in carmen.
+double scoredist(unsigned zoom, double distance, double score) {
+    if (distance == 0.0) distance = 0.01;
+    double scoredist = 0;
+    if (zoom >= 14) scoredist = 32.0 / distance;
+    if (zoom == 13) scoredist = 16.0 / distance;
+    if (zoom == 12) scoredist = 8.0 / distance;
+    if (zoom == 11) scoredist = 4.0 / distance;
+    if (zoom == 10) scoredist = 2.0 / distance;
+    if (zoom <= 9)  scoredist = 1.0 / distance;
+    return score > scoredist ? score : scoredist;
 }
 
 void coalesceFinalize(CoalesceBaton* baton, std::vector<Context> && contexts) {
@@ -1151,7 +1159,7 @@ void coalesceSingle(uv_work_t* req) {
             cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
             cover.relev = cover.relev * subq.weight;
             cover.distance = proximity ? tileDist(cx, cy, cover.x, cover.y, cz) : 0;
-            cover.scoredist = proximity ? scoredist(cover.distance, cover.score) : cover.score;
+            cover.scoredist = proximity ? scoredist(cz, cover.distance, cover.score) : cover.score;
 
             // only add cover id if it's got a higer scoredist
             if (lastId == cover.id && cover.scoredist <= lastScoredist) continue;
