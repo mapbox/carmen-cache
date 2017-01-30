@@ -15,7 +15,7 @@
     "protozero": "~1.4.5"
   },
   "devDependencies": {
-    "tape": "3.0.x"
+    "tape": "^4.6.3"
   },
   "main": "./index.js",
   "scripts": {
