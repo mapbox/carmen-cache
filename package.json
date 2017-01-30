@@ -1,7 +1,7 @@
 {
   "name": "@mapbox/carmen-cache",
   "description": "C++ protobuf cache used by carmen",
-  "version": "0.16.2",
+  "version": "0.16.4",
   "url": "http://github.com/mapbox/carmen-cache",
   "author": "Mapbox (https://www.mapbox.com)",
   "license": "BSD",
@@ -15,7 +15,7 @@
     "protozero": "~1.4.5"
   },
   "devDependencies": {
-    "tape": "3.0.x"
+    "tape": "^4.6.3"
   },
   "main": "./index.js",
   "scripts": {
