@@ -1307,7 +1307,7 @@ void coalesceMulti(uv_work_t* req) {
                 if (proximity) {
                     ZXY dxy = pxy2zxy(z, cover.x, cover.y, cz);
                     cover.distance = tileDist(cx, cy, dxy.x, dxy.y, cz);
-                    cover.scoredist = scoredist(cover.distance, cover.score);
+                    cover.scoredist = scoredist(cz, cover.distance, cover.score);
                 } else {
                     cover.distance = 0;
                     cover.scoredist = cover.score;
