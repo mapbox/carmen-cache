@@ -243,6 +243,28 @@ test('coalesce args', function(assert) {
         coalesce([{cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, weight: .5, zoom: 1, phrase: ''}],{},function(){});
     }, /encountered invalid phrase/, 'throws');
 
+    coalesce([
+        {
+            cache: new Cache('a'),
+            mask: -1000,
+            idx: 0,
+            zoom: 0,
+            weight: 0.5,
+            phrase: 1
+        },
+        {
+            cache: new Cache('b'),
+            mask: -1000,
+            idx: 1,
+            zoom: 1,
+            weight: 0.5,
+            phrase: 1
+        }
+    ],{}, function(err, res) {
+            if (err) throw err;
+            assert.ok(res.length == 0)
+    });
+
     assert.end();
 });
 
