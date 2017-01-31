@@ -55,7 +55,6 @@ function run() {
     echo "leak:node::Init" >> ${SUPPRESSION_FILE}
     echo "export LSAN_OPTIONS=suppressions=${SUPPRESSION_FILE}" >> ${config}
     echo "export ASAN_OPTIONS=abort_on_error=1:check_initialization_order=1:detect_stack_use_after_return=1" >> ${config}
-     -fno-sanitize-recover=all
     echo 'export MASON_SANITIZE="-fsanitize=address,undefined -fno-sanitize=vptr,function"' >> ${config}
     echo 'export MASON_SANITIZE_CXXFLAGS="${MASON_SANITIZE} -fno-sanitize=vptr,function -fsanitize-address-use-after-scope -fno-omit-frame-pointer -fno-common"' >> ${config}
     echo 'export MASON_SANITIZE_LDFLAGS="${MASON_SANITIZE}"' >> ${config}
