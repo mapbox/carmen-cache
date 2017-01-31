@@ -1163,7 +1163,7 @@ void coalesceSingle(uv_work_t* req) {
             cover.scoredist = proximity ? scoredist(cz, cover.distance, cover.score) : cover.score;
 
             // only add cover id if it's got a higer scoredist
-            if (lastId == cover.id && cover.scoreDist <= lastScoredist && cover.distance >= lastDistance) continue;
+            if (lastId == cover.id && cover.scoredist <= lastScoredist && cover.distance >= lastDistance) continue;
 
             // short circuit based on relevMax thres
             if (length > 40) {
