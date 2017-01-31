@@ -1151,6 +1151,7 @@ void coalesceSingle(uv_work_t* req) {
         uint32_t lastId = 0;
         double lastRelev = 0;
         double lastScoredist = 0;
+        double lastDistance = 0;
         double minScoredist = std::numeric_limits<double>::max();
         for (unsigned long j = 0; j < m; j++) {
             Cover cover = numToCover(grids[j]);
@@ -1162,7 +1163,7 @@ void coalesceSingle(uv_work_t* req) {
             cover.scoredist = proximity ? scoredist(cz, cover.distance, cover.score) : cover.score;
 
             // only add cover id if it's got a higer scoredist
-            if (lastId == cover.id && cover.scoredist <= lastScoredist) continue;
+            if (lastId == cover.id && cover.scoreDist <= lastScoredist && cover.distance >= lastDistance) continue;
 
             // short circuit based on relevMax thres
             if (length > 40) {
@@ -1183,6 +1184,7 @@ void coalesceSingle(uv_work_t* req) {
             lastId = cover.id;
             lastRelev = cover.relev;
             lastScoredist = cover.scoredist;
+            lastDistance = cover.distance;
         }
 
         std::sort(covers.begin(), covers.end(), coverSortByRelev);
