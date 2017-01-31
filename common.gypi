@@ -34,10 +34,16 @@
         'defines': [
           'NDEBUG'
         ],
+        'cflags_cc' : [
+          '-gline-tables-only'
+        ],
         'xcode_settings': {
           'OTHER_CPLUSPLUSFLAGS!': [
             '-Os',
             '-O2'
+          ],
+          'OTHER_CPLUSPLUSFLAGS': [
+            '-gline-tables-only'
           ],
           'GCC_OPTIMIZATION_LEVEL': '3',
           'GCC_GENERATE_DEBUGGING_SYMBOLS': 'NO',
