@@ -1030,9 +1030,9 @@ inline bool contextSortByRelev(Context const& a, Context const& b) noexcept {
     return (b.coverList[0].id > a.coverList[0].id);
 }
 
-inline double tileDist(double px, double py, unsigned tileX, unsigned tileY, unsigned tileZ) {
-    const double tileCenterX = tileX + 0.5;
-    const double tileCenterY = tileY + 0.5;
+inline double tileDist(double px, double py, unsigned tileX, unsigned tileY) {
+    const double tileCenterX = tileX;
+    const double tileCenterY = tileY;
     const double dx = px - tileCenterX;
     const double dy = py - tileCenterY;
     const double distance = std::sqrt(dx * dx + dy * dy);
@@ -1110,7 +1110,7 @@ void coalesceSingle(uv_work_t* req) {
         double cx;
         double cy;
         if (proximity) {
-            cz = static_cast<unsigned>(baton->centerzxy[0] + 0.5);
+            cz = baton->centerzxy[0];
             cx = baton->centerzxy[1];
             cy = baton->centerzxy[2];
         } else {
@@ -1159,7 +1159,7 @@ void coalesceSingle(uv_work_t* req) {
             cover.idx = subq.idx;
             cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
             cover.relev = cover.relev * subq.weight;
-            cover.distance = proximity ? tileDist(cx, cy, cover.x, cover.y, cz) : 0;
+            cover.distance = proximity ? tileDist(cx, cy, cover.x, cover.y) : 0;
             cover.scoredist = proximity ? scoredist(cz, cover.distance, cover.score) : cover.score;
 
             // only add cover id if it's got a higer scoredist
