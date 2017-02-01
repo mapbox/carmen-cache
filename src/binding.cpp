@@ -1255,7 +1255,7 @@ void coalesceMulti(uv_work_t* req) {
         double cx;
         double cy;
         if (proximity) {
-            cz = static_cast<unsigned>(baton->centerzxy[0] + 0.5);
+            cz = baton->centerzxy[0];
             cx = baton->centerzxy[1];
             cy = baton->centerzxy[2];
         } else {
@@ -1308,7 +1308,7 @@ void coalesceMulti(uv_work_t* req) {
                 cover.relev = cover.relev * subq.weight;
                 if (proximity) {
                     ZXY dxy = pxy2zxy(z, cover.x, cover.y, cz);
-                    cover.distance = tileDist(cx, cy, dxy.x, dxy.y, cz);
+                    cover.distance = tileDist(cx, cy, dxy.x, dxy.y);
                     cover.scoredist = scoredist(cz, cover.distance, cover.score);
                 } else {
                     cover.distance = 0;
