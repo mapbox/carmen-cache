@@ -54,7 +54,7 @@ inline std::vector<std::string> arrayToStrVector(Local<Array> const& array) {
     std::vector<std::string> cpp_array;
     cpp_array.reserve(array->Length());
     for (uint32_t i = 0; i < array->Length(); i++) {
-        std::string js_value = *String::Utf8Value(array->Get(i)->ToString());;
+        std::string js_value = *String::Utf8Value(array->Get(i)->ToString());
         cpp_array.emplace_back(js_value);
     }
     return cpp_array;
@@ -287,6 +287,29 @@ Cache::Cache()
 
 Cache::~Cache() { }
 
+inline void __packVec(Cache::intarray const& varr, std::unique_ptr<rocksdb::DB> const& db, std::string const& key) {
+    std::string message;
+
+    protozero::pbf_writer item_writer(message);
+
+    {
+        // Using new (in protozero 1.3.0) packed writing API
+        // https://github.com/mapbox/protozero/commit/4e7e32ac5350ea6d3dcf78ff5e74faeee513a6e1
+        protozero::packed_field_uint64 field{item_writer, 1};
+        uint64_t lastval = 0;
+        for (auto const& vitem : varr) {
+            if (lastval == 0) {
+                field.add_element(static_cast<uint64_t>(vitem));
+            } else {
+                field.add_element(static_cast<uint64_t>(lastval - vitem));
+            }
+            lastval = vitem;
+        }
+    }
+
+    db->Put(rocksdb::WriteOptions(), key, message);
+}
+
 NAN_METHOD(Cache::pack)
 {
     if (info.Length() < 2) {
@@ -324,87 +347,72 @@ NAN_METHOD(Cache::pack)
         Cache::memcache::const_iterator itr = mem.find(type);
 
         if (itr != mem.end()) {
-            Cache::arraycache memoized_prefixes;
+            std::map<Cache::key_type, std::deque<Cache::value_type>> memoized_prefixes;
 
-            Cache::arraycache const* map = &(itr->second);
-            for (;;) {
-                for (auto const& item : *map) {
-                    std::string message;
-                    message.clear();
+            for (auto const& item : itr->second) {
+                std::cout << item.first << "\n";
 
-                    protozero::pbf_writer item_writer(message);
-                    std::size_t array_size = item.second.size();
-                    if (array_size > 0) {
-                        // make copy of intarray so we can sort without
-                        // modifying the original array
-                        Cache::intarray varr = item.second;
+                std::size_t array_size = item.second.size();
+                if (array_size > 0) {
+                    // make copy of intarray so we can sort without
+                    // modifying the original array
+                    Cache::intarray varr = item.second;
 
-                        // delta-encode values, sorted in descending order.
-                        std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
-                        if (item.first.compare(0, 1, "=") == 0 && varr.size() > 500000) {
-                            // for the prefix memos we're only going to ever use 500k max anyway
-                            std::cout << "resize '" << item.first << "' from " << varr.size() << "to 500k\n";
-                            varr.resize(500000);
+                    // delta-encode values, sorted in descending order.
+                    std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
+
+                    __packVec(varr, db, item.first);
+
+                    std::string prefix = "";
+
+                    // add this to the memoized prefix array too, maybe
+                    auto item_length = item.first.length();
+                    if (item.first.at(item_length - 1) == '.') {
+                        // this is an entry that bans degens
+                        // so only include it if it itself smaller than the
+                        // prefix limit (minus dot), and leave it dot-suffixed
+                        if (item_length <= (MEMO_PREFIX_LENGTH + 1)) {
+                            prefix = "=" + item.first;
                         }
-
-                        {
-                            // Using new (in protozero 1.3.0) packed writing API
-                            // https://github.com/mapbox/protozero/commit/4e7e32ac5350ea6d3dcf78ff5e74faeee513a6e1
-                            protozero::packed_field_uint64 field{item_writer, 1};
-                            uint64_t lastval = 0;
-                            for (auto const& vitem : varr) {
-                                if (lastval == 0) {
-                                    field.add_element(static_cast<uint64_t>(vitem));
-                                } else {
-                                    field.add_element(static_cast<uint64_t>(lastval - vitem));
-                                }
-                                lastval = vitem;
-                            }
-                        }
-
-                        db->Put(rocksdb::WriteOptions(), item.first, message);
-
-                        if (item.first.compare(0, 1, "=") != 0) {
-                            std::string prefix = "";
-
-                            // this is not a memoized prefix, so we must be on the real array
-                            // which means we should add this to the memoized prefix array too, maybe
-                            auto item_length = item.first.length();
-                            if (item.first.at(item_length - 1) == '.') {
-                                // this is an entry that bans degens
-                                // so only include it if it itself smaller than the
-                                // prefix limit (minus dot), and leave it dot-suffixed
-                                if (item_length <= (MEMO_PREFIX_LENGTH + 1)) {
-                                    prefix = "=" + item.first;
-                                }
-                            } else {
-                                // use the full string for things shorter than the limit
-                                // or the prefix otherwise
-                                if (item_length < MEMO_PREFIX_LENGTH) {
-                                    prefix = "=" + item.first;
-                                } else {
-                                    prefix = "=" + item.first.substr(0, MEMO_PREFIX_LENGTH);
-                                }
-                            }
-
-                            if (prefix != "") {
-                                Cache::arraycache::const_iterator mitr = memoized_prefixes.find(prefix);
-                                if (mitr == memoized_prefixes.end()) {
-                                    memoized_prefixes.emplace(prefix, Cache::intarray());
-                                }
-                                Cache::intarray & buf = memoized_prefixes[prefix];
-
-                                buf.reserve(buf.size() + varr.size());
-                                buf.insert(buf.end(), varr.begin(), varr.end());
-                            }
+                    } else {
+                        // use the full string for things shorter than the limit
+                        // or the prefix otherwise
+                        if (item_length < MEMO_PREFIX_LENGTH) {
+                            prefix = "=" + item.first;
+                        } else {
+                            prefix = "=" + item.first.substr(0, MEMO_PREFIX_LENGTH);
                         }
                     }
+
+                    if (prefix != "") {
+                        std::map<Cache::key_type, std::deque<Cache::value_type>>::const_iterator mitr = memoized_prefixes.find(prefix);
+                        if (mitr == memoized_prefixes.end()) {
+                            memoized_prefixes.emplace(prefix, std::deque<Cache::value_type>());
+                        }
+                        std::deque<Cache::value_type> & buf = memoized_prefixes[prefix];
+
+                        buf.insert(buf.end(), varr.begin(), varr.end());
+                    }
                 }
-                if (map == &(itr->second)) {
-                    map = &memoized_prefixes;
-                } else {
-                    break;
+            }
+
+            for (auto const& item : memoized_prefixes) {
+                std::cout << item.first << "\n";
+
+                // copy the deque into a vector so we can sort without
+                // modifying the original array
+                Cache::intarray varr(item.second.begin(), item.second.end());
+
+                // delta-encode values, sorted in descending order.
+                std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
+
+                if (varr.size() > 500000) {
+                    // for the prefix memos we're only going to ever use 500k max anyway
+                    std::cout << "resize '" << item.first << "' from " << varr.size() << "to 500k\n";
+                    varr.resize(500000);
                 }
+
+                __packVec(varr, db, item.first);
             }
         }
         if (existing != NULL) {
