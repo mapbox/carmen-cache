@@ -39,16 +39,6 @@ inline std::vector<unsigned> arrayToVector(Local<Array> const& array) {
     return cpp_array;
 }
 
-inline std::vector<double> arrayToDoubleVector(Local<Array> const& array) {
-    std::vector<double> cpp_array;
-    cpp_array.reserve(array->Length());
-    for (uint32_t i = 0; i < array->Length(); i++) {
-        double js_value = array->Get(i)->NumberValue();
-        cpp_array.emplace_back(js_value);
-    }
-    return cpp_array;
-}
-
 inline Local<Array> vectorToArray(Cache::intarray const& vector) {
     std::size_t size = vector.size();
     Local<Array> array = Nan::New<Array>(static_cast<int>(size));
@@ -1030,12 +1020,12 @@ inline bool contextSortByRelev(Context const& a, Context const& b) noexcept {
     return (b.coverList[0].id > a.coverList[0].id);
 }
 
-inline double tileDist(double px, double py, unsigned tileX, unsigned tileY) {
-    const double tileCenterX = tileX;
-    const double tileCenterY = tileY;
-    const double dx = px - tileCenterX;
-    const double dy = py - tileCenterY;
-    const double distance = std::sqrt(dx * dx + dy * dy);
+inline unsigned tileDist(unsigned px, unsigned py, unsigned tileX, unsigned tileY) {
+    const unsigned tileCenterX = tileX;
+    const unsigned tileCenterY = tileY;
+    const unsigned dx = px - tileCenterX;
+    const unsigned dy = py - tileCenterY;
+    const unsigned distance = dx * dx + dy * dy;
 
     return distance;
 }
@@ -1044,7 +1034,7 @@ struct CoalesceBaton : carmen::noncopyable {
     uv_work_t request;
     // params
     std::vector<PhrasematchSubq> stack;
-    std::vector<double> centerzxy;
+    std::vector<unsigned> centerzxy;
     std::vector<unsigned> bboxzxy;
     Nan::Persistent<v8::Function> callback;
     // return
@@ -1107,8 +1097,8 @@ void coalesceSingle(uv_work_t* req) {
         // proximity (optional)
         bool proximity = !baton->centerzxy.empty();
         unsigned cz;
-        double cx;
-        double cy;
+        unsigned cx;
+        unsigned cy;
         if (proximity) {
             cz = baton->centerzxy[0];
             cx = baton->centerzxy[1];
@@ -1252,8 +1242,8 @@ void coalesceMulti(uv_work_t* req) {
         // proximity (optional)
         bool proximity = baton->centerzxy.size() > 0;
         unsigned cz;
-        double cx;
-        double cy;
+        unsigned cx;
+        unsigned cy;
         if (proximity) {
             cz = baton->centerzxy[0];
             cx = baton->centerzxy[1];
@@ -1510,7 +1500,7 @@ NAN_METHOD(Cache::coalesce) {
         }
         const Local<Object> options = Local<Object>::Cast(info[1]);
         if (options->Has(Nan::New("centerzxy").ToLocalChecked())) {
-            baton->centerzxy = arrayToDoubleVector(Local<Array>::Cast(options->Get(Nan::New("centerzxy").ToLocalChecked())));
+            baton->centerzxy = arrayToVector(Local<Array>::Cast(options->Get(Nan::New("centerzxy").ToLocalChecked())));
         }
 
         if (options->Has(Nan::New("bboxzxy").ToLocalChecked())) {
