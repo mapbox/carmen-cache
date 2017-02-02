@@ -1020,12 +1020,12 @@ inline bool contextSortByRelev(Context const& a, Context const& b) noexcept {
     return (b.coverList[0].id > a.coverList[0].id);
 }
 
-inline unsigned tileDist(unsigned px, unsigned py, unsigned tileX, unsigned tileY) {
+inline double tileDist(unsigned px, unsigned py, unsigned tileX, unsigned tileY) {
     const unsigned tileCenterX = tileX;
     const unsigned tileCenterY = tileY;
     const unsigned dx = px - tileCenterX;
     const unsigned dy = py - tileCenterY;
-    const unsigned distance = dx * dx + dy * dy;
+    const double distance = dx * dx + dy * dy;
 
     return distance;
 }
