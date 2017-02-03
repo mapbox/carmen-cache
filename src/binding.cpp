@@ -1046,7 +1046,6 @@ struct CoalesceBaton : carmen::noncopyable {
 double scoredist(unsigned zoom, double distance, double score) {
     if (distance == 0.0) distance = 0.01;
     double scoredist = 0;
-
     if (zoom >= 13) scoredist = 32.0 / distance;
     if (zoom == 12) scoredist = 24.0 / distance;
     if (zoom == 11) scoredist = 16.0 / distance;
