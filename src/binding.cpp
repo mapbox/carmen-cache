@@ -1021,10 +1021,8 @@ inline bool contextSortByRelev(Context const& a, Context const& b) noexcept {
 }
 
 inline double tileDist(unsigned px, unsigned py, unsigned tileX, unsigned tileY) {
-    const unsigned tileCenterX = tileX;
-    const unsigned tileCenterY = tileY;
-    const double dx = static_cast<double>(px - tileCenterX);
-    const double dy = static_cast<double>(py - tileCenterY);
+    const double dx = static_cast<double>(px - tileX);
+    const double dy = static_cast<double>(py - tileY);
     const double distance = dx * dx + dy * dy;
 
     return distance;
