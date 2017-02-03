@@ -852,7 +852,7 @@ struct Cover {
     unsigned short score;
     unsigned short idx;
     uint32_t mask;
-    unsigned distance;
+    double distance;
     double scoredist;
 };
 
@@ -1020,8 +1020,12 @@ inline bool contextSortByRelev(Context const& a, Context const& b) noexcept {
     return (b.coverList[0].id > a.coverList[0].id);
 }
 
-inline unsigned tileDist(unsigned ax, unsigned bx, unsigned ay, unsigned by) noexcept {
-    return (ax > bx ? ax - bx : bx - ax) + (ay > by ? ay - by : by - ay);
+inline double tileDist(unsigned px, unsigned py, unsigned tileX, unsigned tileY) {
+    const double dx = static_cast<double>(px - tileX);
+    const double dy = static_cast<double>(py - tileY);
+    const double distance = dx * dx + dy * dy;
+
+    return distance;
 }
 
 struct CoalesceBaton : carmen::noncopyable {
@@ -1042,12 +1046,14 @@ struct CoalesceBaton : carmen::noncopyable {
 double scoredist(unsigned zoom, double distance, double score) {
     if (distance == 0.0) distance = 0.01;
     double scoredist = 0;
-    if (zoom >= 14) scoredist = 32.0 / distance;
-    if (zoom == 13) scoredist = 16.0 / distance;
-    if (zoom == 12) scoredist = 8.0 / distance;
-    if (zoom == 11) scoredist = 4.0 / distance;
-    if (zoom == 10) scoredist = 2.0 / distance;
-    if (zoom <= 9)  scoredist = 1.0 / distance;
+    if (zoom >= 13) scoredist = 32.0 / distance;
+    if (zoom == 12) scoredist = 24.0 / distance;
+    if (zoom == 11) scoredist = 16.0 / distance;
+    if (zoom == 10) scoredist = 10.0 / distance;
+    if (zoom == 9)  scoredist = 6.0 / distance;
+    if (zoom == 8)  scoredist = 3.5 / distance;
+    if (zoom == 7)  scoredist = 2.0 / distance;
+    if (zoom <= 6)  scoredist = 1.125 / distance;
     return score > scoredist ? score : scoredist;
 }
 
@@ -1135,6 +1141,7 @@ void coalesceSingle(uv_work_t* req) {
         uint32_t lastId = 0;
         double lastRelev = 0;
         double lastScoredist = 0;
+        double lastDistance = 0;
         double minScoredist = std::numeric_limits<double>::max();
         for (unsigned long j = 0; j < m; j++) {
             Cover cover = numToCover(grids[j]);
@@ -1142,7 +1149,7 @@ void coalesceSingle(uv_work_t* req) {
             cover.idx = subq.idx;
             cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
             cover.relev = cover.relev * subq.weight;
-            cover.distance = proximity ? tileDist(cx, cover.x, cy, cover.y) : 0;
+            cover.distance = proximity ? tileDist(cx, cy, cover.x, cover.y) : 0;
             cover.scoredist = proximity ? scoredist(cz, cover.distance, cover.score) : cover.score;
 
             // only add cover id if it's got a higer scoredist
@@ -1167,6 +1174,7 @@ void coalesceSingle(uv_work_t* req) {
             lastId = cover.id;
             lastRelev = cover.relev;
             lastScoredist = cover.scoredist;
+            lastDistance = cover.distance;
         }
 
         std::sort(covers.begin(), covers.end(), coverSortByRelev);
@@ -1290,7 +1298,7 @@ void coalesceMulti(uv_work_t* req) {
                 cover.relev = cover.relev * subq.weight;
                 if (proximity) {
                     ZXY dxy = pxy2zxy(z, cover.x, cover.y, cz);
-                    cover.distance = tileDist(cx, dxy.x, cy, dxy.y);
+                    cover.distance = tileDist(cx, cy, dxy.x, dxy.y);
                     cover.scoredist = scoredist(cz, cover.distance, cover.score);
                 } else {
                     cover.distance = 0;

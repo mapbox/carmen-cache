@@ -54,7 +54,7 @@ var mp36 = Math.pow(2,36);
             }
             coalesce(stacks, { centerzxy: [14,4893,6001] }, function(err, res) {
                 var checks = true;
-                checks = checks && res.length === 39;
+                checks = checks && res.length === 40;
                 checks = checks && res[0][0].x === 4893;
                 checks = checks && res[0][0].y === 6001;
                 checks = checks && res[0][0].tmpid === 446213;
