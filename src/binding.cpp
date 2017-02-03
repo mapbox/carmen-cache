@@ -1046,12 +1046,15 @@ struct CoalesceBaton : carmen::noncopyable {
 double scoredist(unsigned zoom, double distance, double score) {
     if (distance == 0.0) distance = 0.01;
     double scoredist = 0;
-    if (zoom >= 14) scoredist = 32.0 / distance;
-    if (zoom == 13) scoredist = 16.0 / distance;
-    if (zoom == 12) scoredist = 8.0 / distance;
-    if (zoom == 11) scoredist = 4.0 / distance;
-    if (zoom == 10) scoredist = 2.0 / distance;
-    if (zoom <= 9)  scoredist = 1.0 / distance;
+
+    if (zoom >= 13) scoredist = 32.0 / distance;
+    if (zoom == 12) scoredist = 24.0 / distance;
+    if (zoom == 11) scoredist = 16.0 / distance;
+    if (zoom == 10) scoredist = 10.0 / distance;
+    if (zoom == 9)  scoredist = 6.0 / distance;
+    if (zoom == 8)  scoredist = 3.5 / distance;
+    if (zoom == 7)  scoredist = 2.0 / distance;
+    if (zoom <= 6)  scoredist = 1.125 / distance;
     return score > scoredist ? score : scoredist;
 }
 
@@ -1151,7 +1154,7 @@ void coalesceSingle(uv_work_t* req) {
             cover.scoredist = proximity ? scoredist(cz, cover.distance, cover.score) : cover.score;
 
             // only add cover id if it's got a higer scoredist
-            if (lastId == cover.id && cover.scoredist <= lastScoredist && cover.distance >= lastDistance) continue;
+            if (lastId == cover.id && cover.scoredist <= lastScoredist) continue;
 
             // short circuit based on relevMax thres
             if (length > 40) {
