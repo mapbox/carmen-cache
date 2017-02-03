@@ -350,8 +350,6 @@ NAN_METHOD(Cache::pack)
             std::map<Cache::key_type, std::deque<Cache::value_type>> memoized_prefixes;
 
             for (auto const& item : itr->second) {
-                std::cout << item.first << "\n";
-
                 std::size_t array_size = item.second.size();
                 if (array_size > 0) {
                     // make copy of intarray so we can sort without
@@ -397,8 +395,6 @@ NAN_METHOD(Cache::pack)
             }
 
             for (auto const& item : memoized_prefixes) {
-                std::cout << item.first << "\n";
-
                 // copy the deque into a vector so we can sort without
                 // modifying the original array
                 Cache::intarray varr(item.second.begin(), item.second.end());
@@ -408,7 +404,6 @@ NAN_METHOD(Cache::pack)
 
                 if (varr.size() > 500000) {
                     // for the prefix memos we're only going to ever use 500k max anyway
-                    std::cout << "resize '" << item.first << "' from " << varr.size() << "to 500k\n";
                     varr.resize(500000);
                 }
 
