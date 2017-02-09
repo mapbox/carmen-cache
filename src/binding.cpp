@@ -179,7 +179,7 @@ struct sortableGrid {
 
 Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::string prefix) {
     Cache::intarray array;
-    uint64_t prefix_length = prefix.length();
+    size_t prefix_length = prefix.length();
     const char* prefix_cstr = prefix.c_str();
 
     // Load values from memory cache
@@ -210,8 +210,10 @@ Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::stri
     std::vector<std::string> messages;
     std::vector<sortableGrid> grids;
 
-    if (prefix.length() <= MEMO_PREFIX_LENGTH) {
-        prefix = "=" + prefix.substr(0, MEMO_PREFIX_LENGTH);
+    if (prefix_length <= MEMO_PREFIX_LENGTH_T1) {
+        prefix = "=1" + prefix.substr(0, MEMO_PREFIX_LENGTH_T1);
+    } else if (prefix_length <= MEMO_PREFIX_LENGTH_T2) {
+        prefix = "=2" + prefix.substr(0, MEMO_PREFIX_LENGTH_T2);
     }
     radix_max_heap::pair_radix_max_heap<uint64_t, size_t> rh;
     if (cacheHas(c, type)) {
@@ -361,7 +363,8 @@ NAN_METHOD(Cache::pack)
 
                     __packVec(varr, db, item.first);
 
-                    std::string prefix = "";
+                    std::string prefix_t1 = "";
+                    std::string prefix_t2 = "";
 
                     // add this to the memoized prefix array too, maybe
                     auto item_length = item.first.length();
@@ -369,25 +372,41 @@ NAN_METHOD(Cache::pack)
                         // this is an entry that bans degens
                         // so only include it if it itself smaller than the
                         // prefix limit (minus dot), and leave it dot-suffixed
-                        if (item_length <= (MEMO_PREFIX_LENGTH + 1)) {
-                            prefix = "=" + item.first;
+                        if (item_length <= (MEMO_PREFIX_LENGTH_T1 + 1)) {
+                            prefix_t1 = "=1" + item.first;
+                        } else if (item_length > MEMO_PREFIX_LENGTH_T1 && item_length <= MEMO_PREFIX_LENGTH_T2) {
+                            prefix_t2 = "=2" + item.first;
                         }
                     } else {
                         // use the full string for things shorter than the limit
                         // or the prefix otherwise
-                        if (item_length < MEMO_PREFIX_LENGTH) {
-                            prefix = "=" + item.first;
+                        if (item_length < MEMO_PREFIX_LENGTH_T1) {
+                            prefix_t1 = "=1" + item.first;
                         } else {
-                            prefix = "=" + item.first.substr(0, MEMO_PREFIX_LENGTH);
+                            prefix_t1 = "=1" + item.first.substr(0, MEMO_PREFIX_LENGTH_T1);
+                            if (item_length < MEMO_PREFIX_LENGTH_T2) {
+                                prefix_t2 = "=2" + item.first;
+                            } else {
+                                prefix_t2 = "=2" + item.first.substr(0, MEMO_PREFIX_LENGTH_T2);
+                            }
                         }
                     }
 
-                    if (prefix != "") {
-                        std::map<Cache::key_type, std::deque<Cache::value_type>>::const_iterator mitr = memoized_prefixes.find(prefix);
+                    if (prefix_t1 != "") {
+                        std::map<Cache::key_type, std::deque<Cache::value_type>>::const_iterator mitr = memoized_prefixes.find(prefix_t1);
                         if (mitr == memoized_prefixes.end()) {
-                            memoized_prefixes.emplace(prefix, std::deque<Cache::value_type>());
+                            memoized_prefixes.emplace(prefix_t1, std::deque<Cache::value_type>());
                         }
-                        std::deque<Cache::value_type> & buf = memoized_prefixes[prefix];
+                        std::deque<Cache::value_type> & buf = memoized_prefixes[prefix_t1];
+
+                        buf.insert(buf.end(), varr.begin(), varr.end());
+                    }
+                    if (prefix_t2 != "") {
+                        std::map<Cache::key_type, std::deque<Cache::value_type>>::const_iterator mitr = memoized_prefixes.find(prefix_t2);
+                        if (mitr == memoized_prefixes.end()) {
+                            memoized_prefixes.emplace(prefix_t2, std::deque<Cache::value_type>());
+                        }
+                        std::deque<Cache::value_type> & buf = memoized_prefixes[prefix_t2];
 
                         buf.insert(buf.end(), varr.begin(), varr.end());
                     }
@@ -687,6 +706,7 @@ NAN_METHOD(Cache::list)
             std::unique_ptr<rocksdb::Iterator> it(db->NewIterator(rocksdb::ReadOptions()));
             for (it->SeekToFirst(); it->Valid(); it->Next()) {
                 std::string key_id = it->key().ToString();
+                if (key_id.at(0) == '=') continue;
                 ids->Set(idx++, Nan::New(key_id).ToLocalChecked());
             }
         }

@@ -79,7 +79,8 @@ public:
 #define CACHE_MESSAGE 1
 #define CACHE_ITEM 1
 
-#define MEMO_PREFIX_LENGTH 4
+#define MEMO_PREFIX_LENGTH_T1 4
+#define MEMO_PREFIX_LENGTH_T2 7
 
 }
 
