@@ -7,6 +7,7 @@
 #include <cstring>
 #include <limits>
 #include <algorithm>
+#include <memory>
 
 #include <protozero/pbf_writer.hpp>
 #include <protozero/pbf_reader.hpp>
@@ -90,10 +91,10 @@ inline bool cacheHas(Cache const* c, std::string const& key) {
 }
 
 inline void cacheInsert(Cache * c, std::string const& key, std::shared_ptr<rocksdb::DB> message) {
-    Cache::message_list &list = c->msglist_;
     Cache::message_cache &messages = c->msg_;
     Cache::message_cache::iterator mitr = messages.find(key);
     if (mitr == messages.end()) {
+        Cache::message_list &list = c->msglist_;
         list.emplace_front(std::make_pair(key, std::move(message)));
         messages.emplace(key, list.begin());
         if (list.size() > c->cachesize) {
@@ -740,7 +741,6 @@ NAN_METHOD(Cache::merge)
     baton->callback.Reset(callback.As<Function>());
     baton->request.data = baton;
     uv_queue_work(uv_default_loop(), &baton->request, mergeQueue, (uv_after_work_cb)mergeAfter);
-
     info.GetReturnValue().Set(Nan::Undefined());
     return;
 }
@@ -826,6 +826,13 @@ NAN_METHOD(Cache::_set)
     info.GetReturnValue().Set(Nan::Undefined());
     return;
 }
+
+/*
+
+Note: This function will not override data for keys already inserted into the cache
+
+*/
+
 
 NAN_METHOD(Cache::loadSync)
 {
@@ -1058,7 +1065,7 @@ struct PhrasematchSubq {
     bool prefix;
     unsigned short idx;
     unsigned short zoom;
-    unsigned short mask;
+    uint32_t mask;
 };
 
 struct Cover {
@@ -1069,15 +1076,43 @@ struct Cover {
     unsigned short y;
     unsigned short score;
     unsigned short idx;
-    unsigned short mask;
-    unsigned distance;
+    uint32_t mask;
+    double distance;
     double scoredist;
 };
 
 struct Context {
     std::vector<Cover> coverList;
-    unsigned mask;
+    uint32_t mask;
     double relev;
+
+    Context(Context const& c) = default;
+    Context(Cover && cov,
+            uint32_t mask,
+            double relev)
+     : coverList(),
+       mask(mask),
+       relev(relev) {
+          coverList.emplace_back(std::move(cov));
+       }
+    Context& operator=(Context && c) {
+        coverList = std::move(c.coverList);
+        mask = std::move(c.mask);
+        relev = std::move(c.relev);
+        return *this;
+    }
+    Context(std::vector<Cover> && cl,
+            uint32_t mask,
+            double relev)
+     : coverList(std::move(cl)),
+       mask(mask),
+       relev(relev) {}
+
+    Context(Context && c)
+     : coverList(std::move(c.coverList)),
+       mask(std::move(c.mask)),
+       relev(std::move(c.relev)) {}
+
 };
 
 Cover numToCover(uint64_t num) {
@@ -1210,8 +1245,12 @@ inline bool contextSortByRelev(Context const& a, Context const& b) noexcept {
     return (b.coverList[0].id > a.coverList[0].id);
 }
 
-inline unsigned tileDist(unsigned ax, unsigned bx, unsigned ay, unsigned by) noexcept {
-    return (ax > bx ? ax - bx : bx - ax) + (ay > by ? ay - by : by - ay);
+inline double tileDist(unsigned px, unsigned py, unsigned tileX, unsigned tileY) {
+    const double dx = static_cast<double>(px - tileX);
+    const double dy = static_cast<double>(py - tileY);
+    const double distance = dx * dx + dy * dy;
+
+    return distance;
 }
 
 struct CoalesceBaton : carmen::noncopyable {
@@ -1232,39 +1271,41 @@ struct CoalesceBaton : carmen::noncopyable {
 double scoredist(unsigned zoom, double distance, double score) {
     if (distance == 0.0) distance = 0.01;
     double scoredist = 0;
-    if (zoom >= 14) scoredist = 32.0 / distance;
-    if (zoom == 13) scoredist = 16.0 / distance;
-    if (zoom == 12) scoredist = 8.0 / distance;
-    if (zoom == 11) scoredist = 4.0 / distance;
-    if (zoom == 10) scoredist = 2.0 / distance;
-    if (zoom <= 9)  scoredist = 1.0 / distance;
+    if (zoom >= 13) scoredist = 32.0 / distance;
+    if (zoom == 12) scoredist = 24.0 / distance;
+    if (zoom == 11) scoredist = 16.0 / distance;
+    if (zoom == 10) scoredist = 10.0 / distance;
+    if (zoom == 9)  scoredist = 6.0 / distance;
+    if (zoom == 8)  scoredist = 3.5 / distance;
+    if (zoom == 7)  scoredist = 2.0 / distance;
+    if (zoom <= 6)  scoredist = 1.125 / distance;
     return score > scoredist ? score : scoredist;
 }
 
-void coalesceFinalize(CoalesceBaton* baton, std::vector<Context> const& contexts) {
-    if (contexts.size() > 0) {
+void coalesceFinalize(CoalesceBaton* baton, std::vector<Context> && contexts) {
+    if (!contexts.empty()) {
         // Coalesce stack, generate relevs.
         double relevMax = contexts[0].relev;
-        unsigned short total = 0;
+        std::size_t total = 0;
         std::map<uint64_t,bool> sets;
         std::map<uint64_t,bool>::iterator sit;
-
-        for (unsigned short i = 0; i < contexts.size(); i++) {
+        std::size_t max_contexts = 40;
+        baton->features.reserve(max_contexts);
+        for (auto && context : contexts) {
             // Maximum allowance of coalesced features: 40.
-            if (total >= 40) break;
-
-            Context const& feature = contexts[i];
+            if (total >= max_contexts) break;
 
             // Since `coalesced` is sorted by relev desc at first
             // threshold miss we can break the loop.
-            if (relevMax - feature.relev >= 0.25) break;
+            if (relevMax - context.relev >= 0.25) break;
 
             // Only collect each feature once.
-            sit = sets.find(feature.coverList[0].tmpid);
+            uint32_t id = context.coverList[0].tmpid;
+            sit = sets.find(id);
             if (sit != sets.end()) continue;
 
-            sets.emplace(feature.coverList[0].tmpid, true);
-            baton->features.emplace_back(feature);
+            sets.emplace(id, true);
+            baton->features.emplace_back(std::move(context));
             total++;
         }
     }
@@ -1327,6 +1368,7 @@ void coalesceSingle(uv_work_t* req) {
         uint32_t lastId = 0;
         double lastRelev = 0;
         double lastScoredist = 0;
+        double lastDistance = 0;
         double minScoredist = std::numeric_limits<double>::max();
         for (unsigned long j = 0; j < m; j++) {
             Cover cover = numToCover(grids[j]);
@@ -1334,7 +1376,7 @@ void coalesceSingle(uv_work_t* req) {
             cover.idx = subq.idx;
             cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
             cover.relev = cover.relev * subq.weight;
-            cover.distance = proximity ? tileDist(cx, cover.x, cy, cover.y) : 0;
+            cover.distance = proximity ? tileDist(cx, cy, cover.x, cover.y) : 0;
             cover.scoredist = proximity ? scoredist(cz, cover.distance, cover.score) : cover.score;
 
             // only add cover id if it's got a higer scoredist
@@ -1359,33 +1401,33 @@ void coalesceSingle(uv_work_t* req) {
             lastId = cover.id;
             lastRelev = cover.relev;
             lastScoredist = cover.scoredist;
+            lastDistance = cover.distance;
         }
 
         // sort grids by distance to proximity point
         std::sort(covers.begin(), covers.end(), coverSortByRelev);
 
         uint32_t lastid = 0;
-        unsigned short added = 0;
+        std::size_t added = 0;
         std::vector<Context> contexts;
-        m = covers.size();
-        contexts.reserve(m);
-        for (unsigned long j = 0; j < m; j++) {
+        std::size_t max_contexts = 40;
+        contexts.reserve(max_contexts);
+        for (auto && cover : covers) {
             // Stop at 40 contexts
-            if (added == 40) break;
+            if (added == max_contexts) break;
 
             // Attempt not to add the same feature but by diff cover twice
-            if (lastid == covers[j].id) continue;
+            if (lastid == cover.id) continue;
 
-            lastid = covers[j].id;
+            lastid = cover.id;
             added++;
 
-            Context context;
-            context.coverList.emplace_back(covers[j]);
-            context.relev = covers[j].relev;
-            contexts.emplace_back(context);
+            double relev = cover.relev;
+            uint32_t mask = 0;
+            contexts.emplace_back(std::move(cover),mask,relev);
         }
 
-        coalesceFinalize(baton, contexts);
+        coalesceFinalize(baton, std::move(contexts));
     } catch (std::exception const& ex) {
         baton->error = ex.what();
     }
@@ -1397,7 +1439,7 @@ void coalesceMulti(uv_work_t* req) {
     try {
         std::vector<PhrasematchSubq> &stack = baton->stack;
         std::sort(stack.begin(), stack.end(), subqSortByZoom);
-        unsigned short stackSize = stack.size();
+        std::size_t stackSize = stack.size();
 
         // Cache zoom levels to iterate over as coalesce occurs.
         std::vector<Cache::intarray> zoomCache;
@@ -1462,8 +1504,7 @@ void coalesceMulti(uv_work_t* req) {
         }
 
         std::vector<Context> contexts;
-
-        unsigned short i = 0;
+        std::size_t i = 0;
         for (auto const& subq : stack) {
             // Load and concatenate grids for all ids in `phrases`
             std::string type = "grid";
@@ -1474,6 +1515,7 @@ void coalesceMulti(uv_work_t* req) {
                 grids = __get(subq.cache, type, subq.phrase, true);
             }
 
+            bool first = i == 0;
             bool last = i == (stack.size() - 1);
             unsigned short z = subq.zoom;
             auto const& zCache = zoomCache[i];
@@ -1489,7 +1531,7 @@ void coalesceMulti(uv_work_t* req) {
                 cover.relev = cover.relev * subq.weight;
                 if (proximity) {
                     ZXY dxy = pxy2zxy(z, cover.x, cover.y, cz);
-                    cover.distance = tileDist(cx, dxy.x, cy, dxy.y);
+                    cover.distance = tileDist(cx, cy, dxy.x, dxy.y);
                     cover.scoredist = scoredist(cz, cover.distance, cover.score);
                 } else {
                     cover.distance = 0;
@@ -1504,14 +1546,14 @@ void coalesceMulti(uv_work_t* req) {
 
                 uint64_t zxy = (z * POW2_28) + (cover.x * POW2_14) + (cover.y);
 
-                Context context;
                 // Reserve stackSize for the coverList. The vector
                 // will grow no larger that the size of the input
                 // subqueries that are being coalesced.
-                context.coverList.reserve(stackSize);
-                context.coverList.push_back(std::move(cover));
-                context.relev = cover.relev;
-                context.mask = cover.mask;
+                std::vector<Cover> covers;
+                covers.reserve(stackSize);
+                covers.push_back(cover);
+                uint32_t context_mask = cover.mask;
+                double context_relev = cover.relev;
 
                 for (unsigned a = 0; a < zCacheSize; a++) {
                     uint64_t p = zCache[a];
@@ -1521,24 +1563,24 @@ void coalesceMulti(uv_work_t* req) {
                         static_cast<uint64_t>(std::floor(cover.y/s));
                     pit = coalesced.find(pxy);
                     if (pit != coalesced.end()) {
-                        unsigned lastMask = 0;
+                        uint32_t lastMask = 0;
                         double lastRelev = 0.0;
                         for (auto const& parents : pit->second) {
                             for (auto const& parent : parents.coverList) {
                                 // this cover is functionally identical with previous and
                                 // is more relevant, replace the previous.
                                 if (parent.mask == lastMask && parent.relev > lastRelev) {
-                                    context.coverList.pop_back();
-                                    context.coverList.emplace_back(parent);
-                                    context.relev -= lastRelev;
-                                    context.relev += parent.relev;
+                                    covers.pop_back();
+                                    covers.emplace_back(parent);
+                                    context_relev -= lastRelev;
+                                    context_relev += parent.relev;
                                     lastMask = parent.mask;
                                     lastRelev = parent.relev;
                                 // this cover doesn't overlap with used mask.
-                                } else if (!(context.mask & parent.mask)) {
-                                    context.coverList.emplace_back(parent);
-                                    context.relev += parent.relev;
-                                    context.mask = context.mask | parent.mask;
+                                } else if (!(context_mask & parent.mask)) {
+                                    covers.emplace_back(parent);
+                                    context_relev += parent.relev;
+                                    context_mask = context_mask | parent.mask;
                                     lastMask = parent.mask;
                                     lastRelev = parent.relev;
                                 }
@@ -1549,21 +1591,21 @@ void coalesceMulti(uv_work_t* req) {
 
                 if (last) {
                     // Slightly penalize contexts that have no stacking
-                    if (context.coverList.size() == 1) {
-                        context.relev -= 0.01;
+                    if (covers.size() == 1) {
+                        context_relev -= 0.01;
                     // Slightly penalize contexts in ascending order
-                    } else if (context.coverList[0].mask > context.coverList[1].mask) {
-                        context.relev -= 0.01;
+                    } else if (covers[0].mask > covers[1].mask) {
+                        context_relev -= 0.01;
                     }
-                    contexts.push_back(std::move(context));
-                } else {
+                    contexts.emplace_back(std::move(covers),context_mask,context_relev);
+                } else if (first || covers.size() > 1) {
                     cit = coalesced.find(zxy);
                     if (cit == coalesced.end()) {
-                        std::vector<Context> contexts;
-                        contexts.push_back(std::move(context));
-                        coalesced.emplace(zxy, contexts);
+                        std::vector<Context> local_contexts;
+                        local_contexts.emplace_back(std::move(covers),context_mask,context_relev);
+                        coalesced.emplace(zxy, std::move(local_contexts));
                     } else {
-                        cit->second.push_back(std::move(context));
+                        cit->second.emplace_back(std::move(covers),context_mask,context_relev);
                     }
                 }
             }
@@ -1571,14 +1613,15 @@ void coalesceMulti(uv_work_t* req) {
             i++;
         }
 
-        for (auto &matched : coalesced) {
-            for (auto &context : matched.second) {
-                contexts.emplace_back(context);
+        // append coalesced to contexts by moving memory
+        for (auto && matched : coalesced) {
+            for (auto &&context : matched.second) {
+                contexts.emplace_back(std::move(context));
             }
         }
 
         std::sort(contexts.begin(), contexts.end(), contextSortByRelev);
-        coalesceFinalize(baton, contexts);
+        coalesceFinalize(baton, std::move(contexts));
     } catch (std::exception const& ex) {
        baton->error = ex.what();
     }
@@ -1610,6 +1653,10 @@ void coalesceAfter(uv_work_t* req) {
     Nan::HandleScope scope;
     CoalesceBaton *baton = static_cast<CoalesceBaton *>(req->data);
 
+    for (auto & phrase_match : baton->stack) {
+        phrase_match.cache->_unref();
+    }
+
     if (!baton->error.empty()) {
         v8::Local<v8::Value> argv[1] = { Nan::Error(baton->error.c_str()) };
         Nan::MakeCallback(Nan::GetCurrentContext()->Global(), Nan::New(baton->callback), 1, argv);
@@ -1618,7 +1665,7 @@ void coalesceAfter(uv_work_t* req) {
         std::vector<Context> const& features = baton->features;
 
         Local<Array> jsFeatures = Nan::New<Array>(static_cast<int>(features.size()));
-        for (unsigned short i = 0; i < features.size(); i++) {
+        for (std::size_t i = 0; i < features.size(); i++) {
             jsFeatures->Set(i, contextToArray(features[i]));
         }
 
@@ -1667,15 +1714,15 @@ NAN_METHOD(Cache::coalesce) {
             subq.zoom = static_cast<unsigned short>(_zoom);
 
             subq.weight = jsStack->Get(Nan::New("weight").ToLocalChecked())->NumberValue();
-            subq.phrase = *String::Utf8Value(jsStack->Get(Nan::New("phrase").ToLocalChecked())->ToString());
-
+            subq.phrase = jsStack->Get(Nan::New("phrase").ToLocalChecked())->IntegerValue();
             subq.prefix = jsStack->Get(Nan::New("prefix").ToLocalChecked())->BooleanValue();
-            subq.mask = static_cast<unsigned short>(jsStack->Get(Nan::New("mask").ToLocalChecked())->IntegerValue());
+            subq.mask = static_cast<std::uint32_t>(jsStack->Get(Nan::New("mask").ToLocalChecked())->IntegerValue());
 
             // JS cache reference => cpp
             Local<Object> cache = Local<Object>::Cast(jsStack->Get(Nan::New("cache").ToLocalChecked()));
-            subq.cache = node::ObjectWrap::Unwrap<Cache>(cache);
-
+            Cache * cache_ptr = node::ObjectWrap::Unwrap<Cache>(cache);
+            cache_ptr->_ref();
+            subq.cache = cache_ptr;
             stack.push_back(subq);
         }
         baton->stack = stack;

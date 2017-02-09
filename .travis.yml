@@ -1,4 +1,4 @@
-language: cpp
+language: generic
 
 sudo: false
 
@@ -6,42 +6,39 @@ addons:
   apt:
     sources:
      - ubuntu-toolchain-r-test
-     - llvm-toolchain-precise-3.5
     packages:
-     - clang-3.5
+     - libstdc++-4.9-dev
 
 matrix:
   include:
      # Coverage
      - os: osx
        compiler: clang
-       env: NODE_VERSION="0.10.38" COVERAGE=true
+       env: NODE_VERSION="4" COVERAGE=true
+       osx_image: xcode8.2
      # Linux
      - os: linux
        compiler: clang
-       env: NODE_VERSION="0.12.2" # node abi 14
+       env: NODE_VERSION="0.10" # node abi 11
      - os: linux
        compiler: clang
-       env: NODE_VERSION="0.10.38" # node abi 11
+       env: NODE_VERSION="4" # node abi 46
      - os: linux
        compiler: clang
-       env: NODE_VERSION="4.2.4" # node abi 46
-     - os: linux
-       compiler: clang
-       env: NODE_VERSION="5.4.1" # node abi 47
+       env: NODE_VERSION="6" # node abi 48
      # OS X
      - os: osx
        compiler: clang
-       env: NODE_VERSION="0.12.2" # node abi 14
+       env: NODE_VERSION="0.10" # node abi 11
+       osx_image: xcode8.2
      - os: osx
        compiler: clang
-       env: NODE_VERSION="0.10.38" # node abi 11
+       env: NODE_VERSION="4" # node abi 46
+       osx_image: xcode8.2
      - os: osx
        compiler: clang
-       env: NODE_VERSION="4.2.4" # node abi 46
-     - os: osx
-       compiler: clang
-       env: NODE_VERSION="5.4.1" # node abi 47
+       env: NODE_VERSION="6" # node abi 48
+       osx_image: xcode8.2
 
 env:
   global:
@@ -50,11 +47,14 @@ env:
    - secure: lmfuNtK0/ubV4ZZobgfeKY6DzG41ZciS4a00yCe29jHLxAg+EEmB/qpsW5d1//cC94OKsAySW08xp2uX5wBVvtryaaoiwU7fdKF9DOxHRHieGw/3+m8NNjELkd5hKMKiqDj7l4QPMchzBQR2PQkoG0UMCGUFe+RmzZ2/iCdGHXU=
 
 before_install:
+ # install clang++ via mason
+ - mkdir /tmp/mason && curl -sSfL https://github.com/mapbox/mason/archive/v0.5.0.tar.gz | tar --gunzip --extract --strip-components=1 --directory=/tmp/mason
+ - /tmp/mason/mason install clang++ 3.9.1
+ - export PATH=$(/tmp/mason/mason prefix clang++ 3.9.1)/bin:${PATH}
+ - export CXX=clang++-3.9
  - export COVERAGE=${COVERAGE:-false}
  - mkdir -p $(pwd)/.local
  - if [[ $(uname -s) == 'Linux' ]]; then
-     export CXX="clang++-3.5";
-     export CC="clang-3.5";
      export PYTHONPATH=$(pwd)/.local/lib/python2.7/site-packages;
    else
      export PYTHONPATH=$(pwd)/.local/lib/python/site-packages;

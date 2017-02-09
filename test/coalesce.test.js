@@ -125,9 +125,9 @@ test('coalesce args', function(assert) {
         }, function(err, res) {
             assert.ifError(err);
             assert.deepEqual(res[0].relev, 1, '0.relev');
-            assert.deepEqual(res[0][0], { distance: 0, id: 3, idx: 0, relev: 1.0, score: 1, scoredist: 100, tmpid: 3, x: 3, y: 3 }, '0.0');
+            assert.deepEqual(res[0][0], { distance: 0, id: 3, idx: 0, relev: 1.0, score: 1, scoredist: 112.5, tmpid: 3, x: 3, y: 3 }, '0.0');
             assert.deepEqual(res[1].relev, 1, '1.relev');
-            assert.deepEqual(res[1][0], { distance: 4, id: 1, idx: 0, relev: 1.0, score: 7, scoredist: 7, tmpid: 1, x: 1, y: 1 }, '1.0');
+            assert.deepEqual(res[1][0], { distance: 8, id: 1, idx: 0, relev: 1.0, score: 7, scoredist: 7, tmpid: 1, x: 1, y: 1 }, '1.0');
             assert.deepEqual(res[2].relev, 0.8, '2.relev');
             assert.deepEqual(res[2][0], { distance: 2, id: 2, idx: 0, relev: 0.8, score: 3, scoredist: 3, tmpid: 2, x: 2, y: 2 }, '2.0');
             assert.end();
@@ -289,11 +289,11 @@ test('coalesce args', function(assert) {
             assert.ifError(err);
             // sorts by relev, score
             assert.deepEqual(res[0].relev, 1, '0.relev');
-            assert.deepEqual(res[0][0], { distance: 0, id: 3, idx: 1, relev: 0.5, score: 1, scoredist: 100, tmpid: 33554435, x: 3, y: 3 }, '0.0');
-            assert.deepEqual(res[0][1], { distance: 4, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 1, x: 1, y: 1 }, '0.1');
+            assert.deepEqual(res[0][0], { distance: 0, id: 3, idx: 1, relev: 0.5, score: 1, scoredist: 112.5, tmpid: 33554435, x: 3, y: 3 }, '0.0');
+            assert.deepEqual(res[0][1], { distance: 8, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 1, x: 1, y: 1 }, '0.1');
             assert.deepEqual(res[1].relev, 1, '1.relev');
             assert.deepEqual(res[1][0], { distance: 2, id: 2, idx: 1, relev: 0.5, score: 7, scoredist: 7, tmpid: 33554434, x: 2, y: 2 }, '1.0');
-            assert.deepEqual(res[1][1], { distance: 4, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 1, x: 1, y: 1 }, '1.1');
+            assert.deepEqual(res[1][1], { distance: 8, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 1, x: 1, y: 1 }, '1.1');
             assert.end();
         });
     });
@@ -591,7 +591,6 @@ test('coalesce args', function(assert) {
             bboxzxy: [1, 0, 0, 1, 0]
         }, function(err, res) {
             assert.ifError(err);
-            console.log("res", res);
             assert.deepEqual(res.length, 2, '2 results: 5/20/7, 2/3/0');
             assert.end();
         });
@@ -717,3 +716,102 @@ test('coalesce args', function(assert) {
         });
     });
 })();
+
+// Mask overflow
+(function() {
+    var a = new Cache('a', 0);
+    var b = new Cache('b', 0);
+    var c = new Cache('c', 0);
+
+    var grids = [];
+    for (var i = 1; i < 10e3; i++) grids.push(Grid.encode({
+        id: i,
+        x: 0,
+        y: 0,
+        relev: 1,
+        score: 1
+    }));
+    a._set('grid', 0, 1, grids);
+
+    b._set('grid', 0, 1, [
+        Grid.encode({
+            id: 1,
+            x: 0,
+            y: 0,
+            relev: 1,
+            score: 1
+        })
+    ]);
+    c._set('grid', 0, 1, [
+        Grid.encode({
+            id: 1,
+            x: 0,
+            y: 0,
+            relev: 1,
+            score: 1
+        })
+    ]);
+
+    test('coalesceMulti mask safe', function(assert) {
+        assert.comment('start coalesce (mask: 2)');
+        coalesce([{
+            cache: a,
+            mask: 1 << 2,
+            idx: 0,
+            zoom: 0,
+            weight: 0.33,
+            phrase: 1
+        }, {
+            cache: b,
+            mask: 1 << 0,
+            idx: 1,
+            zoom: 0,
+            weight: 0.33,
+            phrase: 1
+        }, {
+            cache: c,
+            mask: 1 << 1,
+            idx: 2,
+            zoom: 0,
+            weight: 0.33,
+            phrase: 1
+        }], {}, function(err, res) {
+            assert.ifError(err);
+            assert.equal(res.length, 1, 'res length = 1');
+            assert.deepEqual(res[0].map(function(f) { return f.id; }), [1, 1, 1], '0.relev = 0.99');
+            assert.end();
+        });
+    });
+
+    test('coalesceMulti mask overflow', function(assert) {
+        assert.comment('start coalesce (mask: 18)');
+        coalesce([{
+            cache: a,
+            mask: 1 << 18,
+            idx: 0,
+            zoom: 0,
+            weight: 0.33,
+            phrase: 1
+        }, {
+            cache: b,
+            mask: 1 << 0,
+            idx: 1,
+            zoom: 0,
+            weight: 0.33,
+            phrase: 1
+        }, {
+            cache: c,
+            mask: 1 << 1,
+            idx: 2,
+            zoom: 0,
+            weight: 0.33,
+            phrase: 1
+        }], {}, function(err, res) {
+            assert.ifError(err);
+            assert.equal(res.length, 1, 'res length = 1');
+            assert.deepEqual(res[0].map(function(f) { return f.id; }), [1, 1, 1], '0.relev = 0.99');
+            assert.end();
+        });
+    });
+})();
+
