@@ -1745,7 +1745,7 @@ NAN_METHOD(Cache::coalesce) {
             subq.zoom = static_cast<unsigned short>(_zoom);
 
             subq.weight = jsStack->Get(Nan::New("weight").ToLocalChecked())->NumberValue();
-            subq.phrase = jsStack->Get(Nan::New("phrase").ToLocalChecked())->IntegerValue();
+            subq.phrase = *String::Utf8Value(jsStack->Get(Nan::New("phrase").ToLocalChecked())->ToString());
             subq.prefix = jsStack->Get(Nan::New("prefix").ToLocalChecked())->BooleanValue();
             subq.mask = static_cast<std::uint32_t>(jsStack->Get(Nan::New("mask").ToLocalChecked())->IntegerValue());
 

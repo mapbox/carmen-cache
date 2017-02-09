@@ -731,9 +731,9 @@ test('coalesce args', function(assert) {
         relev: 1,
         score: 1
     }));
-    a._set('grid', 0, 1, grids);
+    a._set('grid', '1', grids);
 
-    b._set('grid', 0, 1, [
+    b._set('grid', '1', [
         Grid.encode({
             id: 1,
             x: 0,
@@ -742,7 +742,7 @@ test('coalesce args', function(assert) {
             score: 1
         })
     ]);
-    c._set('grid', 0, 1, [
+    c._set('grid', '1', [
         Grid.encode({
             id: 1,
             x: 0,
@@ -760,21 +760,21 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 0,
             weight: 0.33,
-            phrase: 1
+            phrase: '1'
         }, {
             cache: b,
             mask: 1 << 0,
             idx: 1,
             zoom: 0,
             weight: 0.33,
-            phrase: 1
+            phrase: '1'
         }, {
             cache: c,
             mask: 1 << 1,
             idx: 2,
             zoom: 0,
             weight: 0.33,
-            phrase: 1
+            phrase: '1'
         }], {}, function(err, res) {
             assert.ifError(err);
             assert.equal(res.length, 1, 'res length = 1');
