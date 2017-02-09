@@ -19,6 +19,7 @@
 #include <list>
 #include <vector>
 #include <deque>
+#include <algorithm>
 #include "radix_max_heap.h"
 #pragma clang diagnostic pop
 #include <iostream>

@@ -127,6 +127,7 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string id, b
         std::shared_ptr<rocksdb::DB> db = cacheGet(c, type);
 
         std::string search_id = id;
+        std::vector<size_t> end_positions;
         for (uint32_t i = 0; i < 2; i++) {
             std::string message;
             rocksdb::Status s = db->Get(rocksdb::ReadOptions(), search_id, &message);
@@ -146,6 +147,7 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string id, b
                     }
                 }
             }
+            end_positions.emplace_back(array.size());
             if (i == 0) {
                 if (!ignorePrefixFlag) {
                     break;
@@ -154,6 +156,12 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string id, b
                 }
             }
         }
+
+        if (end_positions.size() == 2 && end_positions[0] != 0 && end_positions[0] != end_positions[1]) {
+            // we've found things for both the non-dot version and the dot version
+            // so we need to merge them so the order is sorted
+            std::inplace_merge(array.begin(), array.begin() + end_positions[0], array.end(), std::greater<uint64_t>());
+        }
         return array;
     } else {
         Cache::arraycache::const_iterator aitr = itr->second.find(id);
@@ -161,13 +169,28 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string id, b
             if (ignorePrefixFlag) {
                 Cache::arraycache::const_iterator aitr2 = itr->second.find(id + ".");
                 if (aitr2 == itr->second.end()) {
+                    // we found neither
                     return array;
                 } else {
+                    // we only found . suffix
                     return aitr2->second;
                 }
             }
             return array;
         } else {
+            if (ignorePrefixFlag) {
+                Cache::arraycache::const_iterator aitr2 = itr->second.find(id + ".");
+                if (aitr2 == itr->second.end()) {
+                    // we found only non-.-suffix
+                    return aitr->second;
+                } else {
+                    // we found both; make a copy
+                    std::vector<uint64_t> combined = aitr->second;
+                    combined.insert(combined.end(), aitr2->second.begin(), aitr2->second.end());
+                    std::inplace_merge(combined.begin(), combined.begin() + aitr->second.size(), combined.end(), std::greater<uint64_t>());
+                    return combined;
+                }
+            }
             return aitr->second;
         }
     }
@@ -205,6 +228,7 @@ Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::stri
                 array.insert(array.end(), item.second.begin(), item.second.end());
             }
         }
+        std::sort(array.begin(), array.end(), std::greater<uint64_t>());
     }
 
     // Load values from message cache

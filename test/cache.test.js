@@ -148,3 +148,41 @@ tape('#unload after load', function(assert) {
     assert.deepEqual(loader.has('term'), false);
     assert.end();
 });
+
+tape('#dot suffix', function(assert) {
+    var cache = new Cache('mem', 1);
+
+    cache._set('grid', 'test', [2,1,0]);
+    cache._set('grid', 'test.', [7,6,5,4]);
+    cache._set('grid', 'something', [4,3,2]);
+    cache._set('grid', 'else.', [9,8,7]);
+
+    // cache A serializes data, cache B loads serialized data.
+    var pack = tmpfile();
+    cache.pack(pack, 'grid');
+    var loader = new Cache('packed', 1);
+    loader.loadSync(pack, 'grid');
+
+    [cache, loader].forEach(function(c) {
+        assert.deepEqual(c._get('grid', 'test'), [2,1,0], 'exact get without dot where both exist for ' + c.id);
+        assert.deepEqual(c._get('grid', 'test.'), [7,6,5,4], 'exact get with dot where both exist for ' + c.id);
+        assert.deepEqual(c._get('grid', 'something'), [4,3,2], 'exact get without dot where non-dot exists for ' + c.id);
+        assert.deepEqual(c._get('grid', 'something.'), undefined, 'exact get with dot where non-dot exists for ' + c.id);
+        assert.deepEqual(c._get('grid', 'else'), undefined, 'exact get without dot where dot exists for ' + c.id);
+        assert.deepEqual(c._get('grid', 'else.'), [9,8,7], 'exact get with dot where dot exists for ' + c.id);
+
+        assert.deepEqual(c._get('grid', 'test', true), [7,6,5,4,2,1,0], 'ignore-prefix get where both exist for ' + c.id);
+        assert.deepEqual(c._get('grid', 'something', true), [4,3,2], 'ignore-prefix get where non-dot exists for ' + c.id);
+        assert.deepEqual(c._get('grid', 'else', true), [9,8,7], 'ignore-prefix get where dot exists for ' + c.id);
+
+        assert.deepEqual(c._getByPrefix('grid', 'te'), [2,1,0], 'partial getbyprefix where both exist for ' + c.id);
+        assert.deepEqual(c._getByPrefix('grid', 'test'), [7,6,5,4,2,1,0], 'complete getbyprefix where both exist for ' + c.id);
+        assert.deepEqual(c._getByPrefix('grid', 'so'), [4,3,2], 'partial getbyprefix where non-dot exists for ' + c.id);
+        assert.deepEqual(c._getByPrefix('grid', 'something'), [4,3,2], 'complete getbyprefix where non-dot exists for ' + c.id);
+        assert.deepEqual(c._getByPrefix('grid', 'el'), undefined, 'partial getbyprefix where dot exists for ' + c.id);
+        assert.deepEqual(c._getByPrefix('grid', 'else'), [9,8,7], 'complete getbyprefix where dot exists for ' + c.id);
+    });
+
+    assert.deepEqual(loader.list('grid'), [ 'else.', 'something', 'test', 'test.' ], 'keys in shard');
+    assert.end();
+});
