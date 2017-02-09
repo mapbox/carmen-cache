@@ -245,7 +245,7 @@ Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::stri
             }
         }
 
-        while (!rh.empty() && array.size() < 500000) {
+        while (!rh.empty() && array.size() < PREFIX_MAX_GRID_LENGTH) {
             size_t gridIdx = rh.top_value();
             uint64_t lastval = rh.top_key();
             rh.pop();
@@ -420,9 +420,9 @@ NAN_METHOD(Cache::pack)
                 // delta-encode values, sorted in descending order.
                 std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
 
-                if (varr.size() > 500000) {
+                if (varr.size() > PREFIX_MAX_GRID_LENGTH) {
                     // for the prefix memos we're only going to ever use 500k max anyway
-                    varr.resize(500000);
+                    varr.resize(PREFIX_MAX_GRID_LENGTH);
                 }
 
                 __packVec(varr, db, item.first);
@@ -634,6 +634,13 @@ void mergeQueue(uv_work_t* req) {
 
             // Sort for proper delta encoding
             std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
+
+            // if this is the merging of a prefix cache entry
+            // (which would start with '=' and have been truncated)
+            // truncate the merged result
+            if (key_id.at(0) == '=' && varr.size() > PREFIX_MAX_GRID_LENGTH) {
+                varr.resize(PREFIX_MAX_GRID_LENGTH);
+            }
 
             // Write varr to merged protobuf
             std::string message;

@@ -83,6 +83,7 @@ public:
 
 #define MEMO_PREFIX_LENGTH_T1 4
 #define MEMO_PREFIX_LENGTH_T2 7
+#define PREFIX_MAX_GRID_LENGTH 500000
 
 }
 
