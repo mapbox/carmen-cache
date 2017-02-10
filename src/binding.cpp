@@ -121,9 +121,42 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string id, b
     Cache::memcache const& mem = c->cache_;
     Cache::memcache::const_iterator itr = mem.find(type);
     Cache::intarray array;
-    if (itr == mem.end()) {
-        if (!cacheHas(c, type)) return array;
 
+    if (itr != mem.end()) {
+        Cache::arraycache::const_iterator aitr = itr->second.find(id);
+        if (aitr == itr->second.end()) {
+            if (ignorePrefixFlag) {
+                Cache::arraycache::const_iterator aitr2 = itr->second.find(id + ".");
+                if (aitr2 != itr->second.end()) {
+                    // we only found . suffix
+                    return aitr2->second;
+                }
+            }
+            // we didn't find the non-.-suffix version and didn't look for the .-suffix version
+        } else {
+            if (ignorePrefixFlag) {
+                Cache::arraycache::const_iterator aitr2 = itr->second.find(id + ".");
+                if (aitr2 == itr->second.end()) {
+                    // we found only non-.-suffix
+                    return aitr->second;
+                } else {
+                    // we found both; make a copy
+                    std::vector<uint64_t> combined = aitr->second;
+                    combined.insert(combined.end(), aitr2->second.begin(), aitr2->second.end());
+                    std::inplace_merge(combined.begin(), combined.begin() + aitr->second.size(), combined.end(), std::greater<uint64_t>());
+                    return combined;
+                }
+            }
+            // we found the non-.-suffix version (but didn't look for the .-suffix version)
+            return aitr->second;
+        }
+    }
+    // if we've made it this far, either we don't have the type in mem, or we do but don't have the key
+    // so check the rocksdb cache
+
+    // ugh this is so complicated
+
+    if (cacheHas(c, type)) {
         std::shared_ptr<rocksdb::DB> db = cacheGet(c, type);
 
         std::string search_id = id;
@@ -163,37 +196,8 @@ Cache::intarray __get(Cache const* c, std::string const& type, std::string id, b
             std::inplace_merge(array.begin(), array.begin() + end_positions[0], array.end(), std::greater<uint64_t>());
         }
         return array;
-    } else {
-        Cache::arraycache::const_iterator aitr = itr->second.find(id);
-        if (aitr == itr->second.end()) {
-            if (ignorePrefixFlag) {
-                Cache::arraycache::const_iterator aitr2 = itr->second.find(id + ".");
-                if (aitr2 == itr->second.end()) {
-                    // we found neither
-                    return array;
-                } else {
-                    // we only found . suffix
-                    return aitr2->second;
-                }
-            }
-            return array;
-        } else {
-            if (ignorePrefixFlag) {
-                Cache::arraycache::const_iterator aitr2 = itr->second.find(id + ".");
-                if (aitr2 == itr->second.end()) {
-                    // we found only non-.-suffix
-                    return aitr->second;
-                } else {
-                    // we found both; make a copy
-                    std::vector<uint64_t> combined = aitr->second;
-                    combined.insert(combined.end(), aitr2->second.begin(), aitr2->second.end());
-                    std::inplace_merge(combined.begin(), combined.begin() + aitr->second.size(), combined.end(), std::greater<uint64_t>());
-                    return combined;
-                }
-            }
-            return aitr->second;
-        }
     }
+    return array;
 }
 
 struct sortableGrid {
@@ -397,7 +401,7 @@ NAN_METHOD(Cache::pack)
                         // prefix limit (minus dot), and leave it dot-suffixed
                         if (item_length <= (MEMO_PREFIX_LENGTH_T1 + 1)) {
                             prefix_t1 = "=1" + item.first;
-                        } else if (item_length > MEMO_PREFIX_LENGTH_T1 && item_length <= MEMO_PREFIX_LENGTH_T2) {
+                        } else if (item_length > (MEMO_PREFIX_LENGTH_T1 + 1) && item_length <= (MEMO_PREFIX_LENGTH_T2 + 1)) {
                             prefix_t2 = "=2" + item.first;
                         }
                     } else {
@@ -459,14 +463,53 @@ NAN_METHOD(Cache::pack)
             for (existingIt->SeekToFirst(); existingIt->Valid(); existingIt->Next()) {
                 // check if we've already written this key from the memcache
                 // and if so, error
+                std::string existingKey = existingIt->key().ToString();
                 std::string tmp;
-                rocksdb::Status s = db->Get(rocksdb::ReadOptions(), existingIt->key(), &tmp);
+                rocksdb::Status s = db->Get(rocksdb::ReadOptions(), existingKey, &tmp);
                 if (s.ok()) {
-                    // we've already gotten this key before and merged it
+                    // we've already gotten this key before
+                    // we get here because addfeature is terrible and needs to die
+                    // but addfeature will manage keys it knows about, so skip those
+                    // we really only need to concern ourselves with magical prefixes
+
+                    if (existingKey.at(0) != '=') continue;
+
+                    // it's a magical prefix key
+                    // so retrieve, unpack, combine, sort, repack
+                    // sidenote: I absolutely hate this
+
+                    std::vector<std::string> messages;
+                    messages.emplace_back(existingIt->value().ToString());
+                    messages.emplace_back(tmp);
+                    Cache::intarray varr;
+
+                    for (auto const& message : messages) {
+                        protozero::pbf_reader item(message);
+                        item.next(CACHE_ITEM);
+
+                        uint64_t lastval = 0;
+                        auto vals = item.get_packed_uint64();
+                        for (auto it = vals.first; it != vals.second; ++it) {
+                            if (lastval == 0) {
+                                lastval = *it;
+                                varr.emplace_back(lastval);
+                            } else {
+                                lastval = lastval - *it;
+                                varr.emplace_back(lastval);
+                            }
+                        }
+                    }
+                    std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
+
+                    // unique-ify
+                    auto last = std::unique(varr.begin(), varr.end());
+                    varr.erase(last, varr.end());
+
+                    __packVec(varr, db, existingKey);
                     continue;
                 }
 
-                db->Put(rocksdb::WriteOptions(), existingIt->key(), existingIt->value());
+                db->Put(rocksdb::WriteOptions(), existingKey, existingIt->value());
             }
         }
         info.GetReturnValue().Set(true);
@@ -715,6 +758,7 @@ NAN_METHOD(Cache::list)
     if (!info[0]->IsString()) {
         return Nan::ThrowTypeError("first argument must be a String");
     }
+
     try {
         std::string type = *String::Utf8Value(info[0]->ToString());
         Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
