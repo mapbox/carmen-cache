@@ -791,21 +791,21 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 0,
             weight: 0.33,
-            phrase: 1
+            phrase: '1'
         }, {
             cache: b,
             mask: 1 << 0,
             idx: 1,
             zoom: 0,
             weight: 0.33,
-            phrase: 1
+            phrase: '1'
         }, {
             cache: c,
             mask: 1 << 1,
             idx: 2,
             zoom: 0,
             weight: 0.33,
-            phrase: 1
+            phrase: '1'
         }], {}, function(err, res) {
             assert.ifError(err);
             assert.equal(res.length, 1, 'res length = 1');
