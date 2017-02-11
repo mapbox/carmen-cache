@@ -1,33 +1,33 @@
 {
-  "name": "@mapbox/carmen-cache",
-  "description": "C++ protobuf cache used by carmen",
-  "version": "0.16.5",
-  "url": "http://github.com/mapbox/carmen-cache",
-  "author": "Mapbox (https://www.mapbox.com)",
-  "license": "BSD",
+  "binary": {
+    "module_name": "carmen", 
+    "host": "https://mapbox-node-binary.s3.amazonaws.com", 
+    "remote_path": "./{name}/v{version}", 
+    "package_name": "{node_abi}-{platform}-{arch}.tar.gz", 
+    "module_path": "./lib/"
+  }, 
+  "name": "@mapbox/carmen-cache", 
+  "license": "BSD-2-Clause", 
+  "author": "Mapbox (https://www.mapbox.com)", 
+  "url": "http://github.com/mapbox/carmen-cache", 
   "repository": {
-    "type": "git",
-    "url": "git://github.com/mapbox/carmen-cache.git"
-  },
+    "url": "git://github.com/mapbox/carmen-cache.git", 
+    "type": "git"
+  }, 
+  "version": "0.16.5", 
   "dependencies": {
-    "nan": "~2.4.0",
-    "node-pre-gyp": "~0.6.32",
+    "node-pre-gyp": "~0.6.32", 
+    "nan": "~2.4.0", 
     "protozero": "~1.4.5"
-  },
+  }, 
+  "scripts": {
+    "test": "tape test/*.test.js", 
+    "install": "node-pre-gyp install --fallback-to-build", 
+    "preinstall": "npm install node-pre-gyp"
+  }, 
   "devDependencies": {
     "tape": "^4.6.3"
-  },
-  "main": "./index.js",
-  "scripts": {
-    "preinstall": "npm install node-pre-gyp",
-    "install": "node-pre-gyp install --fallback-to-build",
-    "test": "tape test/*.test.js"
-  },
-  "binary": {
-    "module_name": "carmen",
-    "module_path": "./lib/",
-    "host": "https://mapbox-node-binary.s3.amazonaws.com",
-    "remote_path": "./{name}/v{version}",
-    "package_name": "{node_abi}-{platform}-{arch}.tar.gz"
-  }
+  }, 
+  "main": "./index.js", 
+  "description": "C++ protobuf cache used by carmen"
 }
