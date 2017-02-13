@@ -1,5 +1,9 @@
 {
   'includes': [ 'common.gypi' ],
+  'make_global_settings': [
+      ['CXX', '<(module_root_dir)/mason_packages/.link/bin/clang++-3.9'],
+      ['LINK', '<(module_root_dir)/mason_packages/.link/bin/clang++-3.9']
+  ],
   'targets': [
     {
       'target_name': 'action_before_build',
