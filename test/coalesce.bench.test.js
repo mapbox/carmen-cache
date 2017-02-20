@@ -16,6 +16,7 @@ var mp36 = Math.pow(2,36);
         weight: 1,
         phrase: '3848571113',
         prefix: false,
+        mask: 1 << 0
     }];
     test('coalesceSingle', function(assert) {
         if (process.env.COVERAGE) return assert.end();
