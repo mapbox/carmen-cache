@@ -57,57 +57,83 @@ test('coalesce args', function(assert) {
         coalesce([valid_subq],undefined,function(){});
     }, /Arg 2 must be an options object/, 'throws');
 
-    assert.throws(function() {
-        coalesce([Object.assign({},valid_subq,{idx:-1})],{},function(){});
-    }, /encountered idx value too large to fit/, 'throws');
+    if (process.versions.node[0] != '0') {
+        assert.throws(function() {
+            coalesce([Object.assign({},valid_subq,{idx:-1})],{},function(){});
+        }, /encountered idx value too large to fit/, 'throws');
 
-    assert.throws(function() {
-        coalesce([Object.assign({},valid_subq,{idx:null})],{},function(){});
-    }, /value must be a number/, 'throws');
+        assert.throws(function() {
+            coalesce([Object.assign({},valid_subq,{idx:null})],{},function(){});
+        }, /value must be a number/, 'throws');
 
-    assert.throws(function() {
-        coalesce([Object.assign({},valid_subq,{zoom:-1})],{},function(){});
-    }, /encountered zoom value too large to fit/, 'throws');
+        assert.throws(function() {
+            coalesce([Object.assign({},valid_subq,{zoom:-1})],{},function(){});
+        }, /encountered zoom value too large to fit/, 'throws');
 
-    assert.throws(function() {
-        coalesce([Object.assign({},valid_subq,{zoom:null})],{},function(){});
-    }, /value must be a number/, 'throws');
+        assert.throws(function() {
+            coalesce([Object.assign({},valid_subq,{zoom:null})],{},function(){});
+        }, /value must be a number/, 'throws');
 
-    assert.throws(function() {
-        coalesce([Object.assign({},valid_subq,{zoom:-1})],{},function(){});
-    }, /encountered zoom value too large to fit/, 'throws');
+        assert.throws(function() {
+            coalesce([Object.assign({},valid_subq,{zoom:-1})],{},function(){});
+        }, /encountered zoom value too large to fit/, 'throws');
 
-    assert.throws(function() {
-        coalesce([Object.assign({},valid_subq,{mask:null})],{},function(){});
-    }, /value must be a number/, 'throws');
+        assert.throws(function() {
+            coalesce([Object.assign({},valid_subq,{mask:null})],{},function(){});
+        }, /value must be a number/, 'throws');
 
-    assert.throws(function() {
-        coalesce([Object.assign({},valid_subq,{mask:-1})],{},function(){});
-    }, /encountered mask value too large to fit/, 'throws');
+        assert.throws(function() {
+            coalesce([Object.assign({},valid_subq,{mask:-1})],{},function(){});
+        }, /encountered mask value too large to fit/, 'throws');
 
-    assert.throws(function() {
-        coalesce([Object.assign({},valid_subq,{weight:null})],{},function(){});
-    }, /weight value must be a number/, 'throws');
+        assert.throws(function() {
+            coalesce([Object.assign({},valid_subq,{weight:null})],{},function(){});
+        }, /weight value must be a number/, 'throws');
 
-    assert.throws(function() {
-        coalesce([Object.assign({},valid_subq,{weight:-1})],{},function(){});
-    }, /encountered weight value too large to fit in double/, 'throws');
+        assert.throws(function() {
+            coalesce([Object.assign({},valid_subq,{weight:-1})],{},function(){});
+        }, /encountered weight value too large to fit in double/, 'throws');
 
-    assert.throws(function() {
-        coalesce([Object.assign({},valid_subq,{phrase:null})],{},function(){});
-    }, /phrase value must be a number/, 'throws');
+        assert.throws(function() {
+            coalesce([Object.assign({},valid_subq,{phrase:null})],{},function(){});
+        }, /phrase value must be a number/, 'throws');
 
-    assert.throws(function() {
-        coalesce([Object.assign({},valid_subq,{phrase:-1})],{},function(){});
-    }, /encountered phrase value too large to fit in uint64_t/, 'throws');
+        assert.throws(function() {
+            coalesce([Object.assign({},valid_subq,{phrase:-1})],{},function(){});
+        }, /encountered phrase value too large to fit in uint64_t/, 'throws');
 
-    assert.throws(function() {
-        coalesce([Object.assign({},valid_subq,{cache:null})],{},function(){});
-    }, /cache value must be a Cache object/, 'throws');
+        assert.throws(function() {
+            coalesce([Object.assign({},valid_subq,{cache:null})],{},function(){});
+        }, /cache value must be a Cache object/, 'throws');
 
-    assert.throws(function() {
-        coalesce([Object.assign({},valid_subq,{cache:{}})],{},function(){});
-    }, /cache value must be a Cache object/, 'throws');
+        assert.throws(function() {
+            coalesce([Object.assign({},valid_subq,{cache:{}})],{},function(){});
+        }, /cache value must be a Cache object/, 'throws');
+
+        var valid_stack = [
+            {
+                cache: new Cache('a'),
+                mask: 1 << 0,
+                idx: 0,
+                zoom: 0,
+                weight: 0.5,
+                phrase: 1
+            },
+            {
+                cache: new Cache('b'),
+                mask: 1 << 1,
+                idx: 1,
+                zoom: 1,
+                weight: 0.5,
+                phrase: 1
+            }
+        ];
+
+        assert.throws(function() {
+            coalesce(valid_stack.concat([Object.assign({},valid_subq,{cache:null})]),{},function(){});
+        }, /cache value must be a Cache object/, 'throws');
+
+    }
 
     assert.throws(function() {
         coalesce([valid_subq], { bboxzxy:null },function(){} );
@@ -152,29 +178,6 @@ test('coalesce args', function(assert) {
     assert.throws(function() {
         coalesce([valid_subq], { centerzxy:[0,0,0] }, 5 );
     }, /Arg 3 must be a callback/, 'throws');
-
-    var valid_stack = [
-        {
-            cache: new Cache('a'),
-            mask: 1 << 0,
-            idx: 0,
-            zoom: 0,
-            weight: 0.5,
-            phrase: 1
-        },
-        {
-            cache: new Cache('b'),
-            mask: 1 << 1,
-            idx: 1,
-            zoom: 1,
-            weight: 0.5,
-            phrase: 1
-        }
-    ];
-
-    assert.throws(function() {
-        coalesce(valid_stack.concat([Object.assign({},valid_subq,{cache:null})]),{},function(){});
-    }, /cache value must be a Cache object/, 'throws');
 
     assert.throws(function() {
         coalesce([{mask: 1 << 0, idx: 1, zoom: 1, weight: .5, phrase: 1}],{},function(){});
