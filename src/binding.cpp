@@ -24,38 +24,6 @@ inline std::string shard(uint64_t level, uint64_t id) {
     return std::to_string(shard_id);
 }
 
-inline std::vector<unsigned> arrayToVector(Local<Array> const& array) {
-    std::vector<unsigned> cpp_array;
-    cpp_array.reserve(array->Length());
-    for (uint32_t i = 0; i < array->Length(); i++) {
-        int64_t js_value = array->Get(i)->IntegerValue();
-        if (js_value < 0 || js_value >= std::numeric_limits<unsigned>::max()) {
-            std::stringstream s;
-            s << "value in array too large (cannot fit '" << js_value << "' in unsigned)";
-            throw std::runtime_error(s.str());
-        }
-        cpp_array.emplace_back(static_cast<unsigned>(js_value));
-    }
-    return cpp_array;
-}
-
-inline Local<Array> vectorToArray(Cache::intarray const& vector) {
-    std::size_t size = vector.size();
-    Local<Array> array = Nan::New<Array>(static_cast<int>(size));
-    for (uint32_t i = 0; i < size; i++) {
-        array->Set(i, Nan::New<Number>(vector[i]));
-    }
-    return array;
-}
-
-inline Local<Object> mapToObject(std::map<std::uint64_t,std::uint64_t> const& map) {
-    Local<Object> object = Nan::New<Object>();
-    for (auto const& item : map) {
-        object->Set(Nan::New<Number>(item.first), Nan::New<Number>(item.second));
-    }
-    return object;
-}
-
 inline std::string cacheGet(Cache const* c, std::string const& key) {
     Cache::message_cache const& messages = c->msg_;
     Cache::message_cache::const_iterator mitr = messages.find(key);
@@ -219,9 +187,12 @@ NAN_METHOD(Cache::pack)
         return Nan::ThrowTypeError("second arg must be an Integer");
     }
     try {
-        std::string type = *String::Utf8Value(info[0]->ToString());
-        std::string shard = *String::Utf8Value(info[1]->ToString());
-        std::string key = type + "-" + shard;
+        Nan::Utf8String utf8_value(info[0]);
+        if (utf8_value.length() < 1) {
+            return Nan::ThrowTypeError("first arg must be a String");
+        }
+        std::string type(*utf8_value);
+        std::string key = type + "-" + std::to_string(info[1]->IntegerValue());
         Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
         Cache::memcache const& mem = c->cache_;
         Cache::memcache::const_iterator itr = mem.find(key);
@@ -505,7 +476,11 @@ NAN_METHOD(Cache::list)
         return Nan::ThrowTypeError("first argument must be a String");
     }
     try {
-        std::string type = *String::Utf8Value(info[0]->ToString());
+        Nan::Utf8String utf8_value(info[0]);
+        if (utf8_value.length() < 1) {
+            return Nan::ThrowTypeError("first arg must be a String");
+        }
+        std::string type(*utf8_value);
         Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
         Cache::memcache const& mem = c->cache_;
         Cache::message_cache const& messages = c->msg_;
@@ -530,8 +505,7 @@ NAN_METHOD(Cache::list)
             info.GetReturnValue().Set(ids);
             return;
         } else if (info.Length() == 2) {
-            std::string shard = *String::Utf8Value(info[1]->ToString());
-            std::string key = type + "-" + shard;
+            std::string key = type + "-" + std::to_string(info[1]->IntegerValue());
             Cache::memcache::const_iterator itr = mem.find(key);
             unsigned idx = 0;
             if (itr != mem.end()) {
@@ -607,9 +581,12 @@ NAN_METHOD(Cache::_set)
         return Nan::ThrowTypeError("an array expected for fourth argument");
     }
     try {
-        std::string type = *String::Utf8Value(info[0]->ToString());
-        std::string shard = *String::Utf8Value(info[1]->ToString());
-        std::string key = type + "-" + shard;
+        Nan::Utf8String utf8_value(info[0]);
+        if (utf8_value.length() < 1) {
+            return Nan::ThrowTypeError("first arg must be a String");
+        }
+        std::string type(*utf8_value);
+        std::string key = type + "-" + std::to_string(info[1]->IntegerValue());
         Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
         Cache::memcache & mem = c->cache_;
         Cache::memcache::const_iterator itr = mem.find(key);
@@ -671,9 +648,12 @@ NAN_METHOD(Cache::loadSync)
         return Nan::ThrowTypeError("third arg 'shard' must be an Integer");
     }
     try {
-        std::string type = *String::Utf8Value(info[1]->ToString());
-        std::string shard = *String::Utf8Value(info[2]->ToString());
-        std::string key = type + "-" + shard;
+        Nan::Utf8String utf8_value(info[1]);
+        if (utf8_value.length() < 1) {
+            return Nan::ThrowTypeError("first arg must be a String");
+        }
+        std::string type(*utf8_value);
+        std::string key = type + "-" + std::to_string(info[2]->IntegerValue());
         Cache & c = *node::ObjectWrap::Unwrap<Cache>(info.This());
         cacheInsert(c, key, node::Buffer::Data(obj), node::Buffer::Length(obj));
     } catch (std::exception const& ex) {
@@ -695,9 +675,12 @@ NAN_METHOD(Cache::has)
         return Nan::ThrowTypeError("second arg must be an Integer");
     }
     try {
-        std::string type = *String::Utf8Value(info[0]->ToString());
-        std::string shard = *String::Utf8Value(info[1]->ToString());
-        std::string key = type + "-" + shard;
+        Nan::Utf8String utf8_value(info[0]);
+        if (utf8_value.length() < 1) {
+            return Nan::ThrowTypeError("first arg must be a String");
+        }
+        std::string type(*utf8_value);
+        std::string key = type + "-" + std::to_string(info[1]->IntegerValue());
         Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
         Cache::memcache const& mem = c->cache_;
         Cache::memcache::const_iterator itr = mem.find(key);
@@ -733,8 +716,12 @@ NAN_METHOD(Cache::_get)
         return Nan::ThrowTypeError("third arg must be a positive Integer");
     }
     try {
-        std::string type = *String::Utf8Value(info[0]->ToString());
-        std::string shard = *String::Utf8Value(info[1]->ToString());
+        Nan::Utf8String utf8_value(info[0]);
+        if (utf8_value.length() < 1) {
+            return Nan::ThrowTypeError("first arg must be a String");
+        }
+        std::string type(*utf8_value);
+        std::string shard = std::to_string(info[1]->IntegerValue());
         int64_t id = info[2]->IntegerValue();
         if (id < 0) {
             return Nan::ThrowTypeError("third arg must be a positive Integer");
@@ -743,7 +730,12 @@ NAN_METHOD(Cache::_get)
         Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
         Cache::intarray vector = __get(c, type, shard, id2);
         if (!vector.empty()) {
-            info.GetReturnValue().Set(vectorToArray(vector));
+            std::size_t size = vector.size();
+            Local<Array> array = Nan::New<Array>(static_cast<int>(size));
+            for (uint32_t i = 0; i < size; ++i) {
+                array->Set(i, Nan::New<Number>(vector[i]));
+            }
+            info.GetReturnValue().Set(array);
             return;
         } else {
             info.GetReturnValue().Set(Nan::Undefined());
@@ -767,9 +759,12 @@ NAN_METHOD(Cache::unload)
     }
     bool hit = false;
     try {
-        std::string type = *String::Utf8Value(info[0]->ToString());
-        std::string shard = *String::Utf8Value(info[1]->ToString());
-        std::string key = type + "-" + shard;
+        Nan::Utf8String utf8_value(info[0]);
+        if (utf8_value.length() < 1) {
+            return Nan::ThrowTypeError("first arg must be a String");
+        }
+        std::string type(*utf8_value);
+        std::string key = type + "-" + std::to_string(info[1]->IntegerValue());
         Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
         Cache::memcache & mem = c->cache_;
         Cache::memcache::iterator itr = mem.find(key);
@@ -835,12 +830,26 @@ constexpr uint64_t POW2_3 = static_cast<uint64_t>(_pow(2.0,3));
 constexpr uint64_t POW2_2 = static_cast<uint64_t>(_pow(2.0,2));
 
 struct PhrasematchSubq {
+    PhrasematchSubq(carmen::Cache *c,
+                    double w,
+                    uint64_t p,
+                    unsigned short i,
+                    unsigned short z,
+                    uint32_t m) :
+        cache(c),
+        weight(w),
+        phrase(p),
+        idx(i),
+        zoom(z),
+        mask(m) {}
     carmen::Cache *cache;
     double weight;
     uint64_t phrase;
     unsigned short idx;
     unsigned short zoom;
     uint32_t mask;
+    PhrasematchSubq& operator=(PhrasematchSubq && c) = default;
+    PhrasematchSubq(PhrasematchSubq && c) = default;
 };
 
 struct Cover {
@@ -1420,8 +1429,9 @@ void coalesceAfter(uv_work_t* req) {
     Nan::HandleScope scope;
     CoalesceBaton *baton = static_cast<CoalesceBaton *>(req->data);
 
-    for (auto & phrase_match : baton->stack) {
-        phrase_match.cache->_unref();
+    // Reference count the cache objects
+    for (auto & subq : baton->stack) {
+       subq.cache->_unref();
     }
 
     if (!baton->error.empty()) {
@@ -1445,86 +1455,213 @@ void coalesceAfter(uv_work_t* req) {
 }
 NAN_METHOD(Cache::coalesce) {
     // PhrasematchStack (js => cpp)
+    if (info.Length() < 3) {
+        return Nan::ThrowTypeError("Expects 3 arguments: a PhrasematchSubq array, an option object, and a callback");
+    }
+
     if (!info[0]->IsArray()) {
         return Nan::ThrowTypeError("Arg 1 must be a PhrasematchSubq array");
     }
-    CoalesceBaton *baton = new CoalesceBaton();
 
+    Local<Array> array = Local<Array>::Cast(info[0]);
+    auto array_length = array->Length();
+    if (array_length < 1) {
+        return Nan::ThrowTypeError("Arg 1 must be an array with one or more PhrasematchSubq objects");
+    }
+
+    // Options object (js => cpp)
+    Local<Value> options_val = info[1];
+    if (!options_val->IsObject()) {
+        return Nan::ThrowTypeError("Arg 2 must be an options object");
+    }
+    Local<Object> options = options_val->ToObject();
+
+    // callback
+    Local<Value> callback = info[2];
+    if (!callback->IsFunction()) {
+        return Nan::ThrowTypeError("Arg 3 must be a callback function");
+    }
+
+    // We use unique_ptr here to manage the heap allocated CoalesceBaton
+    // If an error is thrown the unique_ptr will go out of scope and delete
+    // its underlying baton.
+    // If no error is throw we release the underlying baton pointer before
+    // heading into the threadpool since we assume it will be deleted manually in coalesceAfter
+    std::unique_ptr<CoalesceBaton> baton_ptr = std::make_unique<CoalesceBaton>();
+    CoalesceBaton* baton = baton_ptr.get();
     try {
-        std::vector<PhrasematchSubq> stack;
-        const Local<Array> array = Local<Array>::Cast(info[0]);
-        for (uint32_t i = 0; i < array->Length(); i++) {
+        for (uint32_t i = 0; i < array_length; i++) {
             Local<Value> val = array->Get(i);
             if (!val->IsObject()) {
-                delete baton;
                 return Nan::ThrowTypeError("All items in array must be valid PhrasematchSubq objects");
             }
             Local<Object> jsStack = val->ToObject();
             if (jsStack->IsNull() || jsStack->IsUndefined()) {
-                delete baton;
                 return Nan::ThrowTypeError("All items in array must be valid PhrasematchSubq objects");
             }
-            PhrasematchSubq subq;
 
-            int64_t _idx = jsStack->Get(Nan::New("idx").ToLocalChecked())->IntegerValue();
-            if (_idx < 0 || _idx > std::numeric_limits<unsigned short>::max()) {
-                delete baton;
-                return Nan::ThrowTypeError("encountered idx value too large to fit in unsigned short");
+            double weight;
+            uint64_t phrase;
+            unsigned short idx;
+            unsigned short zoom;
+            uint32_t mask;
+
+            // TODO: this is verbose: we could write some generic functions to do this robust conversion per type
+            if (!jsStack->Has(Nan::New("idx").ToLocalChecked())) {
+                return Nan::ThrowTypeError("missing idx property");
+            } else {
+                Local<Value> prop_val = jsStack->Get(Nan::New("idx").ToLocalChecked());
+                if (!prop_val->IsNumber()) {
+                    return Nan::ThrowTypeError("idx value must be a number");
+                }
+                int64_t _idx = prop_val->IntegerValue();
+                if (_idx < 0 || _idx > std::numeric_limits<unsigned short>::max()) {
+                    return Nan::ThrowTypeError("encountered idx value too large to fit in unsigned short");
+                }
+                idx = static_cast<unsigned short>(_idx);
             }
-            subq.idx = static_cast<unsigned short>(_idx);
 
-            int64_t _zoom = jsStack->Get(Nan::New("zoom").ToLocalChecked())->IntegerValue();
-            if (_zoom < 0 || _zoom > std::numeric_limits<unsigned short>::max()) {
-                delete baton;
-                return Nan::ThrowTypeError("encountered zoom value too large to fit in unsigned short");
+            if (!jsStack->Has(Nan::New("zoom").ToLocalChecked())) {
+                return Nan::ThrowTypeError("missing zoom property");
+            } else {
+                Local<Value> prop_val = jsStack->Get(Nan::New("zoom").ToLocalChecked());
+                if (!prop_val->IsNumber()) {
+                    return Nan::ThrowTypeError("zoom value must be a number");
+                }
+                int64_t _zoom = prop_val->IntegerValue();
+                if (_zoom < 0 || _zoom > std::numeric_limits<unsigned short>::max()) {
+                    return Nan::ThrowTypeError("encountered zoom value too large to fit in unsigned short");
+                }
+                zoom = static_cast<unsigned short>(_zoom);
             }
-            subq.zoom = static_cast<unsigned short>(_zoom);
 
-            subq.weight = jsStack->Get(Nan::New("weight").ToLocalChecked())->NumberValue();
-            subq.phrase = jsStack->Get(Nan::New("phrase").ToLocalChecked())->IntegerValue();
-            subq.mask = static_cast<std::uint32_t>(jsStack->Get(Nan::New("mask").ToLocalChecked())->IntegerValue());
+            if (!jsStack->Has(Nan::New("weight").ToLocalChecked())) {
+                return Nan::ThrowTypeError("missing weight property");
+            } else {
+                Local<Value> prop_val = jsStack->Get(Nan::New("weight").ToLocalChecked());
+                if (!prop_val->IsNumber()) {
+                    return Nan::ThrowTypeError("weight value must be a number");
+                }
+                double _weight = prop_val->NumberValue();
+                if (_weight < 0 || _weight > std::numeric_limits<double>::max()) {
+                    return Nan::ThrowTypeError("encountered weight value too large to fit in double");
+                }
+                weight = _weight;
+            }
 
-            // JS cache reference => cpp
-            Local<Object> cache = Local<Object>::Cast(jsStack->Get(Nan::New("cache").ToLocalChecked()));
-            Cache * cache_ptr = node::ObjectWrap::Unwrap<Cache>(cache);
-            cache_ptr->_ref();
-            subq.cache = cache_ptr;
-            stack.push_back(subq);
+            if (!jsStack->Has(Nan::New("phrase").ToLocalChecked())) {
+                return Nan::ThrowTypeError("missing phrase property");
+            } else {
+                Local<Value> prop_val = jsStack->Get(Nan::New("phrase").ToLocalChecked());
+                if (!prop_val->IsNumber()) {
+                    return Nan::ThrowTypeError("phrase value must be a number");
+                }
+                double _phrase = prop_val->NumberValue();
+                if (_phrase < 0 || _phrase > std::numeric_limits<uint64_t>::max()) {
+                    return Nan::ThrowTypeError("encountered phrase value too large to fit in uint64_t");
+                }
+                phrase = static_cast<uint64_t>(_phrase);
+            }
+
+            if (!jsStack->Has(Nan::New("mask").ToLocalChecked())) {
+                return Nan::ThrowTypeError("missing mask property");
+            } else {
+                Local<Value> prop_val = jsStack->Get(Nan::New("mask").ToLocalChecked());
+                if (!prop_val->IsNumber()) {
+                    return Nan::ThrowTypeError("mask value must be a number");
+                }
+                int64_t _mask = prop_val->IntegerValue();
+                if (_mask < 0 || _mask > std::numeric_limits<uint32_t>::max()) {
+                    return Nan::ThrowTypeError("encountered mask value too large to fit in uint32_t");
+                }
+                mask = static_cast<uint32_t>(_mask);
+            }
+
+            if (!jsStack->Has(Nan::New("cache").ToLocalChecked())) {
+                return Nan::ThrowTypeError("missing cache property");
+            } else {
+                Local<Value> prop_val = jsStack->Get(Nan::New("cache").ToLocalChecked());
+                if (!prop_val->IsObject()) {
+                    return Nan::ThrowTypeError("cache value must be a Cache object");
+                }
+                Local<Object> _cache = prop_val->ToObject();
+                if (_cache->IsNull() || _cache->IsUndefined() || !Nan::New(Cache::constructor)->HasInstance(prop_val)) {
+                    return Nan::ThrowTypeError("cache value must be a Cache object");
+                }
+                baton->stack.emplace_back(
+                    node::ObjectWrap::Unwrap<Cache>(_cache),
+                    weight,
+                    phrase,
+                    idx,
+                    zoom,
+                    mask
+                );
+            }
         }
-        baton->stack = stack;
 
-        // Options object (js => cpp)
-        if (!info[1]->IsObject()) {
-            delete baton;
-            return Nan::ThrowTypeError("Arg 2 must be an options object");
-        }
-        const Local<Object> options = Local<Object>::Cast(info[1]);
         if (options->Has(Nan::New("centerzxy").ToLocalChecked())) {
-            baton->centerzxy = arrayToVector(Local<Array>::Cast(options->Get(Nan::New("centerzxy").ToLocalChecked())));
+            Local<Value> c_array = options->Get(Nan::New("centerzxy").ToLocalChecked());
+            if (!c_array->IsArray()) {
+                return Nan::ThrowTypeError("centerzxy must be an array");
+            }
+            Local<Array> carray = Local<Array>::Cast(c_array);
+            if (carray->Length() != 3) {
+                return Nan::ThrowTypeError("centerzxy must be an array of 3 numbers");
+            }
+            baton->centerzxy.reserve(carray->Length());
+            for (uint32_t i = 0; i < carray->Length(); ++i) {
+                Local<Value> item = carray->Get(i);
+                if (!item->IsNumber()) {
+                    return Nan::ThrowTypeError("centerzxy values must be number");
+                }
+                int64_t a_val = item->IntegerValue();
+                if (a_val < 0 || a_val > std::numeric_limits<uint32_t>::max()) {
+                    return Nan::ThrowTypeError("encountered centerzxy value too large to fit in uint32_t");
+                }
+                baton->centerzxy.emplace_back(static_cast<uint32_t>(a_val));
+            }
         }
 
         if (options->Has(Nan::New("bboxzxy").ToLocalChecked())) {
-            baton->bboxzxy = arrayToVector(Local<Array>::Cast(options->Get(Nan::New("bboxzxy").ToLocalChecked())));
+            Local<Value> c_array = options->Get(Nan::New("bboxzxy").ToLocalChecked());
+            if (!c_array->IsArray()) {
+                return Nan::ThrowTypeError("bboxzxy must be an array");
+            }
+            Local<Array> carray = Local<Array>::Cast(c_array);
+            if (carray->Length() != 5) {
+                return Nan::ThrowTypeError("bboxzxy must be an array of 5 numbers");
+            }
+            baton->bboxzxy.reserve(carray->Length());
+            for (uint32_t i = 0; i < carray->Length(); ++i) {
+                Local<Value> item = carray->Get(i);
+                if (!item->IsNumber()) {
+                    return Nan::ThrowTypeError("bboxzxy values must be number");
+                }
+                int64_t a_val = item->IntegerValue();
+                if (a_val < 0 || a_val > std::numeric_limits<uint32_t>::max()) {
+                    return Nan::ThrowTypeError("encountered bboxzxy value too large to fit in uint32_t");
+                }
+                baton->bboxzxy.emplace_back(static_cast<uint32_t>(a_val));
+            }
         }
-
-        // callback
-        if (!info[2]->IsFunction()) {
-            delete baton;
-            return Nan::ThrowTypeError("Arg 3 must be a callback function");
-        }
-        Local<Value> callback = info[2];
+        
         baton->callback.Reset(callback.As<Function>());
 
         // queue work
         baton->request.data = baton;
+        // Release the managed baton
+        baton_ptr.release();
+        // Reference count the cache objects
+        for (auto & subq : baton->stack) {
+           subq.cache->_ref();
+        }
         // optimization: for stacks of 1, use coalesceSingle
-        if (stack.size() == 1) {
+        if (baton->stack.size() == 1) {
             uv_queue_work(uv_default_loop(), &baton->request, coalesceSingle, (uv_after_work_cb)coalesceAfter);
         } else {
             uv_queue_work(uv_default_loop(), &baton->request, coalesceMulti, (uv_after_work_cb)coalesceAfter);
         }
     } catch (std::exception const& ex) {
-        delete baton;
         return Nan::ThrowTypeError(ex.what());
     }
 
