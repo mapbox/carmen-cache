@@ -41,13 +41,13 @@ test('coalesce args', function(assert) {
     }, /All items in array must be valid PhrasematchSubq objects/, 'throws');
 
     var valid_subq = {
-             cache: new Cache('a'),
-             mask: 1 << 0,
-             idx: 0,
-             zoom: 2,
-             weight: 1,
-             phrase: '1',
-             prefix: false
+        cache: new Cache('a'),
+        mask: 1 << 0,
+        idx: 0,
+        zoom: 2,
+        weight: 1,
+        phrase: 'a',
+        prefix: false
     };
 
     assert.throws(function() {
@@ -98,6 +98,10 @@ test('coalesce args', function(assert) {
         assert.throws(function() {
             coalesce([Object.assign({},valid_subq,{phrase:null})],{},function(){});
         }, /phrase value must be a string/, 'throws');
+
+        assert.throws(function() {
+            coalesce([Object.assign({},valid_subq,{phrase:''})],{},function(){});
+        }, /encountered invalid phrase/, 'throws');
 
         assert.throws(function() {
             coalesce([Object.assign({},valid_subq,{cache:null})],{},function(){});
@@ -221,6 +225,10 @@ test('coalesce args', function(assert) {
     assert.throws(function() {
         coalesce([{cache: new Cache('b'), mask: 1 << 0, idx: 1, weight: '', zoom: 1, phrase: '1', prefix: false}],{},function(){});
     }, /weight value must be a number/, 'throws');
+
+    assert.throws(function() {
+        coalesce([{cache: new Cache('b'), mask: 1 << 0, idx: 1, weight: .5, zoom: 1, phrase: ''}],{},function(){});
+    }, /encountered invalid phrase/, 'throws');
 
     assert.end();
 });
