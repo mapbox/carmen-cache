@@ -231,10 +231,10 @@ void RocksDBCache::Initialize(Handle<Object> target) {
     t->InstanceTemplate()->SetInternalFieldCount(1);
     t->SetClassName(Nan::New("RocksDBCache").ToLocalChecked());
     Nan::SetPrototypeMethod(t, "pack", RocksDBCache::pack);
-    Nan::SetPrototypeMethod(t, "merge", merge);
     Nan::SetPrototypeMethod(t, "list", RocksDBCache::list);
     Nan::SetPrototypeMethod(t, "_get", _get);
     Nan::SetPrototypeMethod(t, "_getByPrefix", _getbyprefix);
+    Nan::SetMethod(t, "merge", merge);
     target->Set(Nan::New("RocksDBCache").ToLocalChecked(), t->GetFunction());
     constructor.Reset(t);
 }
@@ -270,7 +270,7 @@ inline void __packVec(intarray const& varr, std::unique_ptr<rocksdb::DB> const& 
 
 NAN_METHOD(MemoryCache::pack)
 {
-    if (info.Length() < 2) {
+    if (info.Length() < 1) {
         return Nan::ThrowTypeError("expected one info: 'filename'");
     }
     if (!info[0]->IsString()) {
@@ -382,7 +382,7 @@ NAN_METHOD(MemoryCache::pack)
 
 NAN_METHOD(RocksDBCache::pack)
 {
-    if (info.Length() < 2) {
+    if (info.Length() < 1) {
         return Nan::ThrowTypeError("expected one info: 'filename'");
     }
     if (!info[0]->IsString()) {
@@ -658,19 +658,11 @@ void mergeAfter(uv_work_t* req) {
 
 NAN_METHOD(MemoryCache::list)
 {
-    if (info.Length() < 1) {
-        return Nan::ThrowTypeError("expected one arg: 'type'");
-    }
-    if (!info[0]->IsString()) {
-        return Nan::ThrowTypeError("first argument must be a String");
-    }
-
     try {
         Nan::Utf8String utf8_value(info[0]);
         if (utf8_value.length() < 1) {
             return Nan::ThrowTypeError("first arg must be a String");
         }
-        std::string type(*utf8_value);
         MemoryCache* c = node::ObjectWrap::Unwrap<MemoryCache>(info.This());
         Local<Array> ids = Nan::New<Array>();
 
@@ -690,19 +682,7 @@ NAN_METHOD(MemoryCache::list)
 
 NAN_METHOD(RocksDBCache::list)
 {
-    if (info.Length() < 1) {
-        return Nan::ThrowTypeError("expected one arg: 'type'");
-    }
-    if (!info[0]->IsString()) {
-        return Nan::ThrowTypeError("first argument must be a String");
-    }
-
     try {
-        Nan::Utf8String utf8_value(info[0]);
-        if (utf8_value.length() < 1) {
-            return Nan::ThrowTypeError("first arg must be a String");
-        }
-        std::string type(*utf8_value);
         RocksDBCache* c = node::ObjectWrap::Unwrap<RocksDBCache>(info.This());
         Local<Array> ids = Nan::New<Array>();
 
@@ -753,7 +733,7 @@ NAN_METHOD(RocksDBCache::merge)
 
 NAN_METHOD(MemoryCache::_set)
 {
-    if (info.Length() < 3) {
+    if (info.Length() < 2) {
         return Nan::ThrowTypeError("expected two info: 'id', 'data'");
     }
     if (!info[0]->IsString()) {
@@ -804,29 +784,20 @@ NAN_METHOD(MemoryCache::_set)
 template <typename T>
 inline NAN_METHOD(_genericget)
 {
-    if (info.Length() < 2) {
-        return Nan::ThrowTypeError("expected two info: type and id");
+    if (info.Length() < 1) {
+        return Nan::ThrowTypeError("expected one info: id");
     }
     if (!info[0]->IsString()) {
         return Nan::ThrowTypeError("first arg must be a String");
     }
-    if (!info[1]->IsString()) {
-        return Nan::ThrowTypeError("second arg must be a String");
-    }
     try {
-        Nan::Utf8String utf8_type(info[0]);
-        if (utf8_type.length() < 1) {
-            return Nan::ThrowTypeError("first arg must be a String");
-        }
-        std::string type(*utf8_type);
-
-        Nan::Utf8String utf8_id(info[1]);
+        Nan::Utf8String utf8_id(info[0]);
         if (utf8_id.length() < 1) {
-            return Nan::ThrowTypeError("second arg must be a String");
+            return Nan::ThrowTypeError("first arg must be a String");
         }
         std::string id(*utf8_id);
 
-        bool ignorePrefixFlag = (info.Length() >= 3 && info[2]->IsBoolean()) ? info[2]->BooleanValue() : false;
+        bool ignorePrefixFlag = (info.Length() >= 2 && info[1]->IsBoolean()) ? info[1]->BooleanValue() : false;
 
         T* c = node::ObjectWrap::Unwrap<T>(info.This());
         intarray vector = __get(c, id, ignorePrefixFlag);
@@ -858,25 +829,16 @@ NAN_METHOD(RocksDBCache::_get) {
 template <typename T>
 inline NAN_METHOD(_genericgetbyprefix)
 {
-    if (info.Length() < 2) {
-        return Nan::ThrowTypeError("expected two info: type and id");
+    if (info.Length() < 1) {
+        return Nan::ThrowTypeError("expected one info: id");
     }
     if (!info[0]->IsString()) {
         return Nan::ThrowTypeError("first arg must be a String");
     }
-    if (!info[1]->IsString()) {
-        return Nan::ThrowTypeError("second arg must be a String");
-    }
     try {
-        Nan::Utf8String utf8_type(info[0]);
-        if (utf8_type.length() < 1) {
-            return Nan::ThrowTypeError("first arg must be a String");
-        }
-        std::string type(*utf8_type);
-
-        Nan::Utf8String utf8_id(info[1]);
+        Nan::Utf8String utf8_id(info[0]);
         if (utf8_id.length() < 1) {
-            return Nan::ThrowTypeError("second arg must be a String");
+            return Nan::ThrowTypeError("first arg must be a String");
         }
         std::string id(*utf8_id);
 

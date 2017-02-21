@@ -1,6 +1,6 @@
-var Cache = require('../index.js').Cache;
+var Cache = require('../index.js').MemoryCache;
 var Grid = require('./grid.js');
-var coalesce = require('../index.js').Cache.coalesce;
+var coalesce = require('../index.js').coalesce;
 var test = require('tape');
 var mp36 = Math.pow(2,36);
 var fs = require('fs');
@@ -16,12 +16,11 @@ if (!fs.existsSync(megashard)) {
     var writer = new Cache('writer');
     var ids = [];
     for (var i = 0; i < 100; i++) ids.push(i);
-    for (var i = 0; i < Math.pow(2,18); i++) writer._set('grid', "...." + i, ids);
-    writer.pack(megashard, 'grid');
+    for (var i = 0; i < Math.pow(2,18); i++) writer._set("...." + i, ids);
+    writer.pack(megashard);
 }
 
-var c = new Cache('cache');
-c.loadSync(megashard, 'grid');
+var c = new Cache('cache', megashard);
 
 // Benchmark loading many phrases
 var phrases = [];
