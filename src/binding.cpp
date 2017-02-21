@@ -150,7 +150,6 @@ intarray __getbyprefix(MemoryCache const* c, std::string prefix) {
 intarray __getbyprefix(RocksDBCache const* c, std::string prefix) {
     intarray array;
     size_t prefix_length = prefix.length();
-    const char* prefix_cstr = prefix.c_str();
 
     // Load values from message cache
     std::vector<std::string> messages;
@@ -216,7 +215,6 @@ void MemoryCache::Initialize(Handle<Object> target) {
     Nan::SetPrototypeMethod(t, "_set", _set);
     Nan::SetPrototypeMethod(t, "_get", _get);
     Nan::SetPrototypeMethod(t, "_getByPrefix", _getbyprefix);
-    Nan::SetMethod(t, "coalesce", coalesce);
     target->Set(Nan::New("MemoryCache").ToLocalChecked(), t->GetFunction());
     constructor.Reset(t);
 }
@@ -237,7 +235,6 @@ void RocksDBCache::Initialize(Handle<Object> target) {
     Nan::SetPrototypeMethod(t, "list", RocksDBCache::list);
     Nan::SetPrototypeMethod(t, "_get", _get);
     Nan::SetPrototypeMethod(t, "_getByPrefix", _getbyprefix);
-    Nan::SetMethod(t, "coalesce", coalesce);
     target->Set(Nan::New("RocksDBCache").ToLocalChecked(), t->GetFunction());
     constructor.Reset(t);
 }
@@ -999,9 +996,9 @@ constexpr uint64_t POW2_14 = static_cast<uint64_t>(_pow(2.0,14));
 constexpr uint64_t POW2_3 = static_cast<uint64_t>(_pow(2.0,3));
 constexpr uint64_t POW2_2 = static_cast<uint64_t>(_pow(2.0,2));
 
-template <typename T>
 struct PhrasematchSubq {
-    PhrasematchSubq(T *c,
+    PhrasematchSubq(void *c,
+                    char t,
                     double w,
                     std::string p,
                     bool pf,
@@ -1009,13 +1006,15 @@ struct PhrasematchSubq {
                     unsigned short z,
                     uint32_t m) :
         cache(c),
+        type(t),
         weight(w),
         phrase(p),
         prefix(pf),
         idx(i),
         zoom(z),
         mask(m) {}
-    T *cache;
+    void *cache;
+    char type;
     double weight;
     std::string phrase;
     bool prefix;
@@ -1187,8 +1186,7 @@ inline bool coverSortByRelev(Cover const& a, Cover const& b) noexcept {
     else return (b.y > a.y);
 }
 
-template <typename T>
-inline bool subqSortByZoom(PhrasematchSubq<T> const& a, PhrasematchSubq<T> const& b) noexcept {
+inline bool subqSortByZoom(PhrasematchSubq const& a, PhrasematchSubq const& b) noexcept {
     if (a.zoom < b.zoom) return true;
     if (a.zoom > b.zoom) return false;
     return (a.idx < b.idx);
@@ -1212,11 +1210,10 @@ inline double tileDist(unsigned px, unsigned py, unsigned tileX, unsigned tileY)
     return distance;
 }
 
-template <typename T>
 struct CoalesceBaton : carmen::noncopyable {
     uv_work_t request;
     // params
-    std::vector<PhrasematchSubq<T>> stack;
+    std::vector<PhrasematchSubq> stack;
     std::vector<uint64_t> centerzxy;
     std::vector<uint64_t> bboxzxy;
     Nan::Persistent<v8::Function> callback;
@@ -1242,8 +1239,7 @@ double scoredist(unsigned zoom, double distance, double score) {
     return score > scoredist ? score : scoredist;
 }
 
-template <typename T>
-void coalesceFinalize(CoalesceBaton<T>* baton, std::vector<Context> && contexts) {
+void coalesceFinalize(CoalesceBaton* baton, std::vector<Context> && contexts) {
     if (!contexts.empty()) {
         // Coalesce stack, generate relevs.
         double relevMax = contexts[0].relev;
@@ -1271,13 +1267,12 @@ void coalesceFinalize(CoalesceBaton<T>* baton, std::vector<Context> && contexts)
         }
     }
 }
-template <typename T>
 void coalesceSingle(uv_work_t* req) {
-    CoalesceBaton<T> *baton = static_cast<CoalesceBaton<T> *>(req->data);
+    CoalesceBaton *baton = static_cast<CoalesceBaton *>(req->data);
 
     try {
-        std::vector<PhrasematchSubq<T>> const& stack = baton->stack;
-        PhrasematchSubq<T> const& subq = stack[0];
+        std::vector<PhrasematchSubq> const& stack = baton->stack;
+        PhrasematchSubq const& subq = stack[0];
 
         // proximity (optional)
         bool proximity = !baton->centerzxy.empty();
@@ -1315,9 +1310,13 @@ void coalesceSingle(uv_work_t* req) {
         // Load and concatenate grids for all ids in `phrases`
         intarray grids;
         if (subq.prefix) {
-            grids = __getbyprefix(subq.cache, subq.phrase);
+            grids = subq.type == TYPE_MEMORY ?
+                __getbyprefix(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase) :
+                __getbyprefix(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase);
         } else {
-            grids = __get(subq.cache, subq.phrase, true);
+            grids = subq.type == TYPE_MEMORY ?
+                __get(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, true) :
+                __get(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, true);
         }
 
         unsigned long m = grids.size();
@@ -1394,13 +1393,12 @@ void coalesceSingle(uv_work_t* req) {
     }
 }
 
-template <typename T>
 void coalesceMulti(uv_work_t* req) {
-    CoalesceBaton<T> *baton = static_cast<CoalesceBaton<T> *>(req->data);
+    CoalesceBaton *baton = static_cast<CoalesceBaton *>(req->data);
 
     try {
-        std::vector<PhrasematchSubq<T>> &stack = baton->stack;
-        std::sort(stack.begin(), stack.end(), subqSortByZoom<T>);
+        std::vector<PhrasematchSubq> &stack = baton->stack;
+        std::sort(stack.begin(), stack.end(), subqSortByZoom);
         std::size_t stackSize = stack.size();
 
         // Cache zoom levels to iterate over as coalesce occurs.
@@ -1470,9 +1468,13 @@ void coalesceMulti(uv_work_t* req) {
             // Load and concatenate grids for all ids in `phrases`
             intarray grids;
             if (subq.prefix) {
-                grids = __getbyprefix(subq.cache, subq.phrase);
+                grids = subq.type == TYPE_MEMORY ?
+                    __getbyprefix(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase) :
+                    __getbyprefix(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase);
             } else {
-                grids = __get(subq.cache, subq.phrase, true);
+                grids = subq.type == TYPE_MEMORY ?
+                    __get(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, true) :
+                    __get(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, true);
             }
 
             bool first = i == 0;
@@ -1581,7 +1583,7 @@ void coalesceMulti(uv_work_t* req) {
         }
 
         std::sort(contexts.begin(), contexts.end(), contextSortByRelev);
-        coalesceFinalize<T>(baton, std::move(contexts));
+        coalesceFinalize(baton, std::move(contexts));
     } catch (std::exception const& ex) {
        baton->error = ex.what();
     }
@@ -1609,14 +1611,14 @@ Local<Array> contextToArray(Context const& context) {
     array->Set(Nan::New("relev").ToLocalChecked(), Nan::New(context.relev));
     return array;
 }
-template <typename T>
 void coalesceAfter(uv_work_t* req) {
     Nan::HandleScope scope;
-    CoalesceBaton<T> *baton = static_cast<CoalesceBaton<T> *>(req->data);
+    CoalesceBaton *baton = static_cast<CoalesceBaton *>(req->data);
 
     // Reference count the cache objects
     for (auto & subq : baton->stack) {
-       subq.cache->_unref();
+        if (subq.type == TYPE_MEMORY) reinterpret_cast<MemoryCache*>(subq.cache)->_unref();
+        else reinterpret_cast<RocksDBCache*>(subq.cache)->_unref();
     }
 
     if (!baton->error.empty()) {
@@ -1638,8 +1640,8 @@ void coalesceAfter(uv_work_t* req) {
     baton->callback.Reset();
     delete baton;
 }
-template <typename T>
-NAN_METHOD(genericcoalesce) {
+
+NAN_METHOD(coalesce) {
     // PhrasematchStack (js => cpp)
     if (info.Length() < 3) {
         return Nan::ThrowTypeError("Expects 3 arguments: a PhrasematchSubq array, an option object, and a callback");
@@ -1673,8 +1675,8 @@ NAN_METHOD(genericcoalesce) {
     // its underlying baton.
     // If no error is throw we release the underlying baton pointer before
     // heading into the threadpool since we assume it will be deleted manually in coalesceAfter
-    std::unique_ptr<CoalesceBaton<T>> baton_ptr = std::make_unique<CoalesceBaton<T>>();
-    CoalesceBaton<T>* baton = baton_ptr.get();
+    std::unique_ptr<CoalesceBaton> baton_ptr = std::make_unique<CoalesceBaton>();
+    CoalesceBaton* baton = baton_ptr.get();
     try {
         for (uint32_t i = 0; i < array_length; i++) {
             Local<Value> val = array->Get(i);
@@ -1782,18 +1784,37 @@ NAN_METHOD(genericcoalesce) {
                     return Nan::ThrowTypeError("cache value must be a Cache object");
                 }
                 Local<Object> _cache = prop_val->ToObject();
-                if (_cache->IsNull() || _cache->IsUndefined() || !Nan::New(T::constructor)->HasInstance(prop_val)) {
+                if (_cache->IsNull() || _cache->IsUndefined()) {
                     return Nan::ThrowTypeError("cache value must be a Cache object");
                 }
-                baton->stack.emplace_back(
-                    node::ObjectWrap::Unwrap<T>(_cache),
-                    weight,
-                    phrase,
-                    prefix,
-                    idx,
-                    zoom,
-                    mask
-                );
+                bool isMemoryCache = Nan::New(MemoryCache::constructor)->HasInstance(prop_val);
+                bool isRocksDBCache = Nan::New(RocksDBCache::constructor)->HasInstance(prop_val);
+                if (!(isMemoryCache || isRocksDBCache)) {
+                    return Nan::ThrowTypeError("cache value must be a MemoryCache or RocksDBCache object");
+                }
+                if (isMemoryCache) {
+                    baton->stack.emplace_back(
+                        (void*) node::ObjectWrap::Unwrap<MemoryCache>(_cache),
+                        TYPE_MEMORY,
+                        weight,
+                        phrase,
+                        prefix,
+                        idx,
+                        zoom,
+                        mask
+                    );
+                } else {
+                    baton->stack.emplace_back(
+                        (void*) node::ObjectWrap::Unwrap<RocksDBCache>(_cache),
+                        TYPE_ROCKSDB,
+                        weight,
+                        phrase,
+                        prefix,
+                        idx,
+                        zoom,
+                        mask
+                    );
+                }
             }
         }
 
@@ -1851,13 +1872,14 @@ NAN_METHOD(genericcoalesce) {
         baton_ptr.release();
         // Reference count the cache objects
         for (auto & subq : baton->stack) {
-           subq.cache->_ref();
+           if (subq.type == TYPE_MEMORY) reinterpret_cast<MemoryCache*>(subq.cache)->_ref();
+           else reinterpret_cast<RocksDBCache*>(subq.cache)->_ref();
         }
         // optimization: for stacks of 1, use coalesceSingle
         if (baton->stack.size() == 1) {
-            uv_queue_work(uv_default_loop(), &baton->request, coalesceSingle<T>, (uv_after_work_cb)coalesceAfter<T>);
+            uv_queue_work(uv_default_loop(), &baton->request, coalesceSingle, (uv_after_work_cb)coalesceAfter);
         } else {
-            uv_queue_work(uv_default_loop(), &baton->request, coalesceMulti<T>, (uv_after_work_cb)coalesceAfter<T>);
+            uv_queue_work(uv_default_loop(), &baton->request, coalesceMulti, (uv_after_work_cb)coalesceAfter);
         }
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
@@ -1867,18 +1889,11 @@ NAN_METHOD(genericcoalesce) {
     return;
 }
 
-NAN_METHOD(MemoryCache::coalesce) {
-    return genericcoalesce<MemoryCache>(info);
-}
-
-NAN_METHOD(RocksDBCache::coalesce) {
-    return genericcoalesce<RocksDBCache>(info);
-}
-
 extern "C" {
     static void start(Handle<Object> target) {
         MemoryCache::Initialize(target);
         RocksDBCache::Initialize(target);
+        Nan::SetMethod(target, "coalesce", coalesce);
     }
 }
 

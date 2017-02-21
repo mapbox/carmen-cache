@@ -91,6 +91,8 @@ public:
 #define MEMO_PREFIX_LENGTH_T2 7
 #define PREFIX_MAX_GRID_LENGTH 500000
 
+#define TYPE_MEMORY 1
+#define TYPE_ROCKSDB 2
 }
 
 #endif // __CARMEN_BINDING_HPP__
