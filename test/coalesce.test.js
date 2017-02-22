@@ -1,6 +1,6 @@
-var Cache = require('../index.js').Cache;
+var Cache = require('../index.js').MemoryCache;
 var Grid = require('./grid.js');
-var coalesce = require('../index.js').Cache.coalesce;
+var coalesce = require('../index.js').coalesce;
 var test = require('tape');
 
 test('coalesce args', function(assert) {
@@ -109,7 +109,7 @@ test('coalesce args', function(assert) {
 
         assert.throws(function() {
             coalesce([Object.assign({},valid_subq,{cache:{}})],{},function(){});
-        }, /cache value must be a Cache object/, 'throws');
+        }, /cache value must be/, 'throws');
 
         var valid_stack = [
             {
@@ -183,27 +183,27 @@ test('coalesce args', function(assert) {
     }, /Arg 3 must be a callback/, 'throws');
 
     assert.throws(function() {
-        coalesce([{mask: 1 << 0, idx: 1, zoom: 1, weight: .5, phrase: '1'}],{},function(){});
+        coalesce([{mask: 1 << 0, idx: 1, zoom: 1, weight: .5, phrase: '1', prefix: false}],{},function(){});
     }, /missing/, 'throws');
 
     assert.throws(function() {
-        coalesce([{cache: new Cache('b'), idx: 1, zoom: 1, weight: .5, phrase: '1'}],{},function(){});
+        coalesce([{cache: new Cache('b'), idx: 1, zoom: 1, weight: .5, phrase: '1', prefix: false}],{},function(){});
     }, /missing/, 'throws');
 
     assert.throws(function() {
-        coalesce([{cache: new Cache('b'), mask: 1 << 0, zoom: 1, weight: .5, phrase: 1}],{},function(){});
+        coalesce([{cache: new Cache('b'), mask: 1 << 0, zoom: 1, weight: .5, phrase: '1', prefix: false}],{},function(){});
     }, /missing/, 'throws');
 
     assert.throws(function() {
-        coalesce([{cache: new Cache('b'), mask: 1 << 0, idx: 1, weight: .5, phrase: 1}],{},function(){});
+        coalesce([{cache: new Cache('b'), mask: 1 << 0, idx: 1, weight: .5, phrase: '1', prefix: false}],{},function(){});
     }, /missing/, 'throws');
 
     assert.throws(function() {
-        coalesce([{cache: new Cache('b'), mask: 1 << 0, idx: 1, zoom: 1, phrase: 1}],{},function(){});
+        coalesce([{cache: new Cache('b'), mask: 1 << 0, idx: 1, zoom: 1, phrase: '1', prefix: false}],{},function(){});
     }, /missing/, 'throws');
 
     assert.throws(function() {
-        coalesce([{cache: new Cache('b'), mask: 1 << 0, idx: 1, zoom: 1, weight: .5}],{},function(){});
+        coalesce([{cache: new Cache('b'), mask: 1 << 0, idx: 1, zoom: 1, weight: .5, prefix: false}],{},function(){});
     }, /missing/, 'throws');
 
     assert.throws(function() {
@@ -235,7 +235,7 @@ test('coalesce args', function(assert) {
 
 (function() {
     var cache = new Cache('a', 0);
-    cache._set('grid', '1', [
+    cache._set('1', [
         Grid.encode({
             id: 2,
             x: 2,
@@ -340,7 +340,7 @@ test('coalesce args', function(assert) {
         score: 0
     }));
 
-    cache._set('grid', '1', grids);
+    cache._set('1', grids);
     test('coalesceSingle', function(assert) {
         coalesce([{
             cache: cache,
@@ -365,7 +365,7 @@ test('coalesce args', function(assert) {
 (function() {
     var a = new Cache('a', 0);
     var b = new Cache('b', 0);
-    a._set('grid', '1', [
+    a._set('1', [
         Grid.encode({
             id: 1,
             x: 1,
@@ -381,7 +381,7 @@ test('coalesce args', function(assert) {
             score: 1
         }),
     ]);
-    b._set('grid', '1', [
+    b._set('1', [
         Grid.encode({
             id: 2,
             x: 2,
@@ -469,7 +469,7 @@ test('coalesce args', function(assert) {
 (function() {
     var a = new Cache('a', 0);
     var b = new Cache('b', 0);
-    a._set('grid', '1', [
+    a._set('1', [
         Grid.encode({
             id: 1,
             x: 0,
@@ -478,7 +478,7 @@ test('coalesce args', function(assert) {
             score: 1
         }),
     ]);
-    b._set('grid', '1', [
+    b._set('1', [
         Grid.encode({
             id: 2,
             x: 4800,
@@ -553,7 +553,7 @@ test('coalesce args', function(assert) {
 (function() {
     var a = new Cache('a', 0);
     var b = new Cache('b', 0);
-    a._set('grid', '1', [
+    a._set('1', [
         Grid.encode({
             id: 1,
             x: 1,
@@ -569,7 +569,7 @@ test('coalesce args', function(assert) {
             score: 1
         }),
     ]);
-    b._set('grid', '1', [
+    b._set('1', [
         Grid.encode({
             id: 3,
             x: 2,
@@ -614,7 +614,7 @@ test('coalesce args', function(assert) {
     var a = new Cache('a', 0);
     var b = new Cache('b', 0);
     var c = new Cache('c', 0);
-    a._set('grid', '1', [
+    a._set('1', [
         Grid.encode({
             id: 1,
             x: 0,
@@ -630,7 +630,7 @@ test('coalesce args', function(assert) {
             score: 1
         })
     ]);
-    b._set('grid', '1', [
+    b._set('1', [
         Grid.encode({
             id: 3,
             x: 3,
@@ -646,7 +646,7 @@ test('coalesce args', function(assert) {
             score: 1
         })
     ]);
-    c._set('grid', '1', [
+    c._set('1', [
         Grid.encode({
             id: 5,
             x: 21,
@@ -768,7 +768,7 @@ test('coalesce args', function(assert) {
 (function() {
     var a = new Cache('a', 0);
     var b = new Cache('b', 0);
-    a._set('grid', '1', [
+    a._set('1', [
         Grid.encode({
             id: 3,
             x: 0,
@@ -784,7 +784,7 @@ test('coalesce args', function(assert) {
             score: 1
         })
     ]);
-    b._set('grid', '1', [
+    b._set('1', [
         Grid.encode({
             id: 1,
             x: 1,
@@ -832,7 +832,7 @@ test('coalesce args', function(assert) {
 (function() {
     var a = new Cache('a', 0);
     var b = new Cache('b', 0);
-    a._set('grid', '1', [
+    a._set('1', [
         Grid.encode({
             id: 3,
             x: 0,
@@ -848,7 +848,7 @@ test('coalesce args', function(assert) {
             score: 1
         })
     ]);
-    b._set('grid', '1', [
+    b._set('1', [
         Grid.encode({
             id: 1,
             x: 0,
@@ -898,9 +898,9 @@ test('coalesce args', function(assert) {
         relev: 1,
         score: 1
     }));
-    a._set('grid', '1', grids);
+    a._set('1', grids);
 
-    b._set('grid', '1', [
+    b._set('1', [
         Grid.encode({
             id: 1,
             x: 0,
@@ -909,7 +909,7 @@ test('coalesce args', function(assert) {
             score: 1
         })
     ]);
-    c._set('grid', '1', [
+    c._set('1', [
         Grid.encode({
             id: 1,
             x: 0,

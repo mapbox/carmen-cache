@@ -19,7 +19,8 @@ namespace carmen {
 
 using namespace v8;
 
-Nan::Persistent<FunctionTemplate> Cache::constructor;
+Nan::Persistent<FunctionTemplate> MemoryCache::constructor;
+Nan::Persistent<FunctionTemplate> RocksDBCache::constructor;
 
 rocksdb::Status OpenDB(const rocksdb::Options& options, const std::string& name, std::unique_ptr<rocksdb::DB>& dbptr) {
     rocksdb::DB* db;
@@ -35,124 +36,79 @@ rocksdb::Status OpenForReadOnlyDB(const rocksdb::Options& options, const std::st
     return status;
 }
 
-inline std::shared_ptr<rocksdb::DB> cacheGet(Cache const* c, std::string const& key) {
-    Cache::message_cache const& messages = c->msg_;
-    Cache::message_cache::const_iterator mitr = messages.find(key);
-    return mitr->second->second;
-}
+intarray __get(MemoryCache const* c, std::string id, bool ignorePrefixFlag) {
+    arraycache const& cache = c->cache_;
+    intarray array;
 
-inline bool cacheHas(Cache const* c, std::string const& key) {
-    Cache::message_cache const& messages = c->msg_;
-    Cache::message_cache::const_iterator mitr = messages.find(key);
-    return mitr != messages.end();
-}
-
-inline void cacheInsert(Cache * c, std::string const& key, std::shared_ptr<rocksdb::DB> message) {
-    Cache::message_cache &messages = c->msg_;
-    Cache::message_cache::iterator mitr = messages.find(key);
-    if (mitr == messages.end()) {
-        Cache::message_list &list = c->msglist_;
-        list.emplace_front(std::make_pair(key, std::move(message)));
-        messages.emplace(key, list.begin());
-        if (list.size() > c->cachesize) {
-            messages.erase(list.back().first);
-            list.pop_back();
+    arraycache::const_iterator aitr = cache.find(id);
+    if (aitr == cache.end()) {
+        if (ignorePrefixFlag) {
+            arraycache::const_iterator aitr2 = cache.find(id + ".");
+            if (aitr2 != cache.end()) {
+                // we only found . suffix
+                return aitr2->second;
+            }
         }
-    }
-}
-
-inline bool cacheRemove(Cache * c, std::string const& key) {
-    Cache::message_list &list = c->msglist_;
-    Cache::message_cache &messages = c->msg_;
-    Cache::message_cache::iterator mitr = messages.find(key);
-    if (mitr != messages.end()) {
-        list.erase(mitr->second);
-        messages.erase(mitr);
-        return true;
+        // we didn't find the non-.-suffix version and didn't look for the .-suffix version
     } else {
-        return false;
+        if (ignorePrefixFlag) {
+            arraycache::const_iterator aitr2 = cache.find(id + ".");
+            if (aitr2 == cache.end()) {
+                // we found only non-.-suffix
+                return aitr->second;
+            } else {
+                // we found both; make a copy
+                std::vector<uint64_t> combined = aitr->second;
+                combined.insert(combined.end(), aitr2->second.begin(), aitr2->second.end());
+                std::inplace_merge(combined.begin(), combined.begin() + aitr->second.size(), combined.end(), std::greater<uint64_t>());
+                return combined;
+            }
+        }
+        // we found the non-.-suffix version (but didn't look for the .-suffix version)
+        return aitr->second;
     }
+    return array;
 }
 
-Cache::intarray __get(Cache const* c, std::string const& type, std::string id, bool ignorePrefixFlag) {
-    Cache::memcache const& mem = c->cache_;
-    Cache::memcache::const_iterator itr = mem.find(type);
-    Cache::intarray array;
+intarray __get(RocksDBCache const* c, std::string id, bool ignorePrefixFlag) {
+    std::shared_ptr<rocksdb::DB> db = c->db;
+    intarray array;
 
-    if (itr != mem.end()) {
-        Cache::arraycache::const_iterator aitr = itr->second.find(id);
-        if (aitr == itr->second.end()) {
-            if (ignorePrefixFlag) {
-                Cache::arraycache::const_iterator aitr2 = itr->second.find(id + ".");
-                if (aitr2 != itr->second.end()) {
-                    // we only found . suffix
-                    return aitr2->second;
-                }
-            }
-            // we didn't find the non-.-suffix version and didn't look for the .-suffix version
-        } else {
-            if (ignorePrefixFlag) {
-                Cache::arraycache::const_iterator aitr2 = itr->second.find(id + ".");
-                if (aitr2 == itr->second.end()) {
-                    // we found only non-.-suffix
-                    return aitr->second;
+    std::string search_id = id;
+    std::vector<size_t> end_positions;
+    for (uint32_t i = 0; i < 2; i++) {
+        std::string message;
+        rocksdb::Status s = db->Get(rocksdb::ReadOptions(), search_id, &message);
+        if (s.ok()) {
+            protozero::pbf_reader item(message);
+            item.next(CACHE_ITEM);
+            auto vals = item.get_packed_uint64();
+            uint64_t lastval = 0;
+            // delta decode values.
+            for (auto it = vals.first; it != vals.second; ++it) {
+                if (lastval == 0) {
+                    lastval = *it;
+                    array.emplace_back(lastval);
                 } else {
-                    // we found both; make a copy
-                    std::vector<uint64_t> combined = aitr->second;
-                    combined.insert(combined.end(), aitr2->second.begin(), aitr2->second.end());
-                    std::inplace_merge(combined.begin(), combined.begin() + aitr->second.size(), combined.end(), std::greater<uint64_t>());
-                    return combined;
+                    lastval = lastval - *it;
+                    array.emplace_back(lastval);
                 }
             }
-            // we found the non-.-suffix version (but didn't look for the .-suffix version)
-            return aitr->second;
+        }
+        end_positions.emplace_back(array.size());
+        if (i == 0) {
+            if (!ignorePrefixFlag) {
+                break;
+            } else {
+                search_id = search_id + ".";
+            }
         }
     }
-    // if we've made it this far, either we don't have the type in mem, or we do but don't have the key
-    // so check the rocksdb cache
 
-    // ugh this is so complicated
-
-    if (cacheHas(c, type)) {
-        std::shared_ptr<rocksdb::DB> db = cacheGet(c, type);
-
-        std::string search_id = id;
-        std::vector<size_t> end_positions;
-        for (uint32_t i = 0; i < 2; i++) {
-            std::string message;
-            rocksdb::Status s = db->Get(rocksdb::ReadOptions(), search_id, &message);
-            if (s.ok()) {
-                protozero::pbf_reader item(message);
-                item.next(CACHE_ITEM);
-                auto vals = item.get_packed_uint64();
-                uint64_t lastval = 0;
-                // delta decode values.
-                for (auto it = vals.first; it != vals.second; ++it) {
-                    if (lastval == 0) {
-                        lastval = *it;
-                        array.emplace_back(lastval);
-                    } else {
-                        lastval = lastval - *it;
-                        array.emplace_back(lastval);
-                    }
-                }
-            }
-            end_positions.emplace_back(array.size());
-            if (i == 0) {
-                if (!ignorePrefixFlag) {
-                    break;
-                } else {
-                    search_id = search_id + ".";
-                }
-            }
-        }
-
-        if (end_positions.size() == 2 && end_positions[0] != 0 && end_positions[0] != end_positions[1]) {
-            // we've found things for both the non-dot version and the dot version
-            // so we need to merge them so the order is sorted
-            std::inplace_merge(array.begin(), array.begin() + end_positions[0], array.end(), std::greater<uint64_t>());
-        }
-        return array;
+    if (end_positions.size() == 2 && end_positions[0] != 0 && end_positions[0] != end_positions[1]) {
+        // we've found things for both the non-dot version and the dot version
+        // so we need to merge them so the order is sorted
+        std::inplace_merge(array.begin(), array.begin() + end_positions[0], array.end(), std::greater<uint64_t>());
     }
     return array;
 }
@@ -162,35 +118,38 @@ struct sortableGrid {
     protozero::const_varint_iterator<uint64_t> end;
 };
 
-Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::string prefix) {
-    Cache::intarray array;
+intarray __getbyprefix(MemoryCache const* c, std::string prefix) {
+    intarray array;
     size_t prefix_length = prefix.length();
     const char* prefix_cstr = prefix.c_str();
 
     // Load values from memory cache
-    Cache::memcache const& mem = c->cache_;
-    Cache::memcache::const_iterator memshard = mem.find(type);
-    if (memshard != mem.end()) {
-        for (auto const& item : memshard->second) {
-            const char* item_cstr = item.first.c_str();
-            size_t item_length = item.first.length();
-            // here, we skip this iteration if either the key is shorter than
-            // the prefix, or, if the key has the no-prefix flag, its length
-            // without the flag isn't the same as the item length (which will
-            // make the prefix comparison in the next step effectively an
-            // equality check)
-            if (
-                item_length < prefix_length ||
-                (item_cstr[item_length - 1] == '.' && item_length != prefix_length + 1)
-            ) {
-                continue;
-            }
-            if (memcmp(prefix_cstr, item_cstr, prefix_length) == 0) {
-                array.insert(array.end(), item.second.begin(), item.second.end());
-            }
+
+    for (auto const& item : c->cache_) {
+        const char* item_cstr = item.first.c_str();
+        size_t item_length = item.first.length();
+        // here, we skip this iteration if either the key is shorter than
+        // the prefix, or, if the key has the no-prefix flag, its length
+        // without the flag isn't the same as the item length (which will
+        // make the prefix comparison in the next step effectively an
+        // equality check)
+        if (
+            item_length < prefix_length ||
+            (item_cstr[item_length - 1] == '.' && item_length != prefix_length + 1)
+        ) {
+            continue;
         }
-        std::sort(array.begin(), array.end(), std::greater<uint64_t>());
+        if (memcmp(prefix_cstr, item_cstr, prefix_length) == 0) {
+            array.insert(array.end(), item.second.begin(), item.second.end());
+        }
     }
+    std::sort(array.begin(), array.end(), std::greater<uint64_t>());
+    return array;
+}
+
+intarray __getbyprefix(RocksDBCache const* c, std::string prefix) {
+    intarray array;
+    size_t prefix_length = prefix.length();
 
     // Load values from message cache
     std::vector<std::string> messages;
@@ -202,78 +161,91 @@ Cache::intarray __getbyprefix(Cache const* c, std::string const& type, std::stri
         prefix = "=2" + prefix.substr(0, MEMO_PREFIX_LENGTH_T2);
     }
     radix_max_heap::pair_radix_max_heap<uint64_t, size_t> rh;
-    if (cacheHas(c, type)) {
-        std::shared_ptr<rocksdb::DB> db = cacheGet(c, type);
 
-        std::unique_ptr<rocksdb::Iterator> rit(db->NewIterator(rocksdb::ReadOptions()));
-        for (rit->Seek(prefix); rit->Valid() && rit->key().ToString().compare(0, prefix.size(), prefix) == 0; rit->Next()) {
-            std::string key_id = rit->key().ToString();
+    std::shared_ptr<rocksdb::DB> db = c->db;
 
-            // same skip operation as for the memory cache; see above
-            if (
-                key_id.length() < prefix.length() ||
-                (key_id.at(key_id.length() - 1) == '.' && key_id.length() != prefix.length() + 1)
-            ) {
-                continue;
-            }
+    std::unique_ptr<rocksdb::Iterator> rit(db->NewIterator(rocksdb::ReadOptions()));
+    for (rit->Seek(prefix); rit->Valid() && rit->key().ToString().compare(0, prefix.size(), prefix) == 0; rit->Next()) {
+        std::string key_id = rit->key().ToString();
 
-            messages.emplace_back(rit->value().ToString());
-        }
-        for (std::string& message : messages) {
-            protozero::pbf_reader item(message);
-            item.next(CACHE_ITEM);
-            auto vals = item.get_packed_uint64();
-
-            if (vals.first != vals.second) {
-                grids.emplace_back(sortableGrid{vals.first, vals.second});
-                rh.push(*(vals.first), grids.size() - 1);
-            }
+        // same skip operation as for the memory cache; see above
+        if (
+            key_id.length() < prefix.length() ||
+            (key_id.at(key_id.length() - 1) == '.' && key_id.length() != prefix.length() + 1)
+        ) {
+            continue;
         }
 
-        while (!rh.empty() && array.size() < PREFIX_MAX_GRID_LENGTH) {
-            size_t gridIdx = rh.top_value();
-            uint64_t lastval = rh.top_key();
-            rh.pop();
+        messages.emplace_back(rit->value().ToString());
+    }
+    for (std::string& message : messages) {
+        protozero::pbf_reader item(message);
+        item.next(CACHE_ITEM);
+        auto vals = item.get_packed_uint64();
 
-            array.emplace_back(lastval);
-            grids[gridIdx].it++;
-            if (grids[gridIdx].it != grids[gridIdx].end) {
-                lastval = lastval - *(grids[gridIdx].it);
-                rh.push(lastval, gridIdx);
-            }
+        if (vals.first != vals.second) {
+            grids.emplace_back(sortableGrid{vals.first, vals.second});
+            rh.push(*(vals.first), grids.size() - 1);
+        }
+    }
+
+    while (!rh.empty() && array.size() < PREFIX_MAX_GRID_LENGTH) {
+        size_t gridIdx = rh.top_value();
+        uint64_t lastval = rh.top_key();
+        rh.pop();
+
+        array.emplace_back(lastval);
+        grids[gridIdx].it++;
+        if (grids[gridIdx].it != grids[gridIdx].end) {
+            lastval = lastval - *(grids[gridIdx].it);
+            rh.push(lastval, gridIdx);
         }
     }
 
     return array;
 }
 
-void Cache::Initialize(Handle<Object> target) {
+void MemoryCache::Initialize(Handle<Object> target) {
     Nan::HandleScope scope;
-    Local<FunctionTemplate> t = Nan::New<FunctionTemplate>(Cache::New);
+    Local<FunctionTemplate> t = Nan::New<FunctionTemplate>(MemoryCache::New);
     t->InstanceTemplate()->SetInternalFieldCount(1);
-    t->SetClassName(Nan::New("Cache").ToLocalChecked());
-    Nan::SetPrototypeMethod(t, "has", has);
-    Nan::SetPrototypeMethod(t, "loadSync", loadSync);
-    Nan::SetPrototypeMethod(t, "pack", pack);
-    Nan::SetPrototypeMethod(t, "merge", merge);
-    Nan::SetPrototypeMethod(t, "list", list);
+    t->SetClassName(Nan::New("MemoryCache").ToLocalChecked());
+    Nan::SetPrototypeMethod(t, "pack", MemoryCache::pack);
+    Nan::SetPrototypeMethod(t, "list", MemoryCache::list);
     Nan::SetPrototypeMethod(t, "_set", _set);
     Nan::SetPrototypeMethod(t, "_get", _get);
     Nan::SetPrototypeMethod(t, "_getByPrefix", _getbyprefix);
-    Nan::SetPrototypeMethod(t, "unload", unload);
-    Nan::SetMethod(t, "coalesce", coalesce);
-    target->Set(Nan::New("Cache").ToLocalChecked(), t->GetFunction());
+    target->Set(Nan::New("MemoryCache").ToLocalChecked(), t->GetFunction());
     constructor.Reset(t);
 }
 
-Cache::Cache()
+MemoryCache::MemoryCache()
   : ObjectWrap(),
-    cache_(),
-    msg_() {}
+    cache_() {}
 
-Cache::~Cache() { }
+MemoryCache::~MemoryCache() { }
 
-inline void __packVec(Cache::intarray const& varr, std::unique_ptr<rocksdb::DB> const& db, std::string const& key) {
+void RocksDBCache::Initialize(Handle<Object> target) {
+    Nan::HandleScope scope;
+    Local<FunctionTemplate> t = Nan::New<FunctionTemplate>(RocksDBCache::New);
+    t->InstanceTemplate()->SetInternalFieldCount(1);
+    t->SetClassName(Nan::New("RocksDBCache").ToLocalChecked());
+    Nan::SetPrototypeMethod(t, "pack", RocksDBCache::pack);
+    Nan::SetPrototypeMethod(t, "list", RocksDBCache::list);
+    Nan::SetPrototypeMethod(t, "_get", _get);
+    Nan::SetPrototypeMethod(t, "_getByPrefix", _getbyprefix);
+    Nan::SetMethod(t, "merge", merge);
+    target->Set(Nan::New("RocksDBCache").ToLocalChecked(), t->GetFunction());
+    constructor.Reset(t);
+}
+
+RocksDBCache::RocksDBCache()
+  : ObjectWrap(),
+    db() {}
+
+RocksDBCache::~RocksDBCache() { }
+
+inline void __packVec(intarray const& varr, std::unique_ptr<rocksdb::DB> const& db, std::string const& key) {
     std::string message;
 
     protozero::pbf_writer item_writer(message);
@@ -296,16 +268,13 @@ inline void __packVec(Cache::intarray const& varr, std::unique_ptr<rocksdb::DB> 
     db->Put(rocksdb::WriteOptions(), key, message);
 }
 
-NAN_METHOD(Cache::pack)
+NAN_METHOD(MemoryCache::pack)
 {
-    if (info.Length() < 2) {
-        return Nan::ThrowTypeError("expected two info: 'filename', 'type'");
+    if (info.Length() < 1) {
+        return Nan::ThrowTypeError("expected one info: 'filename'");
     }
     if (!info[0]->IsString()) {
         return Nan::ThrowTypeError("first argument must be a String");
-    }
-    if (!info[1]->IsString()) {
-        return Nan::ThrowTypeError("second arg must be a String");
     }
     try {
         Nan::Utf8String utf8_filename(info[0]);
@@ -314,21 +283,7 @@ NAN_METHOD(Cache::pack)
         }
         std::string filename(*utf8_filename);
 
-        Nan::Utf8String utf8_type(info[1]);
-        if (utf8_type.length() < 1) {
-            return Nan::ThrowTypeError("second arg must be a String");
-        }
-        std::string type(*utf8_type);
-
-        Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
-
-        std::shared_ptr<rocksdb::DB> existing = NULL;
-        if (cacheHas(c, type)) {
-            existing = cacheGet(c, type);
-            if (existing->GetName() == filename) {
-                return Nan::ThrowTypeError("rocksdb file is already loaded read-only; unload first");
-            }
-        }
+        MemoryCache* c = node::ObjectWrap::Unwrap<MemoryCache>(info.This());
 
         std::unique_ptr<rocksdb::DB> db;
         rocksdb::Options options;
@@ -339,144 +294,128 @@ NAN_METHOD(Cache::pack)
             return Nan::ThrowTypeError("unable to open rocksdb file for packing");
         }
 
-        Cache::memcache const& mem = c->cache_;
-        Cache::memcache::const_iterator itr = mem.find(type);
+        std::map<key_type, std::deque<value_type>> memoized_prefixes;
 
-        if (itr != mem.end()) {
-            std::map<Cache::key_type, std::deque<Cache::value_type>> memoized_prefixes;
-
-            for (auto const& item : itr->second) {
-                std::size_t array_size = item.second.size();
-                if (array_size > 0) {
-                    // make copy of intarray so we can sort without
-                    // modifying the original array
-                    Cache::intarray varr = item.second;
-
-                    // delta-encode values, sorted in descending order.
-                    std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
-
-                    __packVec(varr, db, item.first);
-
-                    std::string prefix_t1 = "";
-                    std::string prefix_t2 = "";
-
-                    // add this to the memoized prefix array too, maybe
-                    auto item_length = item.first.length();
-                    if (item.first.at(item_length - 1) == '.') {
-                        // this is an entry that bans degens
-                        // so only include it if it itself smaller than the
-                        // prefix limit (minus dot), and leave it dot-suffixed
-                        if (item_length <= (MEMO_PREFIX_LENGTH_T1 + 1)) {
-                            prefix_t1 = "=1" + item.first;
-                        } else if (item_length > (MEMO_PREFIX_LENGTH_T1 + 1) && item_length <= (MEMO_PREFIX_LENGTH_T2 + 1)) {
-                            prefix_t2 = "=2" + item.first;
-                        }
-                    } else {
-                        // use the full string for things shorter than the limit
-                        // or the prefix otherwise
-                        if (item_length < MEMO_PREFIX_LENGTH_T1) {
-                            prefix_t1 = "=1" + item.first;
-                        } else {
-                            prefix_t1 = "=1" + item.first.substr(0, MEMO_PREFIX_LENGTH_T1);
-                            if (item_length < MEMO_PREFIX_LENGTH_T2) {
-                                prefix_t2 = "=2" + item.first;
-                            } else {
-                                prefix_t2 = "=2" + item.first.substr(0, MEMO_PREFIX_LENGTH_T2);
-                            }
-                        }
-                    }
-
-                    if (prefix_t1 != "") {
-                        std::map<Cache::key_type, std::deque<Cache::value_type>>::const_iterator mitr = memoized_prefixes.find(prefix_t1);
-                        if (mitr == memoized_prefixes.end()) {
-                            memoized_prefixes.emplace(prefix_t1, std::deque<Cache::value_type>());
-                        }
-                        std::deque<Cache::value_type> & buf = memoized_prefixes[prefix_t1];
-
-                        buf.insert(buf.end(), varr.begin(), varr.end());
-                    }
-                    if (prefix_t2 != "") {
-                        std::map<Cache::key_type, std::deque<Cache::value_type>>::const_iterator mitr = memoized_prefixes.find(prefix_t2);
-                        if (mitr == memoized_prefixes.end()) {
-                            memoized_prefixes.emplace(prefix_t2, std::deque<Cache::value_type>());
-                        }
-                        std::deque<Cache::value_type> & buf = memoized_prefixes[prefix_t2];
-
-                        buf.insert(buf.end(), varr.begin(), varr.end());
-                    }
-                }
-            }
-
-            for (auto const& item : memoized_prefixes) {
-                // copy the deque into a vector so we can sort without
+        for (auto const& item : c->cache_) {
+            std::size_t array_size = item.second.size();
+            if (array_size > 0) {
+                // make copy of intarray so we can sort without
                 // modifying the original array
-                Cache::intarray varr(item.second.begin(), item.second.end());
+                intarray varr = item.second;
 
                 // delta-encode values, sorted in descending order.
                 std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
 
-                if (varr.size() > PREFIX_MAX_GRID_LENGTH) {
-                    // for the prefix memos we're only going to ever use 500k max anyway
-                    varr.resize(PREFIX_MAX_GRID_LENGTH);
+                __packVec(varr, db, item.first);
+
+                std::string prefix_t1 = "";
+                std::string prefix_t2 = "";
+
+                // add this to the memoized prefix array too, maybe
+                auto item_length = item.first.length();
+                if (item.first.at(item_length - 1) == '.') {
+                    // this is an entry that bans degens
+                    // so only include it if it itself smaller than the
+                    // prefix limit (minus dot), and leave it dot-suffixed
+                    if (item_length <= (MEMO_PREFIX_LENGTH_T1 + 1)) {
+                        prefix_t1 = "=1" + item.first;
+                    } else if (item_length > (MEMO_PREFIX_LENGTH_T1 + 1) && item_length <= (MEMO_PREFIX_LENGTH_T2 + 1)) {
+                        prefix_t2 = "=2" + item.first;
+                    }
+                } else {
+                    // use the full string for things shorter than the limit
+                    // or the prefix otherwise
+                    if (item_length < MEMO_PREFIX_LENGTH_T1) {
+                        prefix_t1 = "=1" + item.first;
+                    } else {
+                        prefix_t1 = "=1" + item.first.substr(0, MEMO_PREFIX_LENGTH_T1);
+                        if (item_length < MEMO_PREFIX_LENGTH_T2) {
+                            prefix_t2 = "=2" + item.first;
+                        } else {
+                            prefix_t2 = "=2" + item.first.substr(0, MEMO_PREFIX_LENGTH_T2);
+                        }
+                    }
                 }
 
-                __packVec(varr, db, item.first);
+                if (prefix_t1 != "") {
+                    std::map<key_type, std::deque<value_type>>::const_iterator mitr = memoized_prefixes.find(prefix_t1);
+                    if (mitr == memoized_prefixes.end()) {
+                        memoized_prefixes.emplace(prefix_t1, std::deque<value_type>());
+                    }
+                    std::deque<value_type> & buf = memoized_prefixes[prefix_t1];
+
+                    buf.insert(buf.end(), varr.begin(), varr.end());
+                }
+                if (prefix_t2 != "") {
+                    std::map<key_type, std::deque<value_type>>::const_iterator mitr = memoized_prefixes.find(prefix_t2);
+                    if (mitr == memoized_prefixes.end()) {
+                        memoized_prefixes.emplace(prefix_t2, std::deque<value_type>());
+                    }
+                    std::deque<value_type> & buf = memoized_prefixes[prefix_t2];
+
+                    buf.insert(buf.end(), varr.begin(), varr.end());
+                }
             }
         }
-        if (existing != NULL) {
+
+        for (auto const& item : memoized_prefixes) {
+            // copy the deque into a vector so we can sort without
+            // modifying the original array
+            intarray varr(item.second.begin(), item.second.end());
+
+            // delta-encode values, sorted in descending order.
+            std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
+
+            if (varr.size() > PREFIX_MAX_GRID_LENGTH) {
+                // for the prefix memos we're only going to ever use 500k max anyway
+                varr.resize(PREFIX_MAX_GRID_LENGTH);
+            }
+
+            __packVec(varr, db, item.first);
+        }
+    } catch (std::exception const& ex) {
+        return Nan::ThrowTypeError(ex.what());
+    }
+    info.GetReturnValue().Set(Nan::Undefined());
+    return;
+}
+
+NAN_METHOD(RocksDBCache::pack)
+{
+    if (info.Length() < 1) {
+        return Nan::ThrowTypeError("expected one info: 'filename'");
+    }
+    if (!info[0]->IsString()) {
+        return Nan::ThrowTypeError("first argument must be a String");
+    }
+    try {
+        Nan::Utf8String utf8_filename(info[0]);
+        if (utf8_filename.length() < 1) {
+            return Nan::ThrowTypeError("first arg must be a String");
+        }
+        std::string filename(*utf8_filename);
+
+        RocksDBCache* c = node::ObjectWrap::Unwrap<RocksDBCache>(info.This());
+
+        if (c->db && c->db->GetName() == filename) {
+            return Nan::ThrowTypeError("rocksdb file is already loaded read-only; unload first");
+        } else {
+            std::shared_ptr<rocksdb::DB> existing = c->db;
+
+            std::unique_ptr<rocksdb::DB> db;
+            rocksdb::Options options;
+            options.create_if_missing = true;
+            rocksdb::Status status = OpenDB(options, filename, db);
+
+            if (!status.ok()) {
+                return Nan::ThrowTypeError("unable to open rocksdb file for packing");
+            }
+
             // if what we have now is already a rocksdb, and it's a different
             // one from what we're being asked to pack into, copy from one to the other
             std::unique_ptr<rocksdb::Iterator> existingIt(existing->NewIterator(rocksdb::ReadOptions()));
             for (existingIt->SeekToFirst(); existingIt->Valid(); existingIt->Next()) {
-                // check if we've already written this key from the memcache
-                // and if so, error
-                std::string existingKey = existingIt->key().ToString();
-                std::string tmp;
-                rocksdb::Status s = db->Get(rocksdb::ReadOptions(), existingKey, &tmp);
-                if (s.ok()) {
-                    // we've already gotten this key before
-                    // we get here because addfeature is terrible and needs to die
-                    // but addfeature will manage keys it knows about, so skip those
-                    // we really only need to concern ourselves with magical prefixes
-
-                    if (existingKey.at(0) != '=') continue;
-
-                    // it's a magical prefix key
-                    // so retrieve, unpack, combine, sort, repack
-                    // sidenote: I absolutely hate this
-
-                    std::vector<std::string> messages;
-                    messages.emplace_back(existingIt->value().ToString());
-                    messages.emplace_back(tmp);
-                    Cache::intarray varr;
-
-                    for (auto const& message : messages) {
-                        protozero::pbf_reader item(message);
-                        item.next(CACHE_ITEM);
-
-                        uint64_t lastval = 0;
-                        auto vals = item.get_packed_uint64();
-                        for (auto it = vals.first; it != vals.second; ++it) {
-                            if (lastval == 0) {
-                                lastval = *it;
-                                varr.emplace_back(lastval);
-                            } else {
-                                lastval = lastval - *it;
-                                varr.emplace_back(lastval);
-                            }
-                        }
-                    }
-                    std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
-
-                    // unique-ify
-                    auto last = std::unique(varr.begin(), varr.end());
-                    varr.erase(last, varr.end());
-
-                    __packVec(varr, db, existingKey);
-                    continue;
-                }
-
-                db->Put(rocksdb::WriteOptions(), existingKey, existingIt->value());
+                db->Put(rocksdb::WriteOptions(), existingIt->key(), existingIt->value());
             }
         }
         info.GetReturnValue().Set(true);
@@ -533,8 +472,8 @@ void mergeQueue(uv_work_t* req) {
     }
 
     // Ids that have been seen
-    std::map<Cache::key_type,bool> ids1;
-    std::map<Cache::key_type,bool> ids2;
+    std::map<key_type,bool> ids1;
+    std::map<key_type,bool> ids2;
 
     try {
         // Store ids from 1
@@ -622,7 +561,7 @@ void mergeQueue(uv_work_t* req) {
             item.next(CACHE_ITEM);
 
             uint64_t lastval = 0;
-            Cache::intarray varr;
+            intarray varr;
 
             // Add values from filename1
             auto vals = item.get_packed_uint64();
@@ -717,43 +656,19 @@ void mergeAfter(uv_work_t* req) {
     delete baton;
 }
 
-NAN_METHOD(Cache::list)
+NAN_METHOD(MemoryCache::list)
 {
-    if (info.Length() < 1) {
-        return Nan::ThrowTypeError("expected one arg: 'type'");
-    }
-    if (!info[0]->IsString()) {
-        return Nan::ThrowTypeError("first argument must be a String");
-    }
-
     try {
         Nan::Utf8String utf8_value(info[0]);
         if (utf8_value.length() < 1) {
             return Nan::ThrowTypeError("first arg must be a String");
         }
-        std::string type(*utf8_value);
-        Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
-        Cache::memcache const& mem = c->cache_;
+        MemoryCache* c = node::ObjectWrap::Unwrap<MemoryCache>(info.This());
         Local<Array> ids = Nan::New<Array>();
 
-        Cache::memcache::const_iterator itr = mem.find(type);
         unsigned idx = 0;
-        if (itr != mem.end()) {
-            for (auto const& item : itr->second) {
-                ids->Set(idx++,Nan::New(item.first).ToLocalChecked());
-            }
-        }
-
-        // parse message for ids
-        if (cacheHas(c, type)) {
-            std::shared_ptr<rocksdb::DB> db = cacheGet(c, type);
-
-            std::unique_ptr<rocksdb::Iterator> it(db->NewIterator(rocksdb::ReadOptions()));
-            for (it->SeekToFirst(); it->Valid(); it->Next()) {
-                std::string key_id = it->key().ToString();
-                if (key_id.at(0) == '=') continue;
-                ids->Set(idx++, Nan::New(key_id).ToLocalChecked());
-            }
+        for (auto const& item : c->cache_) {
+            ids->Set(idx++,Nan::New(item.first).ToLocalChecked());
         }
 
         info.GetReturnValue().Set(ids);
@@ -765,7 +680,32 @@ NAN_METHOD(Cache::list)
     return;
 }
 
-NAN_METHOD(Cache::merge)
+NAN_METHOD(RocksDBCache::list)
+{
+    try {
+        RocksDBCache* c = node::ObjectWrap::Unwrap<RocksDBCache>(info.This());
+        Local<Array> ids = Nan::New<Array>();
+
+        std::shared_ptr<rocksdb::DB> db = c->db;
+
+        std::unique_ptr<rocksdb::Iterator> it(db->NewIterator(rocksdb::ReadOptions()));
+        unsigned idx = 0;
+        for (it->SeekToFirst(); it->Valid(); it->Next()) {
+            std::string key_id = it->key().ToString();
+            if (key_id.at(0) == '=') continue;
+            ids->Set(idx++, Nan::New(key_id).ToLocalChecked());
+        }
+
+        info.GetReturnValue().Set(ids);
+        return;
+    } catch (std::exception const& ex) {
+        return Nan::ThrowTypeError(ex.what());
+    }
+    info.GetReturnValue().Set(Nan::Undefined());
+    return;
+}
+
+NAN_METHOD(RocksDBCache::merge)
 {
     if (!info[0]->IsString()) return Nan::ThrowTypeError("argument 1 must be a String (infile 1)");
     if (!info[1]->IsString()) return Nan::ThrowTypeError("argument 2 must be a String (infile 2)");
@@ -791,81 +731,40 @@ NAN_METHOD(Cache::merge)
     return;
 }
 
-NAN_METHOD(Cache::_set)
+NAN_METHOD(MemoryCache::_set)
 {
-    if (info.Length() < 3) {
-        return Nan::ThrowTypeError("expected three info: 'type', 'id', 'data'");
+    if (info.Length() < 2) {
+        return Nan::ThrowTypeError("expected two info: 'id', 'data'");
     }
     if (!info[0]->IsString()) {
-        return Nan::ThrowTypeError("first argument must be a String");
+        return Nan::ThrowTypeError("first arg must be a String");
     }
-    if (!info[1]->IsString()) {
-        return Nan::ThrowTypeError("second arg must be a String");
+    if (!info[1]->IsArray()) {
+        return Nan::ThrowTypeError("second arg must be an Array");
     }
-    if (!info[2]->IsArray()) {
-        return Nan::ThrowTypeError("third arg must be an Array");
-    }
-    Local<Array> data = Local<Array>::Cast(info[2]);
+    Local<Array> data = Local<Array>::Cast(info[1]);
     if (data->IsNull() || data->IsUndefined()) {
-        return Nan::ThrowTypeError("an array expected for third argument");
+        return Nan::ThrowTypeError("an array expected for second argument");
     }
     try {
-        Nan::Utf8String utf8_type(info[0]);
-        if (utf8_type.length() < 1) {
-            return Nan::ThrowTypeError("first arg must be a String");
-        }
-        std::string type(*utf8_type);
 
-        Nan::Utf8String utf8_id(info[1]);
+        Nan::Utf8String utf8_id(info[0]);
         if (utf8_id.length() < 1) {
-            return Nan::ThrowTypeError("second arg must be a String");
+            return Nan::ThrowTypeError("first arg must be a String");
         }
         std::string id(*utf8_id);
 
-        Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
-        Cache::memcache & mem = c->cache_;
-        Cache::memcache::const_iterator itr = mem.find(type);
-        if (itr == mem.end()) {
-            c->cache_.emplace(type, Cache::arraycache());
-        }
-        Cache::arraycache & arrc = c->cache_[type];
-        Cache::arraycache::key_type key_id = static_cast<Cache::arraycache::key_type>(id);
-        Cache::arraycache::iterator itr2 = arrc.find(key_id);
+        MemoryCache* c = node::ObjectWrap::Unwrap<MemoryCache>(info.This());
+        arraycache & arrc = c->cache_;
+        key_type key_id = static_cast<key_type>(id);
+        arraycache::iterator itr2 = arrc.find(key_id);
         if (itr2 == arrc.end()) {
-            arrc.emplace(key_id,Cache::intarray());
+            arrc.emplace(key_id,intarray());
         }
-        Cache::intarray & vv = arrc[key_id];
+        intarray & vv = arrc[key_id];
 
         unsigned array_size = data->Length();
-        if (info[3]->IsBoolean() && info[3]->BooleanValue()) {
-            // if we're merging and we don't currently have anything in the memcache
-            // but we do have stuff in a loaded rocksdb, merge onto that instead
-            // FIXME: is this a terrible idea?
-            if (vv.size() == 0) {
-                if (cacheHas(c, type)) {
-                    std::shared_ptr<rocksdb::DB> db = cacheGet(c, type);
-
-                    std::string search_id = id;
-                    std::string message;
-                    rocksdb::Status s = db->Get(rocksdb::ReadOptions(), search_id, &message);
-                    if (s.ok()) {
-                        protozero::pbf_reader item(message);
-                        item.next(CACHE_ITEM);
-                        auto vals = item.get_packed_uint64();
-                        uint64_t lastval = 0;
-                        // delta decode values.
-                        for (auto it = vals.first; it != vals.second; ++it) {
-                            if (lastval == 0) {
-                                lastval = *it;
-                                vv.emplace_back(lastval);
-                            } else {
-                                lastval = lastval - *it;
-                                vv.emplace_back(lastval);
-                            }
-                        }
-                    }
-                }
-            }
+        if (info[2]->IsBoolean() && info[2]->BooleanValue()) {
             vv.reserve(vv.size() + array_size);
         } else {
             if (itr2 != arrc.end()) vv.clear();
@@ -882,129 +781,26 @@ NAN_METHOD(Cache::_set)
     return;
 }
 
-/*
-
-Note: This function will not override data for keys already inserted into the cache
-
-*/
-
-
-NAN_METHOD(Cache::loadSync)
-{
-    if (info.Length() < 2) {
-        return Nan::ThrowTypeError("expected two info: 'filename', 'type'");
-    }
-    if (!info[0]->IsString()) {
-        return Nan::ThrowTypeError("first arg 'filename' must be a String");
-    }
-    if (!info[1]->IsString()) {
-        return Nan::ThrowTypeError("second arg 'type' must be a String");
-    }
-    try {
-        Nan::Utf8String utf8_filename(info[0]);
-        if (utf8_filename.length() < 1) {
-            return Nan::ThrowTypeError("first arg must be a String");
-        }
-        std::string filename(*utf8_filename);
-
-        Nan::Utf8String utf8_type(info[1]);
-        if (utf8_type.length() < 1) {
-            return Nan::ThrowTypeError("second arg must be a String");
-        }
-        std::string type(*utf8_type);
-
-        Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
-        Cache::memcache & mem = c->cache_;
-        Cache::memcache::iterator itr = mem.find(type);
-        if (itr != mem.end()) {
-            c->cache_.emplace(type, arraycache());
-        }
-        Cache::memcache::iterator itr2 = mem.find(type);
-        if (itr2 != mem.end()) {
-            mem.erase(itr2);
-        }
-        if (!cacheHas(c, type)) {
-            std::unique_ptr<rocksdb::DB> db;
-            rocksdb::Options options;
-            options.create_if_missing = true;
-            rocksdb::Status status = OpenForReadOnlyDB(options, filename, db);
-
-            if (!status.ok()) {
-                return Nan::ThrowTypeError("unable to open rocksdb file for loading");
-            }
-
-            cacheInsert(c, type, std::move(db));
-        }
-    } catch (std::exception const& ex) {
-        return Nan::ThrowTypeError(ex.what());
-    }
-    info.GetReturnValue().Set(Nan::Undefined());
-    return;
-}
-
-NAN_METHOD(Cache::has)
+template <typename T>
+inline NAN_METHOD(_genericget)
 {
     if (info.Length() < 1) {
-        return Nan::ThrowTypeError("expected one info: 'type'");
+        return Nan::ThrowTypeError("expected one info: id");
     }
     if (!info[0]->IsString()) {
         return Nan::ThrowTypeError("first arg must be a String");
     }
     try {
-        Nan::Utf8String utf8_type(info[0]);
-        if (utf8_type.length() < 1) {
-            return Nan::ThrowTypeError("second arg must be a String");
-        }
-        std::string type(*utf8_type);
-
-        Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
-        Cache::memcache const& mem = c->cache_;
-        Cache::memcache::const_iterator itr = mem.find(type);
-        if (itr != mem.end()) {
-            info.GetReturnValue().Set(Nan::True());
-            return;
-        } else {
-            if (cacheHas(c, type)) {
-                info.GetReturnValue().Set(Nan::True());
-                return;
-            } else {
-                info.GetReturnValue().Set(Nan::False());
-                return;
-            }
-        }
-    } catch (std::exception const& ex) {
-        return Nan::ThrowTypeError(ex.what());
-    }
-}
-
-NAN_METHOD(Cache::_get)
-{
-    if (info.Length() < 2) {
-        return Nan::ThrowTypeError("expected two info: type and id");
-    }
-    if (!info[0]->IsString()) {
-        return Nan::ThrowTypeError("first arg must be a String");
-    }
-    if (!info[1]->IsString()) {
-        return Nan::ThrowTypeError("second arg must be a String");
-    }
-    try {
-        Nan::Utf8String utf8_type(info[0]);
-        if (utf8_type.length() < 1) {
-            return Nan::ThrowTypeError("first arg must be a String");
-        }
-        std::string type(*utf8_type);
-
-        Nan::Utf8String utf8_id(info[1]);
+        Nan::Utf8String utf8_id(info[0]);
         if (utf8_id.length() < 1) {
-            return Nan::ThrowTypeError("second arg must be a String");
+            return Nan::ThrowTypeError("first arg must be a String");
         }
         std::string id(*utf8_id);
 
-        bool ignorePrefixFlag = (info.Length() >= 3 && info[2]->IsBoolean()) ? info[2]->BooleanValue() : false;
+        bool ignorePrefixFlag = (info.Length() >= 2 && info[1]->IsBoolean()) ? info[1]->BooleanValue() : false;
 
-        Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
-        Cache::intarray vector = __get(c, type, id, ignorePrefixFlag);
+        T* c = node::ObjectWrap::Unwrap<T>(info.This());
+        intarray vector = __get(c, id, ignorePrefixFlag);
         if (!vector.empty()) {
             std::size_t size = vector.size();
             Local<Array> array = Nan::New<Array>(static_cast<int>(size));
@@ -1022,32 +818,32 @@ NAN_METHOD(Cache::_get)
     }
 }
 
-NAN_METHOD(Cache::_getbyprefix)
+NAN_METHOD(MemoryCache::_get) {
+    return _genericget<MemoryCache>(info);
+}
+
+NAN_METHOD(RocksDBCache::_get) {
+    return _genericget<RocksDBCache>(info);
+}
+
+template <typename T>
+inline NAN_METHOD(_genericgetbyprefix)
 {
-    if (info.Length() < 2) {
-        return Nan::ThrowTypeError("expected two info: type and id");
+    if (info.Length() < 1) {
+        return Nan::ThrowTypeError("expected one info: id");
     }
     if (!info[0]->IsString()) {
         return Nan::ThrowTypeError("first arg must be a String");
     }
-    if (!info[1]->IsString()) {
-        return Nan::ThrowTypeError("second arg must be a String");
-    }
     try {
-        Nan::Utf8String utf8_type(info[0]);
-        if (utf8_type.length() < 1) {
-            return Nan::ThrowTypeError("first arg must be a String");
-        }
-        std::string type(*utf8_type);
-
-        Nan::Utf8String utf8_id(info[1]);
+        Nan::Utf8String utf8_id(info[0]);
         if (utf8_id.length() < 1) {
-            return Nan::ThrowTypeError("second arg must be a String");
+            return Nan::ThrowTypeError("first arg must be a String");
         }
         std::string id(*utf8_id);
 
-        Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
-        Cache::intarray vector = __getbyprefix(c, type, id);
+        T* c = node::ObjectWrap::Unwrap<T>(info.This());
+        intarray vector = __getbyprefix(c, id);
         if (!vector.empty()) {
             std::size_t size = vector.size();
             Local<Array> array = Nan::New<Array>(static_cast<int>(size));
@@ -1065,55 +861,15 @@ NAN_METHOD(Cache::_getbyprefix)
     }
 }
 
-NAN_METHOD(Cache::unload)
-{
-    if (info.Length() < 1) {
-        return Nan::ThrowTypeError("expected one info: 'type'");
-    }
-    if (!info[0]->IsString()) {
-        return Nan::ThrowTypeError("first arg must be a String");
-    }
-
-    std::string toRemove = "both";
-    if (info.Length() > 1) {
-        if (!info[1]->IsString()) {
-            return Nan::ThrowTypeError("second arg, if supplied, must be a String");
-        }
-        toRemove = *String::Utf8Value(info[1]->ToString());
-        if (toRemove != "mem" && toRemove != "lazy" && toRemove != "both") {
-            return Nan::ThrowTypeError("second arg, if supplied, must be one of 'mem', 'lazy', or 'both'");
-        }
-    }
-
-    bool hit = false;
-    try {
-        Nan::Utf8String utf8_type(info[0]);
-        if (utf8_type.length() < 1) {
-            return Nan::ThrowTypeError("first arg must be a String");
-        }
-        std::string type(*utf8_type);
-
-        Cache* c = node::ObjectWrap::Unwrap<Cache>(info.This());
-
-        if (toRemove == "mem" || toRemove == "both") {
-            Cache::memcache & mem = c->cache_;
-            Cache::memcache::iterator itr = mem.find(type);
-            if (itr != mem.end()) {
-                hit = hit || true;
-                mem.erase(itr);
-            }
-        }
-        if (toRemove == "lazy" || toRemove == "both") {
-            hit = hit || cacheRemove(c, type);
-        }
-    } catch (std::exception const& ex) {
-        return Nan::ThrowTypeError(ex.what());
-    }
-    info.GetReturnValue().Set(Nan::New<Boolean>(hit));
-    return;
+NAN_METHOD(MemoryCache::_getbyprefix) {
+    return _genericgetbyprefix<MemoryCache>(info);
 }
 
-NAN_METHOD(Cache::New)
+NAN_METHOD(RocksDBCache::_getbyprefix) {
+    return _genericgetbyprefix<RocksDBCache>(info);
+}
+
+NAN_METHOD(MemoryCache::New)
 {
     if (!info.IsConstructCall()) {
         return Nan::ThrowTypeError("Cannot call constructor as function, you need to use 'new' keyword");
@@ -1125,10 +881,50 @@ NAN_METHOD(Cache::New)
         if (!info[0]->IsString()) {
             return Nan::ThrowTypeError("first argument 'id' must be a String");
         }
-        Cache* im = new Cache();
+        MemoryCache* im = new MemoryCache();
 
-        if (info[1]->IsNumber()) {
-            im->cachesize = static_cast<unsigned>(info[1]->NumberValue());
+        im->Wrap(info.This());
+        info.This()->Set(Nan::New("id").ToLocalChecked(), info[0]);
+        info.GetReturnValue().Set(info.This());
+        return;
+    } catch (std::exception const& ex) {
+        return Nan::ThrowTypeError(ex.what());
+    }
+    info.GetReturnValue().Set(Nan::Undefined());
+    return;
+}
+
+NAN_METHOD(RocksDBCache::New)
+{
+    if (!info.IsConstructCall()) {
+        return Nan::ThrowTypeError("Cannot call constructor as function, you need to use 'new' keyword");
+    }
+    try {
+        if (info.Length() < 2) {
+            return Nan::ThrowTypeError("expected arguments 'id' and 'filename'");
+        }
+        if (!info[0]->IsString()) {
+            return Nan::ThrowTypeError("first argument 'id' must be a String");
+        }
+        if (!info[1]->IsString()) {
+            return Nan::ThrowTypeError("second argument 'filename' must be a String");
+        }
+        RocksDBCache* im = new RocksDBCache();
+
+        Nan::Utf8String utf8_filename(info[1]);
+        if (utf8_filename.length() < 1) {
+            return Nan::ThrowTypeError("second arg must be a String");
+        }
+        std::string filename(*utf8_filename);
+
+        std::unique_ptr<rocksdb::DB> db;
+        rocksdb::Options options;
+        options.create_if_missing = true;
+        rocksdb::Status status = OpenForReadOnlyDB(options, filename, db);
+        im->db = std::move(db);
+
+        if (!status.ok()) {
+            return Nan::ThrowTypeError("unable to open rocksdb file for loading");
         }
 
         im->Wrap(info.This());
@@ -1163,7 +959,8 @@ constexpr uint64_t POW2_3 = static_cast<uint64_t>(_pow(2.0,3));
 constexpr uint64_t POW2_2 = static_cast<uint64_t>(_pow(2.0,2));
 
 struct PhrasematchSubq {
-    PhrasematchSubq(carmen::Cache *c,
+    PhrasematchSubq(void *c,
+                    char t,
                     double w,
                     std::string p,
                     bool pf,
@@ -1171,13 +968,15 @@ struct PhrasematchSubq {
                     unsigned short z,
                     uint32_t m) :
         cache(c),
+        type(t),
         weight(w),
         phrase(p),
         prefix(pf),
         idx(i),
         zoom(z),
         mask(m) {}
-    carmen::Cache *cache;
+    void *cache;
+    char type;
     double weight;
     std::string phrase;
     bool prefix;
@@ -1471,12 +1270,15 @@ void coalesceSingle(uv_work_t* req) {
         }
 
         // Load and concatenate grids for all ids in `phrases`
-        std::string type = "grid";
-        Cache::intarray grids;
+        intarray grids;
         if (subq.prefix) {
-            grids = __getbyprefix(subq.cache, type, subq.phrase);
+            grids = subq.type == TYPE_MEMORY ?
+                __getbyprefix(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase) :
+                __getbyprefix(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase);
         } else {
-            grids = __get(subq.cache, type, subq.phrase, true);
+            grids = subq.type == TYPE_MEMORY ?
+                __get(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, true) :
+                __get(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, true);
         }
 
         unsigned long m = grids.size();
@@ -1562,10 +1364,10 @@ void coalesceMulti(uv_work_t* req) {
         std::size_t stackSize = stack.size();
 
         // Cache zoom levels to iterate over as coalesce occurs.
-        std::vector<Cache::intarray> zoomCache;
+        std::vector<intarray> zoomCache;
         zoomCache.reserve(stackSize);
         for (auto const& subq : stack) {
-            Cache::intarray zooms;
+            intarray zooms;
             std::vector<bool> zoomUniq(22, false);
             for (auto const& subqB : stack) {
                 if (subq.idx == subqB.idx) continue;
@@ -1580,7 +1382,6 @@ void coalesceMulti(uv_work_t* req) {
         // Coalesce relevs into higher zooms, e.g.
         // z5 inherits relev of overlapping tiles at z4.
         // @TODO assumes sources are in zoom ascending order.
-        std::string type = "grid";
         std::map<uint64_t,std::vector<Context>> coalesced;
         std::map<uint64_t,std::vector<Context>>::iterator cit;
         std::map<uint64_t,std::vector<Context>>::iterator pit;
@@ -1627,12 +1428,15 @@ void coalesceMulti(uv_work_t* req) {
         std::size_t i = 0;
         for (auto const& subq : stack) {
             // Load and concatenate grids for all ids in `phrases`
-            std::string type = "grid";
-            Cache::intarray grids;
+            intarray grids;
             if (subq.prefix) {
-                grids = __getbyprefix(subq.cache, type, subq.phrase);
+                grids = subq.type == TYPE_MEMORY ?
+                    __getbyprefix(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase) :
+                    __getbyprefix(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase);
             } else {
-                grids = __get(subq.cache, type, subq.phrase, true);
+                grids = subq.type == TYPE_MEMORY ?
+                    __get(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, true) :
+                    __get(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, true);
             }
 
             bool first = i == 0;
@@ -1775,7 +1579,8 @@ void coalesceAfter(uv_work_t* req) {
 
     // Reference count the cache objects
     for (auto & subq : baton->stack) {
-       subq.cache->_unref();
+        if (subq.type == TYPE_MEMORY) reinterpret_cast<MemoryCache*>(subq.cache)->_unref();
+        else reinterpret_cast<RocksDBCache*>(subq.cache)->_unref();
     }
 
     if (!baton->error.empty()) {
@@ -1797,7 +1602,8 @@ void coalesceAfter(uv_work_t* req) {
     baton->callback.Reset();
     delete baton;
 }
-NAN_METHOD(Cache::coalesce) {
+
+NAN_METHOD(coalesce) {
     // PhrasematchStack (js => cpp)
     if (info.Length() < 3) {
         return Nan::ThrowTypeError("Expects 3 arguments: a PhrasematchSubq array, an option object, and a callback");
@@ -1940,18 +1746,37 @@ NAN_METHOD(Cache::coalesce) {
                     return Nan::ThrowTypeError("cache value must be a Cache object");
                 }
                 Local<Object> _cache = prop_val->ToObject();
-                if (_cache->IsNull() || _cache->IsUndefined() || !Nan::New(Cache::constructor)->HasInstance(prop_val)) {
+                if (_cache->IsNull() || _cache->IsUndefined()) {
                     return Nan::ThrowTypeError("cache value must be a Cache object");
                 }
-                baton->stack.emplace_back(
-                    node::ObjectWrap::Unwrap<Cache>(_cache),
-                    weight,
-                    phrase,
-                    prefix,
-                    idx,
-                    zoom,
-                    mask
-                );
+                bool isMemoryCache = Nan::New(MemoryCache::constructor)->HasInstance(prop_val);
+                bool isRocksDBCache = Nan::New(RocksDBCache::constructor)->HasInstance(prop_val);
+                if (!(isMemoryCache || isRocksDBCache)) {
+                    return Nan::ThrowTypeError("cache value must be a MemoryCache or RocksDBCache object");
+                }
+                if (isMemoryCache) {
+                    baton->stack.emplace_back(
+                        (void*) node::ObjectWrap::Unwrap<MemoryCache>(_cache),
+                        TYPE_MEMORY,
+                        weight,
+                        phrase,
+                        prefix,
+                        idx,
+                        zoom,
+                        mask
+                    );
+                } else {
+                    baton->stack.emplace_back(
+                        (void*) node::ObjectWrap::Unwrap<RocksDBCache>(_cache),
+                        TYPE_ROCKSDB,
+                        weight,
+                        phrase,
+                        prefix,
+                        idx,
+                        zoom,
+                        mask
+                    );
+                }
             }
         }
 
@@ -2009,7 +1834,8 @@ NAN_METHOD(Cache::coalesce) {
         baton_ptr.release();
         // Reference count the cache objects
         for (auto & subq : baton->stack) {
-           subq.cache->_ref();
+           if (subq.type == TYPE_MEMORY) reinterpret_cast<MemoryCache*>(subq.cache)->_ref();
+           else reinterpret_cast<RocksDBCache*>(subq.cache)->_ref();
         }
         // optimization: for stacks of 1, use coalesceSingle
         if (baton->stack.size() == 1) {
@@ -2027,7 +1853,9 @@ NAN_METHOD(Cache::coalesce) {
 
 extern "C" {
     static void start(Handle<Object> target) {
-        Cache::Initialize(target);
+        MemoryCache::Initialize(target);
+        RocksDBCache::Initialize(target);
+        Nan::SetMethod(target, "coalesce", coalesce);
     }
 }
 

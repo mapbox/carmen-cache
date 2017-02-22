@@ -40,43 +40,48 @@ protected:
     noncopyable& operator=(noncopyable const& ) = delete;
 };
 
-class Cache: public node::ObjectWrap {
+typedef std::string key_type;
+typedef uint64_t value_type;
+// fully cached item
+typedef std::vector<value_type> intarray;
+typedef std::vector<key_type> keyarray;
+typedef std::map<key_type,intarray> arraycache;
+
+class MemoryCache: public node::ObjectWrap {
 public:
-    ~Cache();
-    typedef std::string key_type;
-    typedef uint64_t value_type;
-    // list + map as simple LRU cache
-    typedef std::pair<std::string,std::shared_ptr<rocksdb::DB>> message_pair;
-    typedef std::list<message_pair> message_list;
-    typedef std::map<std::string,message_list::iterator> message_cache;
-    // fully cached item
-    typedef std::vector<value_type> intarray;
-    typedef std::vector<key_type> keyarray;
-    typedef std::map<key_type,intarray> arraycache;
-    typedef std::map<std::string,arraycache> memcache;
+    ~MemoryCache();
     static Nan::Persistent<v8::FunctionTemplate> constructor;
     static void Initialize(v8::Handle<v8::Object> target);
     static NAN_METHOD(New);
-    static NAN_METHOD(_shard);
-    static NAN_METHOD(has);
-    static NAN_METHOD(loadSync);
+    static NAN_METHOD(pack);
+    static NAN_METHOD(list);
+    static NAN_METHOD(_get);
+    static NAN_METHOD(_getbyprefix);
+    static NAN_METHOD(_set);
+    static NAN_METHOD(coalesce);
+    explicit MemoryCache();
+    void _ref() { Ref(); }
+    void _unref() { Unref(); }
+    arraycache cache_;
+};
+
+class RocksDBCache: public node::ObjectWrap {
+public:
+    ~RocksDBCache();
+    static Nan::Persistent<v8::FunctionTemplate> constructor;
+    static void Initialize(v8::Handle<v8::Object> target);
+    static NAN_METHOD(New);
     static NAN_METHOD(pack);
     static NAN_METHOD(merge);
     static NAN_METHOD(list);
     static NAN_METHOD(_get);
     static NAN_METHOD(_getbyprefix);
-    static NAN_METHOD(_benchget);
-    static NAN_METHOD(_benchgetbyprefix);
     static NAN_METHOD(_set);
-    static NAN_METHOD(unload);
     static NAN_METHOD(coalesce);
-    explicit Cache();
+    explicit RocksDBCache();
     void _ref() { Ref(); }
     void _unref() { Unref(); }
-    memcache cache_;
-    message_cache msg_;
-    message_list msglist_;
-    unsigned cachesize = 131072;
+    std::shared_ptr<rocksdb::DB> db;
 };
 
 #define CACHE_MESSAGE 1
@@ -86,6 +91,8 @@ public:
 #define MEMO_PREFIX_LENGTH_T2 7
 #define PREFIX_MAX_GRID_LENGTH 500000
 
+#define TYPE_MEMORY 1
+#define TYPE_ROCKSDB 2
 }
 
 #endif // __CARMEN_BINDING_HPP__
