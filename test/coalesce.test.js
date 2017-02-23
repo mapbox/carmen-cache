@@ -1,22 +1,125 @@
-var Cache = require('../index.js').Cache;
+var Cache = require('../index.js').MemoryCache;
 var Grid = require('./grid.js');
-var coalesce = require('../index.js').Cache.coalesce;
+var coalesce = require('../index.js').coalesce;
 var test = require('tape');
 
 test('coalesce args', function(assert) {
     assert.throws(function() {
         coalesce();
+    }, /Expects 3 arguments/, 'throws');
+
+    assert.throws(function() {
+        coalesce([]);
+    }, /Expects 3 arguments/, 'throws');
+
+    assert.throws(function() {
+        coalesce([], {} );
+    }, /Expects 3 arguments/, 'throws');
+
+    assert.throws(function() {
+        coalesce([{}], {}, function() {} );
+    }, /missing idx property/, 'throws');
+
+    assert.throws(function() {
+        coalesce([-1], {}, function() {} );
+    }, /All items in array must be valid PhrasematchSubq objects/, 'throws');
+
+    assert.throws(function() {
+        coalesce(undefined, {}, function() {} );
     }, /Arg 1 must be a PhrasematchSubq array/, 'throws');
 
     assert.throws(function() {
-        coalesce([
+        coalesce([], {}, function() {} );
+    }, /Arg 1 must be an array with one or more/, 'throws');
+
+    assert.throws(function() {
+        coalesce([undefined], {}, function() {} );
+    }, /All items in array must be valid PhrasematchSubq objects/, 'throws');
+
+    assert.throws(function() {
+        coalesce([null], {}, function() {} );
+    }, /All items in array must be valid PhrasematchSubq objects/, 'throws');
+
+    var valid_subq = {
+        cache: new Cache('a'),
+        mask: 1 << 0,
+        idx: 0,
+        zoom: 2,
+        weight: 1,
+        phrase: 'a',
+        prefix: false
+    };
+
+    assert.throws(function() {
+        coalesce([valid_subq],undefined,function(){});
+    }, /Arg 2 must be an options object/, 'throws');
+
+    assert.throws(function() {
+        coalesce([valid_subq],undefined,function(){});
+    }, /Arg 2 must be an options object/, 'throws');
+
+    if (process.versions.node[0] != '0') {
+        assert.throws(function() {
+            coalesce([Object.assign({},valid_subq,{idx:-1})],{},function(){});
+        }, /encountered idx value too large to fit/, 'throws');
+
+        assert.throws(function() {
+            coalesce([Object.assign({},valid_subq,{idx:null})],{},function(){});
+        }, /value must be a number/, 'throws');
+
+        assert.throws(function() {
+            coalesce([Object.assign({},valid_subq,{zoom:-1})],{},function(){});
+        }, /encountered zoom value too large to fit/, 'throws');
+
+        assert.throws(function() {
+            coalesce([Object.assign({},valid_subq,{zoom:null})],{},function(){});
+        }, /value must be a number/, 'throws');
+
+        assert.throws(function() {
+            coalesce([Object.assign({},valid_subq,{zoom:-1})],{},function(){});
+        }, /encountered zoom value too large to fit/, 'throws');
+
+        assert.throws(function() {
+            coalesce([Object.assign({},valid_subq,{mask:null})],{},function(){});
+        }, /value must be a number/, 'throws');
+
+        assert.throws(function() {
+            coalesce([Object.assign({},valid_subq,{mask:-1})],{},function(){});
+        }, /encountered mask value too large to fit/, 'throws');
+
+        assert.throws(function() {
+            coalesce([Object.assign({},valid_subq,{weight:null})],{},function(){});
+        }, /weight value must be a number/, 'throws');
+
+        assert.throws(function() {
+            coalesce([Object.assign({},valid_subq,{weight:-1})],{},function(){});
+        }, /encountered weight value too large to fit in double/, 'throws');
+
+        assert.throws(function() {
+            coalesce([Object.assign({},valid_subq,{phrase:null})],{},function(){});
+        }, /phrase value must be a string/, 'throws');
+
+        assert.throws(function() {
+            coalesce([Object.assign({},valid_subq,{phrase:''})],{},function(){});
+        }, /encountered invalid phrase/, 'throws');
+
+        assert.throws(function() {
+            coalesce([Object.assign({},valid_subq,{cache:null})],{},function(){});
+        }, /cache value must be a Cache object/, 'throws');
+
+        assert.throws(function() {
+            coalesce([Object.assign({},valid_subq,{cache:{}})],{},function(){});
+        }, /cache value must be/, 'throws');
+
+        var valid_stack = [
             {
                 cache: new Cache('a'),
                 mask: 1 << 0,
                 idx: 0,
                 zoom: 0,
                 weight: 0.5,
-                phrase: 1
+                phrase: '1',
+                prefix: false,
             },
             {
                 cache: new Cache('b'),
@@ -24,49 +127,115 @@ test('coalesce args', function(assert) {
                 idx: 1,
                 zoom: 1,
                 weight: 0.5,
-                phrase: 1
-            },
-        ]);
-    }, /Arg 2 must be an options object/, 'throws');
+                phrase: '1',
+                prefix: false,
+            }
+        ];
+
+        assert.throws(function() {
+            coalesce(valid_stack.concat([Object.assign({},valid_subq,{cache:null})]),{},function(){});
+        }, /cache value must be a Cache object/, 'throws');
+
+    }
 
     assert.throws(function() {
-        coalesce([], { centerzxy:[0,0,0] } );
+        coalesce([valid_subq], { bboxzxy:null },function(){} );
+    }, /bboxzxy must be an array/, 'throws');
+
+    assert.throws(function() {
+        coalesce([valid_subq], { bboxzxy:[0,0,0,0] },function(){} );
+    }, /bboxzxy must be an array of 5 numbers/, 'throws');
+
+    assert.throws(function() {
+        coalesce([valid_subq], { bboxzxy:['',0,0,0,0] },function(){} );
+    }, /bboxzxy values must be number/, 'throws');
+
+    assert.throws(function() {
+        coalesce([valid_subq], { bboxzxy:[-1,0,0,0,0] },function(){} );
+    }, /encountered bboxzxy value too large to fit in uint32_t/, 'throws');
+
+    assert.throws(function() {
+        coalesce([valid_subq], { bboxzxy:[4294967296,0,0,0,0] },function(){} );
+    }, /encountered bboxzxy value too large to fit in uint32_t/, 'throws');
+
+    assert.throws(function() {
+        coalesce([valid_subq], { centerzxy:null },function(){} );
+    }, /centerzxy must be an array/, 'throws');
+
+    assert.throws(function() {
+        coalesce([valid_subq], { centerzxy:['',0,0] },function(){} );
+    }, /centerzxy values must be number/, 'throws');
+
+    assert.throws(function() {
+        coalesce([valid_subq], { centerzxy:[0,0] },function(){} );
+    }, /centerzxy must be an array of 3 numbers/, 'throws');
+
+    assert.throws(function() {
+        coalesce([valid_subq], { centerzxy:[-1,0,0] },function(){} );
+    }, /encountered centerzxy value too large to fit in uint32_t/, 'throws');
+
+    assert.throws(function() {
+        coalesce([valid_subq], { centerzxy:[4294967296,0,0] },function(){} );
+    }, /encountered centerzxy value too large to fit in uint32_t/, 'throws');
+
+    assert.throws(function() {
+        coalesce([valid_subq], { centerzxy:[0,0,0] }, 5 );
     }, /Arg 3 must be a callback/, 'throws');
 
     assert.throws(function() {
-        coalesce([-1]);
-    }, /All items in array must be valid/, 'throws');
+        coalesce([{mask: 1 << 0, idx: 1, zoom: 1, weight: .5, phrase: '1', prefix: false}],{},function(){});
+    }, /missing/, 'throws');
 
     assert.throws(function() {
-        coalesce([undefined]);
-    }, /All items in array must be valid/, 'throws');
+        coalesce([{cache: new Cache('b'), idx: 1, zoom: 1, weight: .5, phrase: '1', prefix: false}],{},function(){});
+    }, /missing/, 'throws');
 
     assert.throws(function() {
-        coalesce([{idx:-1}]);
-    }, /encountered idx value too large to fit/, 'throws');
+        coalesce([{cache: new Cache('b'), mask: 1 << 0, zoom: 1, weight: .5, phrase: '1', prefix: false}],{},function(){});
+    }, /missing/, 'throws');
 
     assert.throws(function() {
-        coalesce([{zoom:-1}]);
-    }, /encountered zoom value too large to fit/, 'throws');
+        coalesce([{cache: new Cache('b'), mask: 1 << 0, idx: 1, weight: .5, phrase: '1', prefix: false}],{},function(){});
+    }, /missing/, 'throws');
 
     assert.throws(function() {
-        coalesce([], { centerzxy:[-1,0,0] } );
-    }, /value in array too large/, 'throws');
+        coalesce([{cache: new Cache('b'), mask: 1 << 0, idx: 1, zoom: 1, phrase: '1', prefix: false}],{},function(){});
+    }, /missing/, 'throws');
 
     assert.throws(function() {
-        coalesce([], { centerzxy:[4294967296,0,0] } );
-    }, /value in array too large/, 'throws');
+        coalesce([{cache: new Cache('b'), mask: 1 << 0, idx: 1, zoom: 1, weight: .5, prefix: false}],{},function(){});
+    }, /missing/, 'throws');
 
     assert.throws(function() {
-        coalesce([], { centerzxy:[0,0,0] }, 5 );
-    }, /Arg 3 must be a callback/, 'throws');
+        coalesce([{cache: '', mask: 1 << 0, idx: 1, weight: .5,  zoom: 1, phrase: '1', prefix: false}],{},function(){});
+    }, /cache value must be a Cache object/, 'throws');
+
+    assert.throws(function() {
+        coalesce([{cache: new Cache('b'), mask: '', idx: 1, zoom: 1, weight: .5, phrase: '1', prefix: false}],{},function(){});
+    }, /mask value must be a number/, 'throws');
+
+    assert.throws(function() {
+        coalesce([{cache: new Cache('b'), mask: 1 << 0, idx: '', weight: .5, zoom: 1, phrase: '1', prefix: false}],{},function(){});
+    }, /idx value must be a number/, 'throws');
+
+    assert.throws(function() {
+        coalesce([{cache: new Cache('b'), mask: 1 << 0, idx: 1, weight: .5, zoom: '', phrase: '1', prefix: false}],{},function(){});
+    }, /zoom value must be a number/, 'throws');
+
+    assert.throws(function() {
+        coalesce([{cache: new Cache('b'), mask: 1 << 0, idx: 1, weight: '', zoom: 1, phrase: '1', prefix: false}],{},function(){});
+    }, /weight value must be a number/, 'throws');
+
+    assert.throws(function() {
+        coalesce([{cache: new Cache('b'), mask: 1 << 0, idx: 1, weight: .5, zoom: 1, phrase: ''}],{},function(){});
+    }, /encountered invalid phrase/, 'throws');
 
     assert.end();
 });
 
 (function() {
     var cache = new Cache('a', 0);
-    cache._set('grid', 0, 1, [
+    cache._set('1', [
         Grid.encode({
             id: 2,
             x: 2,
@@ -96,7 +265,8 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 2,
             weight: 1,
-            phrase: 1
+            phrase: '1',
+            prefix: false,
         }], {}, function(err, res) {
             assert.ifError(err);
             assert.deepEqual(res[0].relev, 1, '0.relev');
@@ -115,7 +285,8 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 2,
             weight: 1,
-            phrase: 1
+            phrase: '1',
+            prefix: false,
         }], {
             centerzxy: [3,3,3]
         }, function(err, res) {
@@ -129,7 +300,6 @@ test('coalesce args', function(assert) {
             assert.end();
         });
     });
-
     test('coalesceSingle bbox', function(assert) {
         coalesce([{
             cache: cache,
@@ -137,7 +307,8 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 2,
             weight: 1,
-            phrase: 1
+            phrase: '1',
+            prefix: false,
         }], {
             bboxzxy: [2, 1, 1, 1, 1]
         }, function(err, res) {
@@ -148,7 +319,6 @@ test('coalesce args', function(assert) {
             assert.end();
         });
     });
-
 })();
 
 (function() {
@@ -170,7 +340,7 @@ test('coalesce args', function(assert) {
         score: 0
     }));
 
-    cache._set('grid', 0, 1, grids);
+    cache._set('1', grids);
     test('coalesceSingle', function(assert) {
         coalesce([{
             cache: cache,
@@ -178,7 +348,8 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 2,
             weight: 1,
-            phrase: 1
+            phrase: '1',
+            prefix: false,
         }], {}, function(err, res) {
             assert.ifError(err);
             assert.equal(res.length, 2);
@@ -194,7 +365,7 @@ test('coalesce args', function(assert) {
 (function() {
     var a = new Cache('a', 0);
     var b = new Cache('b', 0);
-    a._set('grid', 0, 1, [
+    a._set('1', [
         Grid.encode({
             id: 1,
             x: 1,
@@ -210,7 +381,7 @@ test('coalesce args', function(assert) {
             score: 1
         }),
     ]);
-    b._set('grid', 0, 1, [
+    b._set('1', [
         Grid.encode({
             id: 2,
             x: 2,
@@ -240,14 +411,16 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 1,
             weight: 0.5,
-            phrase: 1
+            phrase: '1',
+            prefix: false,
         }, {
             cache: b,
             mask: 1 << 0,
             idx: 1,
             zoom: 2,
             weight: 0.5,
-            phrase: 1
+            phrase: '1',
+            prefix: false,
         }], {}, function(err, res) {
             assert.ifError(err);
             // sorts by relev, score
@@ -267,14 +440,16 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 1,
             weight: 0.5,
-            phrase: 1
+            phrase: '1',
+            prefix: false,
         }, {
             cache: b,
             mask: 1 << 0,
             idx: 1,
             zoom: 2,
             weight: 0.5,
-            phrase: 1
+            phrase: '1',
+            prefix: false,
         }], {
             centerzxy: [2,3,3]
         }, function(err, res) {
@@ -294,7 +469,7 @@ test('coalesce args', function(assert) {
 (function() {
     var a = new Cache('a', 0);
     var b = new Cache('b', 0);
-    a._set('grid', 0, 1, [
+    a._set('1', [
         Grid.encode({
             id: 1,
             x: 0,
@@ -303,7 +478,7 @@ test('coalesce args', function(assert) {
             score: 1
         }),
     ]);
-    b._set('grid', 0, 1, [
+    b._set('1', [
         Grid.encode({
             id: 2,
             x: 4800,
@@ -326,14 +501,16 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 0,
             weight: 0.5,
-            phrase: 1
+            phrase: '1',
+            prefix: false,
         }, {
             cache: b,
             mask: 1 << 0,
             idx: 1,
             zoom: 14,
             weight: 0.5,
-            phrase: 1
+            phrase: '1',
+            prefix: false,
         }], {
             centerzxy: [14,4601,6200]
         }, function(err, res) {
@@ -351,14 +528,16 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 0,
             weight: 0.5,
-            phrase: 1
+            phrase: '1',
+            prefix: false,
         }, {
             cache: b,
             mask: 1 << 0,
             idx: 1,
             zoom: 14,
             weight: 0.5,
-            phrase: 1
+            phrase: '1',
+            prefix: false,
         }], {
             centerzxy: [14,4605,6200]
         }, function(err, res) {
@@ -374,7 +553,7 @@ test('coalesce args', function(assert) {
 (function() {
     var a = new Cache('a', 0);
     var b = new Cache('b', 0);
-    a._set('grid', 0, 1, [
+    a._set('1', [
         Grid.encode({
             id: 1,
             x: 1,
@@ -390,7 +569,7 @@ test('coalesce args', function(assert) {
             score: 1
         }),
     ]);
-    b._set('grid', 0, 1, [
+    b._set('1', [
         Grid.encode({
             id: 3,
             x: 2,
@@ -406,14 +585,16 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 1,
             weight: 0.5,
-            phrase: 1
+            phrase: '1',
+            prefix: false,
         }, {
             cache: b,
             mask: 1 << 0,
             idx: 1,
             zoom: 2,
             weight: 0.5,
-            phrase: 1
+            phrase: '1',
+            prefix: false,
         }], {}, function(err, res) {
             assert.ifError(err);
             // sorts by relev, score
@@ -427,12 +608,13 @@ test('coalesce args', function(assert) {
     });
 })();
 
+
 // cooalese multi bbox
 (function() {
     var a = new Cache('a', 0);
     var b = new Cache('b', 0);
     var c = new Cache('c', 0);
-    a._set('grid', 0, 1, [
+    a._set('1', [
         Grid.encode({
             id: 1,
             x: 0,
@@ -448,7 +630,7 @@ test('coalesce args', function(assert) {
             score: 1
         })
     ]);
-    b._set('grid', 0, 1, [
+    b._set('1', [
         Grid.encode({
             id: 3,
             x: 3,
@@ -464,7 +646,7 @@ test('coalesce args', function(assert) {
             score: 1
         })
     ]);
-    c._set('grid', 0, 1, [
+    c._set('1', [
         Grid.encode({
             id: 5,
             x: 21,
@@ -487,14 +669,16 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 1,
             weight: 0.5,
-            phrase: 1
+            phrase: '1',
+            prefix: false,
         }, {
             cache: b,
             mask: 1 << 0,
             idx: 1,
             zoom: 2,
             weight: 0.5,
-            phrase: 1
+            phrase: '1',
+            prefix: false,
         }], {
             bboxzxy: [1, 0, 0, 1, 0]
         }, function(err, res) {
@@ -510,14 +694,16 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 1,
             weight: 0.5,
-            phrase: 1
+            phrase: '1',
+            prefix: false,
         }, {
             cache: b,
             mask: 1 << 0,
             idx: 1,
             zoom: 2,
             weight: 0.5,
-            phrase: 1
+            phrase: '1',
+            prefix: false,
         }], {
             bboxzxy: [2, 0, 0, 1, 3]
         }, function(err, res) {
@@ -533,14 +719,16 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 1,
             weight: 0.5,
-            phrase: 1
+            phrase: '1',
+            prefix: false,
         }, {
             cache: b,
             mask: 1 << 0,
             idx: 1,
             zoom: 2,
             weight: 0.5,
-            phrase: 1
+            phrase: '1',
+            prefix: false,
         }], {
             bboxzxy: [6, 14, 30, 15, 64]
         }, function(err, res) {
@@ -556,14 +744,16 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 2,
             weight: 0.5,
-            phrase: 1
+            phrase: '1',
+            prefix: false,
         }, {
             cache: c,
             mask: 1 << 0,
             idx: 1,
             zoom: 5,
             weight: 0.5,
-            phrase: 1
+            phrase: '1',
+            prefix: false,
         }], {
             bboxzxy: [1, 0, 0, 1, 0]
         }, function(err, res) {
@@ -578,7 +768,7 @@ test('coalesce args', function(assert) {
 (function() {
     var a = new Cache('a', 0);
     var b = new Cache('b', 0);
-    a._set('grid', 0, 1, [
+    a._set('1', [
         Grid.encode({
             id: 3,
             x: 0,
@@ -594,7 +784,7 @@ test('coalesce args', function(assert) {
             score: 1
         })
     ]);
-    b._set('grid', 0, 1, [
+    b._set('1', [
         Grid.encode({
             id: 1,
             x: 1,
@@ -617,14 +807,16 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 0,
             weight: 0.5,
-            phrase: 1
+            phrase: '1',
+            prefix: false,
         }, {
             cache: b,
             mask: 1 << 0,
             idx: 1,
             zoom: 1,
             weight: 0.5,
-            phrase: 1
+            phrase: '1',
+            prefix: false,
         }], {}, function(err, res) {
             assert.ifError(err);
             assert.equal(res.length, 2, 'res length = 2');
@@ -640,7 +832,7 @@ test('coalesce args', function(assert) {
 (function() {
     var a = new Cache('a', 0);
     var b = new Cache('b', 0);
-    a._set('grid', 0, 1, [
+    a._set('1', [
         Grid.encode({
             id: 3,
             x: 0,
@@ -656,7 +848,7 @@ test('coalesce args', function(assert) {
             score: 1
         })
     ]);
-    b._set('grid', 0, 1, [
+    b._set('1', [
         Grid.encode({
             id: 1,
             x: 0,
@@ -672,14 +864,16 @@ test('coalesce args', function(assert) {
             idx: 25,
             zoom: 0,
             weight: 0.5,
-            phrase: 1
+            phrase: '1',
+            prefix: false,
         }, {
             cache: b,
             mask: 1 << 0,
             idx: 20,
             zoom: 0,
             weight: 0.5,
-            phrase: 1
+            phrase: '1',
+            prefix: false,
         }], {}, function(err, res) {
             assert.ifError(err);
             assert.equal(res.length, 2, 'res length = 2');
@@ -704,9 +898,9 @@ test('coalesce args', function(assert) {
         relev: 1,
         score: 1
     }));
-    a._set('grid', 0, 1, grids);
+    a._set('1', grids);
 
-    b._set('grid', 0, 1, [
+    b._set('1', [
         Grid.encode({
             id: 1,
             x: 0,
@@ -715,7 +909,7 @@ test('coalesce args', function(assert) {
             score: 1
         })
     ]);
-    c._set('grid', 0, 1, [
+    c._set('1', [
         Grid.encode({
             id: 1,
             x: 0,
@@ -733,21 +927,24 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 0,
             weight: 0.33,
-            phrase: 1
+            phrase: '1',
+            prefix: false
         }, {
             cache: b,
             mask: 1 << 0,
             idx: 1,
             zoom: 0,
             weight: 0.33,
-            phrase: 1
+            phrase: '1',
+            prefix: false
         }, {
             cache: c,
             mask: 1 << 1,
             idx: 2,
             zoom: 0,
             weight: 0.33,
-            phrase: 1
+            phrase: '1',
+            prefix: false
         }], {}, function(err, res) {
             assert.ifError(err);
             assert.equal(res.length, 1, 'res length = 1');
@@ -764,21 +961,24 @@ test('coalesce args', function(assert) {
             idx: 0,
             zoom: 0,
             weight: 0.33,
-            phrase: 1
+            phrase: '1',
+            prefix: false
         }, {
             cache: b,
             mask: 1 << 0,
             idx: 1,
             zoom: 0,
             weight: 0.33,
-            phrase: 1
+            phrase: '1',
+            prefix: false
         }, {
             cache: c,
             mask: 1 << 1,
             idx: 2,
             zoom: 0,
             weight: 0.33,
-            phrase: 1
+            phrase: '1',
+            prefix: false
         }], {}, function(err, res) {
             assert.ifError(err);
             assert.equal(res.length, 1, 'res length = 1');

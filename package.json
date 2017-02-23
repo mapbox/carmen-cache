@@ -14,11 +14,11 @@
     "url": "git://github.com/mapbox/carmen-cache.git", 
     "type": "git"
   }, 
-  "version": "0.16.5", 
+  "version": "0.16.5-2", 
   "dependencies": {
     "node-pre-gyp": "~0.6.32", 
-    "nan": "~2.4.0", 
-    "protozero": "~1.4.5"
+    "nan": "~2.5.1",
+    "protozero": "~1.5.1"
   }, 
   "scripts": {
     "test": "tape test/*.test.js", 

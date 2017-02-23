@@ -1,153 +1,128 @@
-var Cache = require('../index.js').Cache;
+var carmenCache = require('../index.js');
 var tape = require('tape');
 var fs = require('fs');
 var mp53 = Math.pow(2,53);
 
+var tmpdir = "/tmp/temp." + Math.random().toString(36).substr(2, 5);
+fs.mkdirSync(tmpdir);
+var tmpidx = 0;
+var tmpfile = function() { return tmpdir + "/" + (tmpidx++) + ".dat"; };
+
 tape('#list', function(assert) {
-    var cache = new Cache('a', 1);
-    cache._set('term', 0, 5, [0,1,2]);
-    assert.deepEqual(cache.list('term'), [0]);
-    assert.end();
-});
-
-tape('#has', function(assert) {
-    var cache = new Cache('a', 1);
-
-    for (var i = 0; i < 5; i++) {
-        var shard = Math.floor(Math.random() * mp53);
-        assert.deepEqual(cache.has('term', shard), false, shard + ' x');
-        cache._set('term', shard, 5, [0,1,2]);
-        assert.deepEqual(cache.has('term', shard), true, shard + ' has');
-    }
-
+    var cache = new carmenCache.MemoryCache('a');
+    cache._set('5', [0,1,2]);
+    assert.deepEqual(cache.list(), ['5']);
     assert.end();
 });
 
 tape('#get + #set', function(assert) {
-    var cache = new Cache('a', 1);
+    var cache = new carmenCache.MemoryCache('a');
 
     for (var i = 0; i < 5; i++) {
-        var id = Math.floor(Math.random() * mp53);
-        assert.deepEqual(cache._get('term', 0, id), undefined, id + ' not set');
-        cache._set('term', 0, id, [0,1,2]);
-        assert.deepEqual(cache._get('term', 0, id), [0, 1, 2], id + ' set to 0,1,2');
-        cache._set('term', 0, id, [3,4,5]);
-        assert.deepEqual(cache._get('term', 0, id), [3, 4, 5], id + ' set to 3,4,5');
-        cache._set('term', 0, id, [6,7,8], true);
-        assert.deepEqual(cache._get('term', 0, id), [3, 4, 5, 6, 7, 8], id + ' set to 3,4,5,6,7,8');
+        var id = Math.random().toString(36).replace(/[^a-z]+/g, '').substr(0, 5);
+        assert.deepEqual(cache._get(id), undefined, id + ' not set');
+        cache._set(id, [0,1,2]);
+        assert.deepEqual(cache._get(id), [0, 1, 2], id + ' set to 0,1,2');
+        cache._set(id, [3,4,5]);
+        assert.deepEqual(cache._get(id), [3, 4, 5], id + ' set to 3,4,5');
+        cache._set(id, [6,7,8], true);
+        assert.deepEqual(cache._get(id), [3, 4, 5, 6, 7, 8], id + ' set to 3,4,5,6,7,8');
     }
 
     assert.end();
 });
 
 tape('#pack', function(assert) {
-    var cache = new Cache('a', 1);
-    cache._set('term', 0, 5, [0,1,2]);
-    assert.deepEqual(cache.pack('term', 0).length, 9);
+    var cache = new carmenCache.MemoryCache('a');
+    cache._set('5', [0,1,2]);
     // set should replace data
-    cache._set('term', 0, 5, [0,1,2,4]);
-    assert.deepEqual(cache.pack('term', 0).length, 10);
-    assert.throws(cache._set.bind(null, 'term', 0, 5, []), 'can\'t set empty term');
+    cache._set('5', [0,1,2,4]);
+    assert.throws(cache._set.bind(null, '5', []), 'can\'t set empty term');
 
     // fake data
     var array = [];
     for (var i=0;i<10000;++i) array.push(0);
 
     // now test packing data created via load
-    var packer = new Cache('a', 1);
-    packer._set('term', 0, 5, array);
-    packer._set('term', 1, mp53-1, array);
-
-    var loader = new Cache('a', 1);
+    var packer = new carmenCache.MemoryCache('a');
+    packer._set('5', array);
+    packer._set('6', array);
 
     // invalid args
-    assert.throws(function() { loader.pack() });
-    assert.throws(function() { loader.pack('term') });
-    assert.throws(function() { loader.pack(1) });
-    assert.throws(function() { loader.pack('term','foo') });
-    assert.throws(function() { loader.loadSync() });
-    assert.throws(function() { loader.loadSync(1) });
-    assert.throws(function() { loader.loadSync(null) });
-    assert.throws(function() { loader.loadSync({}) });
-    assert.throws(function() { loader.loadSync(new Buffer('a'),1,'foo') });
-    assert.throws(function() { loader.loadSync(new Buffer('a'),'term','foo') });
+    assert.throws(function() { var loader = new carmenCache.RocksDBCache('a'); });
+    assert.throws(function() { var loader = new carmenCache.MemoryCache('a'); loader.pack(1); });
+    assert.throws(function() { var loader = new carmenCache.RocksDBCache('a', 1); });
+    assert.throws(function() { var loader = new carmenCache.RocksDBCache('a', null); });
+    assert.throws(function() { var loader = new carmenCache.RocksDBCache('a', {}); });
+    assert.throws(function() { var loader = new carmenCache.RocksDBCache('a', new Buffer('a')); });
 
     // grab data right back out
-    loader.loadSync(packer.pack('term',0), 'term', 0);
-    assert.deepEqual(loader.pack('term', 0).length, 10008);
-    assert.deepEqual(loader._get('term', 0, 5), array);
-
-    // grab data right back out
-    loader.loadSync(packer.pack('term', 1), 'term', 1);
-    assert.deepEqual(loader.pack('term', 1).length, 10015);
-    assert.deepEqual(loader._get('term', 1, mp53-1), array);
-
-    // try to grab data that does not exist
-    assert.throws(function() { loader.pack('term', 99999999999999) });
+    var directLoad = tmpfile();
+    packer.pack(directLoad)
+    var loader = new carmenCache.RocksDBCache('a', directLoad);
+    assert.deepEqual(loader._get('5'), array);
+    assert.deepEqual(loader._get('6'), array);
 
     assert.end();
 });
 
 tape('#load', function(assert) {
-    var cache = new Cache('a', 1);
+    var cache = new carmenCache.MemoryCache('a');
     assert.equal(cache.id, 'a');
 
-    assert.equal(cache._get('term', 0, 5), undefined);
-    assert.deepEqual(cache.list('term'), []);
+    assert.equal(cache._get('5'), undefined);
+    assert.deepEqual(cache.list(), []);
 
-    // invalid args
-    assert.throws(function() { cache.list() });
-    assert.throws(function() { cache.list(1) });
+    cache._set('5', [0,1,2]);
+    assert.deepEqual(cache._get('5'), [0,1,2]);
+    assert.deepEqual(cache.list(), ['5']);
 
-    cache._set('term', 0, 5, [0,1,2]);
-    assert.deepEqual(cache._get('term', 0, 5), [0,1,2]);
-    assert.deepEqual(cache.list('term'), [0]);
-
-    cache._set('term', 0, 21, [5,6]);
-    assert.deepEqual(cache._get('term', 0, 21), [5,6]);
-    assert.deepEqual(cache.list('term'), [0], 'single shard');
-    assert.deepEqual(cache.list('term', 0), ['5', '21'], 'keys in shard');
+    cache._set('21', [5,6]);
+    assert.deepEqual(cache._get('21'), [5,6]);
+    assert.deepEqual(cache.list(), ['21', '5'], 'keys in type');
 
     // cache A serializes data, cache B loads serialized data.
-    var pack = cache.pack('term', 0);
-    var loader = new Cache('b', 1);
-    loader.loadSync(pack, 'term', 0);
-    assert.deepEqual(loader._get('term', 0, 21), [6,5]);
-    assert.deepEqual(loader.list('term'), [0], 'single shard');
-    assert.deepEqual(loader.list('term', 0), ['5', '21'], 'keys in shard');
+    var pack = tmpfile();
+    cache.pack(pack);
+    var loader = new carmenCache.RocksDBCache('b', pack);
+    assert.deepEqual(loader._get('21'), [6,5]);
+    assert.deepEqual(loader.list(), ['21', '5'], 'keys in shard');
     assert.end();
 });
 
-tape('#unload on empty data', function(assert) {
-    var cache = new Cache('a', 1);
-    assert.equal(cache.unload('term',5), false);
-    assert.deepEqual(cache.has('term', 5), false);
-    assert.end();
-});
+tape('#dot suffix', function(assert) {
+    var cache = new carmenCache.MemoryCache('mem');
 
-tape('#unload after set', function(assert) {
-    var cache = new Cache('a', 1);
-    cache._set('term', 0, 0, [0,1,2]);
-    assert.deepEqual(cache.has('term', 0), true);
-    assert.equal(cache.unload('term',0), true);
-    assert.deepEqual(cache.has('term', 0), false);
-    assert.end();
-});
+    cache._set('test', [2,1,0]);
+    cache._set('test.', [7,6,5,4]);
+    cache._set('something', [4,3,2]);
+    cache._set('else.', [9,8,7]);
 
-tape('#unload after load', function(assert) {
-    var cache = new Cache('a', 1);
-    var array = [];
-    for (var i=0;i<10000;++i) {
-        array.push(0);
-    }
-    cache._set('term', 0, 5, array);
-    var pack = cache.pack('term', 0);
-    var loader = new Cache('b', 1);
-    loader.loadSync(pack, 'term', 0);
-    assert.deepEqual(loader._get('term', 0, 5), array);
-    assert.deepEqual(loader.list('term'), [0], 'single shard');
-    assert.deepEqual(loader.has('term', 0), true);
-    assert.equal(loader.unload('term',0), true);
-    assert.deepEqual(loader.has('term', 0), false);
+    // cache A serializes data, cache B loads serialized data.
+    var pack = tmpfile();
+    cache.pack(pack);
+    var loader = new carmenCache.RocksDBCache('packed', pack);
+
+    [cache, loader].forEach(function(c) {
+        assert.deepEqual(c._get('test'), [2,1,0], 'exact get without dot where both exist for ' + c.id);
+        assert.deepEqual(c._get('test.'), [7,6,5,4], 'exact get with dot where both exist for ' + c.id);
+        assert.deepEqual(c._get('something'), [4,3,2], 'exact get without dot where non-dot exists for ' + c.id);
+        assert.deepEqual(c._get('something.'), undefined, 'exact get with dot where non-dot exists for ' + c.id);
+        assert.deepEqual(c._get('else'), undefined, 'exact get without dot where dot exists for ' + c.id);
+        assert.deepEqual(c._get('else.'), [9,8,7], 'exact get with dot where dot exists for ' + c.id);
+
+        assert.deepEqual(c._get('test', true), [7,6,5,4,2,1,0], 'ignore-prefix get where both exist for ' + c.id);
+        assert.deepEqual(c._get('something', true), [4,3,2], 'ignore-prefix get where non-dot exists for ' + c.id);
+        assert.deepEqual(c._get('else', true), [9,8,7], 'ignore-prefix get where dot exists for ' + c.id);
+
+        assert.deepEqual(c._getByPrefix('te'), [2,1,0], 'partial getbyprefix where both exist for ' + c.id);
+        assert.deepEqual(c._getByPrefix('test'), [7,6,5,4,2,1,0], 'complete getbyprefix where both exist for ' + c.id);
+        assert.deepEqual(c._getByPrefix('so'), [4,3,2], 'partial getbyprefix where non-dot exists for ' + c.id);
+        assert.deepEqual(c._getByPrefix('something'), [4,3,2], 'complete getbyprefix where non-dot exists for ' + c.id);
+        assert.deepEqual(c._getByPrefix('el'), undefined, 'partial getbyprefix where dot exists for ' + c.id);
+        assert.deepEqual(c._getByPrefix('else'), [9,8,7], 'complete getbyprefix where dot exists for ' + c.id);
+    });
+
+    assert.deepEqual(loader.list('grid'), [ 'else.', 'something', 'test', 'test.' ], 'keys in shard');
     assert.end();
 });

@@ -1,20 +1,22 @@
-var Cache = require('../index.js').Cache;
+var Cache = require('../index.js').MemoryCache;
 var Grid = require('./grid.js');
-var coalesce = require('../index.js').Cache.coalesce;
+var coalesce = require('../index.js').coalesce;
 var test = require('tape');
 var mp36 = Math.pow(2,36);
 
 (function() {
     var runs = 50;
     var b = new Cache('b');
-    b._set('grid', Math.floor(3848571113/mp36), 3848571113, require('./fixtures/coalesce-bench-single-3848571113.json'));
-    console.log('# pack size', b.pack('grid', Math.floor(3848571113/mp36), 3848571113).length);
+    b._set('3848571113', require('./fixtures/coalesce-bench-single-3848571113.json'));
+    //console.log('# pack size', b.pack('grid', '3848571113').length);
     var stacks = [{
         cache: b,
         idx: 0,
         zoom: 14,
         weight: 1,
-        phrase: 3848571113
+        phrase: '3848571113',
+        prefix: false,
+        mask: 1 << 0
     }];
     test('coalesceSingle', function(assert) {
         if (process.env.COVERAGE) return assert.end();
@@ -74,22 +76,24 @@ var mp36 = Math.pow(2,36);
     var runs = 50;
     var a = new Cache('a', 0);
     var b = new Cache('b', 0);
-    a._set('grid', Math.floor(1965155344/mp36), 1965155344, require('./fixtures/coalesce-bench-multi-1965155344.json'));
-    b._set('grid', Math.floor(3848571113/mp36), 3848571113, require('./fixtures/coalesce-bench-multi-3848571113.json'));
+    a._set('1965155344', require('./fixtures/coalesce-bench-multi-1965155344.json'));
+    b._set('3848571113', require('./fixtures/coalesce-bench-multi-3848571113.json'));
     var stacks = [{
         cache: a,
         mask: 1 << 0,
         idx: 0,
         zoom: 12,
         weight: 0.25,
-        phrase: 1965155344
+        phrase: '1965155344',
+        prefix: false,
     }, {
         cache: b,
         mask: 1 << 1,
         idx: 1,
         zoom: 14,
         weight: 0.75,
-        phrase: 3848571113
+        phrase: '3848571113',
+        prefix: false,
     }];
     test('coalesceMulti', function(assert) {
         if (process.env.COVERAGE) return assert.end();
