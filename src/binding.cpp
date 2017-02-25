@@ -735,7 +735,17 @@ NAN_METHOD(MemoryCache::list)
 
         unsigned idx = 0;
         for (auto const& item : c->cache_) {
-            ids->Set(idx++,Nan::New(item.first).ToLocalChecked());
+            Local<Array> out = Nan::New<Array>();
+            out->Set(0, Nan::New(item.first.substr(0, item.first.find(LANGFIELD_SEPARATOR))).ToLocalChecked());
+
+            langfield_type langfield = extract_langfield(item.first);
+            if (langfield == ALL_LANGUAGES) {
+                out->Set(1, Nan::Null());
+            } else {
+                out->Set(1, langfieldToLangarray(langfield));
+            }
+
+            ids->Set(idx++, out);
         }
 
         info.GetReturnValue().Set(ids);
@@ -760,7 +770,18 @@ NAN_METHOD(RocksDBCache::list)
         for (it->SeekToFirst(); it->Valid(); it->Next()) {
             std::string key_id = it->key().ToString();
             if (key_id.at(0) == '=') continue;
-            ids->Set(idx++, Nan::New(key_id).ToLocalChecked());
+
+            Local<Array> out = Nan::New<Array>();
+            out->Set(0, Nan::New(key_id.substr(0, key_id.find(LANGFIELD_SEPARATOR))).ToLocalChecked());
+
+            langfield_type langfield = extract_langfield(key_id);
+            if (langfield == ALL_LANGUAGES) {
+                out->Set(1, Nan::Null());
+            } else {
+                out->Set(1, langfieldToLangarray(langfield));
+            }
+
+            ids->Set(idx++, out);
         }
 
         info.GetReturnValue().Set(ids);
