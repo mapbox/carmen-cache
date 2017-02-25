@@ -5,7 +5,6 @@
 #include <cmath>
 #include <cassert>
 #include <cstring>
-#include <limits>
 #include <algorithm>
 #include <memory>
 
@@ -116,93 +115,165 @@ intarray __get(RocksDBCache const* c, std::string id, bool ignorePrefixFlag) {
 struct sortableGrid {
     protozero::const_varint_iterator<uint64_t> it;
     protozero::const_varint_iterator<uint64_t> end;
+    value_type unadjusted_lastval;
+    bool matches_language;
 };
 
-intarray __getbyprefix(MemoryCache const* c, std::string prefix) {
+// in general, the key format including language field is <key_text><separator character><8-byte langfield>
+// but as a size optimization for language-less indexes, we omit the langfield
+// if it would otherwise have been ALL_LANGUAGES (all 1's), so if the first occurence
+// of the separator character is also the last character in the string, we just retur ALL_LANGUAGES
+// otherwise we extract it from the string
+//
+// we centralize both the adding of the field and extracting of the field here to keep from having
+// to handle that optimization everywhere
+inline langfield_type extract_langfield(std::string const& s) {
+    if (s.find(LANGFIELD_SEPARATOR) == s.length() - 1) {
+        return ALL_LANGUAGES;
+    } else {
+        return *(reinterpret_cast<const unsigned __int128*>(&s[s.length() - sizeof(langfield_type)]));
+    }
+}
+
+inline void add_langfield(std::string & s, langfield_type langfield) {
+    if (langfield == ALL_LANGUAGES) {
+        s.reserve(sizeof(LANGFIELD_SEPARATOR) + sizeof(langfield_type));
+        s.push_back(LANGFIELD_SEPARATOR);
+        s.append(reinterpret_cast<char*>(&langfield), sizeof(langfield_type));
+    } else {
+        s.push_back(LANGFIELD_SEPARATOR);
+    }
+}
+
+constexpr uint64_t LANGUAGE_MATCH_BOOST = (const uint64_t)(1) << 63;
+
+intarray __getmatching(MemoryCache const* c, std::string phrase, bool match_prefixes, langfield_type langfield) {
     intarray array;
-    size_t prefix_length = prefix.length();
-    const char* prefix_cstr = prefix.c_str();
+
+    if (!match_prefixes) phrase.push_back(LANGFIELD_SEPARATOR);
+    size_t phrase_length = phrase.length();
+    const char* phrase_data = phrase.data();
 
     // Load values from memory cache
 
     for (auto const& item : c->cache_) {
-        const char* item_cstr = item.first.c_str();
+        const char* item_data = item.first.data();
         size_t item_length = item.first.length();
-        // here, we skip this iteration if either the key is shorter than
-        // the prefix, or, if the key has the no-prefix flag, its length
-        // without the flag isn't the same as the item length (which will
-        // make the prefix comparison in the next step effectively an
-        // equality check)
-        if (
-            item_length < prefix_length ||
-            (item_cstr[item_length - 1] == '.' && item_length != prefix_length + 1)
-        ) {
-            continue;
-        }
-        if (memcmp(prefix_cstr, item_cstr, prefix_length) == 0) {
-            array.insert(array.end(), item.second.begin(), item.second.end());
+
+        if (item_length < phrase_length) continue;
+
+        if (memcmp(phrase_data, item_data, phrase_length) == 0) {
+            langfield_type message_langfield = extract_langfield(item.first);
+
+            if (message_langfield & langfield) {
+                array.reserve(array.size() + item.second.size());
+                for (auto const& grid : item.second) {
+                    array.emplace_back(grid | LANGUAGE_MATCH_BOOST);
+                }
+            } else {
+                array.insert(array.end(), item.second.begin(), item.second.end());
+            }
         }
     }
     std::sort(array.begin(), array.end(), std::greater<uint64_t>());
     return array;
 }
 
-intarray __getbyprefix(RocksDBCache const* c, std::string prefix) {
+intarray __getmatching(RocksDBCache const* c, std::string phrase, bool match_prefixes, langfield_type langfield) {
     intarray array;
-    size_t prefix_length = prefix.length();
+
+    if (!match_prefixes) phrase.push_back(LANGFIELD_SEPARATOR);
+    size_t phrase_length = phrase.length();
 
     // Load values from message cache
-    std::vector<std::string> messages;
+    std::vector<std::tuple<std::string, bool>> messages;
     std::vector<sortableGrid> grids;
 
-    if (prefix_length <= MEMO_PREFIX_LENGTH_T1) {
-        prefix = "=1" + prefix.substr(0, MEMO_PREFIX_LENGTH_T1);
-    } else if (prefix_length <= MEMO_PREFIX_LENGTH_T2) {
-        prefix = "=2" + prefix.substr(0, MEMO_PREFIX_LENGTH_T2);
+    if (match_prefixes) {
+        // if this is an autocomplete scan, use the prefix cache
+        if (phrase_length <= MEMO_PREFIX_LENGTH_T1) {
+            phrase = "=1" + phrase.substr(0, MEMO_PREFIX_LENGTH_T1);
+        } else if (phrase_length <= MEMO_PREFIX_LENGTH_T2) {
+            phrase = "=2" + phrase.substr(0, MEMO_PREFIX_LENGTH_T2);
+        }
     }
+
     radix_max_heap::pair_radix_max_heap<uint64_t, size_t> rh;
 
     std::shared_ptr<rocksdb::DB> db = c->db;
 
     std::unique_ptr<rocksdb::Iterator> rit(db->NewIterator(rocksdb::ReadOptions()));
-    for (rit->Seek(prefix); rit->Valid() && rit->key().ToString().compare(0, prefix.size(), prefix) == 0; rit->Next()) {
-        std::string key_id = rit->key().ToString();
+    for (rit->Seek(phrase); rit->Valid() && rit->key().ToString().compare(0, phrase_length, phrase) == 0; rit->Next()) {
+        std::string key = rit->key().ToString();
 
-        // same skip operation as for the memory cache; see above
-        if (
-            key_id.length() < prefix.length() ||
-            (key_id.at(key_id.length() - 1) == '.' && key_id.length() != prefix.length() + 1)
-        ) {
-            continue;
-        }
+        // grab the langfield from the end of the key
+        langfield_type message_langfield = extract_langfield(key);
+        bool matches_language = (bool)(message_langfield & langfield);
 
-        messages.emplace_back(rit->value().ToString());
+        messages.emplace_back(std::make_tuple(rit->value().ToString(), matches_language));
     }
-    for (std::string& message : messages) {
-        protozero::pbf_reader item(message);
+    for (std::tuple<std::string, bool>& message : messages) {
+        protozero::pbf_reader item(std::get<0>(message));
+        bool matches_language = std::get<1>(message);
+
         item.next(CACHE_ITEM);
         auto vals = item.get_packed_uint64();
 
         if (vals.first != vals.second) {
-            grids.emplace_back(sortableGrid{vals.first, vals.second});
-            rh.push(*(vals.first), grids.size() - 1);
+            value_type unadjusted_lastval = *(vals.first);
+            grids.emplace_back(sortableGrid{
+                vals.first,
+                vals.second,
+                unadjusted_lastval,
+                matches_language
+            });
+            rh.push(matches_language ? unadjusted_lastval | LANGUAGE_MATCH_BOOST : unadjusted_lastval, grids.size() - 1);
         }
     }
 
     while (!rh.empty() && array.size() < PREFIX_MAX_GRID_LENGTH) {
         size_t gridIdx = rh.top_value();
-        uint64_t lastval = rh.top_key();
+        uint64_t gridId = rh.top_key();
         rh.pop();
 
-        array.emplace_back(lastval);
-        grids[gridIdx].it++;
-        if (grids[gridIdx].it != grids[gridIdx].end) {
-            lastval = lastval - *(grids[gridIdx].it);
-            rh.push(lastval, gridIdx);
+        array.emplace_back(gridId);
+        sortableGrid* sg = &(grids[gridIdx]);
+        sg->it++;
+        if (sg->it != sg->end) {
+            sg->unadjusted_lastval -= *(grids[gridIdx].it);
+            rh.push(
+                sg->matches_language ? sg->unadjusted_lastval | LANGUAGE_MATCH_BOOST : sg->unadjusted_lastval,
+                gridIdx
+            );
         }
     }
 
     return array;
+}
+
+inline langfield_type langarrayToLangfield(Local<v8::Array> const& array) {
+    size_t array_size = array->Length();
+    langfield_type out = 0;
+    for (unsigned i = 0; i < array_size; i++) {
+        unsigned int val = static_cast<unsigned int>(array->Get(i)->NumberValue());
+        if (val >= sizeof(langfield_type)) {
+            // this should probably throw something
+            continue;
+        }
+        out = out | (static_cast<langfield_type>(1) << val);
+    }
+}
+
+inline Local<v8::Array> langfieldToLangarray(langfield_type langfield) {
+    Local<Array> langs = Nan::New<Array>();
+
+    unsigned idx = 0;
+    for (unsigned i = 0; i < sizeof(langfield_type); i++) {
+        if (langfield & (static_cast<langfield_type>(1) << i)) {
+            langs->Set(idx++,Nan::New(i));
+        }
+    }
+    return langs;
 }
 
 void MemoryCache::Initialize(Handle<Object> target) {
@@ -214,7 +285,7 @@ void MemoryCache::Initialize(Handle<Object> target) {
     Nan::SetPrototypeMethod(t, "list", MemoryCache::list);
     Nan::SetPrototypeMethod(t, "_set", _set);
     Nan::SetPrototypeMethod(t, "_get", _get);
-    Nan::SetPrototypeMethod(t, "_getByPrefix", _getbyprefix);
+    Nan::SetPrototypeMethod(t, "_getMatching", _getmatching);
     target->Set(Nan::New("MemoryCache").ToLocalChecked(), t->GetFunction());
     constructor.Reset(t);
 }
@@ -233,7 +304,7 @@ void RocksDBCache::Initialize(Handle<Object> target) {
     Nan::SetPrototypeMethod(t, "pack", RocksDBCache::pack);
     Nan::SetPrototypeMethod(t, "list", RocksDBCache::list);
     Nan::SetPrototypeMethod(t, "_get", _get);
-    Nan::SetPrototypeMethod(t, "_getByPrefix", _getbyprefix);
+    Nan::SetPrototypeMethod(t, "_getMatching", _getmatching);
     Nan::SetMethod(t, "merge", merge);
     target->Set(Nan::New("RocksDBCache").ToLocalChecked(), t->GetFunction());
     constructor.Reset(t);
@@ -827,13 +898,16 @@ NAN_METHOD(RocksDBCache::_get) {
 }
 
 template <typename T>
-inline NAN_METHOD(_genericgetbyprefix)
+inline NAN_METHOD(_genericgetmatching)
 {
-    if (info.Length() < 1) {
-        return Nan::ThrowTypeError("expected one info: id");
+    if (info.Length() < 3) {
+        return Nan::ThrowTypeError("expected two or three info: id, match_prefixes, [languages]");
     }
     if (!info[0]->IsString()) {
         return Nan::ThrowTypeError("first arg must be a String");
+    }
+    if (!info[1]->IsBoolean()) {
+        return Nan::ThrowTypeError("first arg must be a Bool");
     }
     try {
         Nan::Utf8String utf8_id(info[0]);
@@ -842,8 +916,20 @@ inline NAN_METHOD(_genericgetbyprefix)
         }
         std::string id(*utf8_id);
 
+        bool match_prefixes = info[1]->BooleanValue();
+
+        langfield_type langfield;
+        if (info.Length() > 2 && !(info[2]->IsNull() || info[2]->IsUndefined())) {
+            if (!info[2]->IsArray()) {
+                return Nan::ThrowTypeError("third arg, if supplied must be an Array");
+            }
+            langfield = langarrayToLangfield(Local<Array>::Cast(info[2]));
+        } else {
+            langfield = ALL_LANGUAGES;
+        }
+
         T* c = node::ObjectWrap::Unwrap<T>(info.This());
-        intarray vector = __getbyprefix(c, id);
+        intarray vector = __getmatching(c, id, match_prefixes, langfield);
         if (!vector.empty()) {
             std::size_t size = vector.size();
             Local<Array> array = Nan::New<Array>(static_cast<int>(size));
@@ -861,12 +947,12 @@ inline NAN_METHOD(_genericgetbyprefix)
     }
 }
 
-NAN_METHOD(MemoryCache::_getbyprefix) {
-    return _genericgetbyprefix<MemoryCache>(info);
+NAN_METHOD(MemoryCache::_getmatching) {
+    return _genericgetmatching<MemoryCache>(info);
 }
 
-NAN_METHOD(RocksDBCache::_getbyprefix) {
-    return _genericgetbyprefix<RocksDBCache>(info);
+NAN_METHOD(RocksDBCache::_getmatching) {
+    return _genericgetmatching<RocksDBCache>(info);
 }
 
 NAN_METHOD(MemoryCache::New)
@@ -1273,12 +1359,12 @@ void coalesceSingle(uv_work_t* req) {
         intarray grids;
         if (subq.prefix) {
             grids = subq.type == TYPE_MEMORY ?
-                __getbyprefix(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase) :
-                __getbyprefix(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase);
+                __getmatching(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, true, ALL_LANGUAGES) :
+                __getmatching(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, true, ALL_LANGUAGES);
         } else {
             grids = subq.type == TYPE_MEMORY ?
-                __get(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, true) :
-                __get(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, true);
+                __getmatching(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, false, ALL_LANGUAGES) :
+                __getmatching(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, false, ALL_LANGUAGES);
         }
 
         unsigned long m = grids.size();
@@ -1431,12 +1517,12 @@ void coalesceMulti(uv_work_t* req) {
             intarray grids;
             if (subq.prefix) {
                 grids = subq.type == TYPE_MEMORY ?
-                    __getbyprefix(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase) :
-                    __getbyprefix(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase);
+                    __getmatching(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, true, ALL_LANGUAGES) :
+                    __getmatching(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, true, ALL_LANGUAGES);
             } else {
                 grids = subq.type == TYPE_MEMORY ?
-                    __get(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, true) :
-                    __get(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, true);
+                    __getmatching(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, false, ALL_LANGUAGES) :
+                    __getmatching(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, false, ALL_LANGUAGES);
             }
 
             bool first = i == 0;

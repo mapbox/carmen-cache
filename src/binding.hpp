@@ -19,6 +19,7 @@
 #include <list>
 #include <vector>
 #include <deque>
+#include <limits>
 #include <algorithm>
 #include "radix_max_heap.h"
 #pragma clang diagnostic pop
@@ -42,6 +43,7 @@ protected:
 
 typedef std::string key_type;
 typedef uint64_t value_type;
+typedef unsigned __int128 langfield_type;
 // fully cached item
 typedef std::vector<value_type> intarray;
 typedef std::vector<key_type> keyarray;
@@ -56,7 +58,7 @@ public:
     static NAN_METHOD(pack);
     static NAN_METHOD(list);
     static NAN_METHOD(_get);
-    static NAN_METHOD(_getbyprefix);
+    static NAN_METHOD(_getmatching);
     static NAN_METHOD(_set);
     static NAN_METHOD(coalesce);
     explicit MemoryCache();
@@ -75,7 +77,7 @@ public:
     static NAN_METHOD(merge);
     static NAN_METHOD(list);
     static NAN_METHOD(_get);
-    static NAN_METHOD(_getbyprefix);
+    static NAN_METHOD(_getmatching);
     static NAN_METHOD(_set);
     static NAN_METHOD(coalesce);
     explicit RocksDBCache();
@@ -90,6 +92,9 @@ public:
 #define MEMO_PREFIX_LENGTH_T1 4
 #define MEMO_PREFIX_LENGTH_T2 7
 #define PREFIX_MAX_GRID_LENGTH 500000
+
+#define ALL_LANGUAGES std::numeric_limits<unsigned __int128>::max()
+#define LANGFIELD_SEPARATOR '|'
 
 #define TYPE_MEMORY 1
 #define TYPE_ROCKSDB 2
