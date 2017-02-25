@@ -35,89 +35,7 @@ rocksdb::Status OpenForReadOnlyDB(const rocksdb::Options& options, const std::st
     return status;
 }
 
-intarray __get(MemoryCache const* c, std::string id, bool ignorePrefixFlag) {
-    arraycache const& cache = c->cache_;
-    intarray array;
-
-    arraycache::const_iterator aitr = cache.find(id);
-    if (aitr == cache.end()) {
-        if (ignorePrefixFlag) {
-            arraycache::const_iterator aitr2 = cache.find(id + ".");
-            if (aitr2 != cache.end()) {
-                // we only found . suffix
-                return aitr2->second;
-            }
-        }
-        // we didn't find the non-.-suffix version and didn't look for the .-suffix version
-    } else {
-        if (ignorePrefixFlag) {
-            arraycache::const_iterator aitr2 = cache.find(id + ".");
-            if (aitr2 == cache.end()) {
-                // we found only non-.-suffix
-                return aitr->second;
-            } else {
-                // we found both; make a copy
-                std::vector<uint64_t> combined = aitr->second;
-                combined.insert(combined.end(), aitr2->second.begin(), aitr2->second.end());
-                std::inplace_merge(combined.begin(), combined.begin() + aitr->second.size(), combined.end(), std::greater<uint64_t>());
-                return combined;
-            }
-        }
-        // we found the non-.-suffix version (but didn't look for the .-suffix version)
-        return aitr->second;
-    }
-    return array;
-}
-
-intarray __get(RocksDBCache const* c, std::string id, bool ignorePrefixFlag) {
-    std::shared_ptr<rocksdb::DB> db = c->db;
-    intarray array;
-
-    std::string search_id = id;
-    std::vector<size_t> end_positions;
-    for (uint32_t i = 0; i < 2; i++) {
-        std::string message;
-        rocksdb::Status s = db->Get(rocksdb::ReadOptions(), search_id, &message);
-        if (s.ok()) {
-            protozero::pbf_reader item(message);
-            item.next(CACHE_ITEM);
-            auto vals = item.get_packed_uint64();
-            uint64_t lastval = 0;
-            // delta decode values.
-            for (auto it = vals.first; it != vals.second; ++it) {
-                if (lastval == 0) {
-                    lastval = *it;
-                    array.emplace_back(lastval);
-                } else {
-                    lastval = lastval - *it;
-                    array.emplace_back(lastval);
-                }
-            }
-        }
-        end_positions.emplace_back(array.size());
-        if (i == 0) {
-            if (!ignorePrefixFlag) {
-                break;
-            } else {
-                search_id = search_id + ".";
-            }
-        }
-    }
-
-    if (end_positions.size() == 2 && end_positions[0] != 0 && end_positions[0] != end_positions[1]) {
-        // we've found things for both the non-dot version and the dot version
-        // so we need to merge them so the order is sorted
-        std::inplace_merge(array.begin(), array.begin() + end_positions[0], array.end(), std::greater<uint64_t>());
-    }
-    return array;
-}
-
-struct sortableGrid {
-    protozero::const_varint_iterator<uint64_t> it;
-    protozero::const_varint_iterator<uint64_t> end;
-    value_type unadjusted_lastval;
-    bool matches_language;
-};
+constexpr uint64_t LANGUAGE_MATCH_BOOST = (const uint64_t)(1) << 63;
 
 // in general, the key format including language field is <key_text><separator character><8-byte langfield>
 // but as a size optimization for language-less indexes, we omit the langfield
@@ -145,7 +63,72 @@ inline void add_langfield(std::string & s, langfield_type langfield) {
     }
 }
 
-constexpr uint64_t LANGUAGE_MATCH_BOOST = (const uint64_t)(1) << 63;
+intarray __get(MemoryCache const* c, std::string phrase, langfield_type langfield) {
+    arraycache const& cache = c->cache_;
+    intarray array;
+
+    add_langfield(phrase, langfield);
+    arraycache::const_iterator aitr = cache.find(phrase);
+    if (aitr != cache.end()) {
+        return aitr->second;
+    }
+    return array;
+}
+
+inline void decodeMessage(std::string const & message, intarray & array) {
+    protozero::pbf_reader item(message);
+    item.next(CACHE_ITEM);
+    auto vals = item.get_packed_uint64();
+    uint64_t lastval = 0;
+    // delta decode values.
+    for (auto it = vals.first; it != vals.second; ++it) {
+        if (lastval == 0) {
+            lastval = *it;
+            array.emplace_back(lastval);
+        } else {
+            lastval = lastval - *it;
+            array.emplace_back(lastval);
+        }
+    }
+}
+
+inline void decodeAndBoostMessage(std::string const & message, intarray & array) {
+    protozero::pbf_reader item(message);
+    item.next(CACHE_ITEM);
+    auto vals = item.get_packed_uint64();
+    uint64_t lastval = 0;
+    // delta decode values.
+    for (auto it = vals.first; it != vals.second; ++it) {
+        if (lastval == 0) {
+            lastval = *it;
+            array.emplace_back(lastval | LANGUAGE_MATCH_BOOST);
+        } else {
+            lastval = lastval - *it;
+            array.emplace_back(lastval | LANGUAGE_MATCH_BOOST);
+        }
+    }
+}
+
+intarray __get(RocksDBCache const* c, std::string phrase, langfield_type langfield) {
+    std::shared_ptr<rocksdb::DB> db = c->db;
+    intarray array;
+
+    add_langfield(phrase, langfield);
+    std::string message;
+    rocksdb::Status s = db->Get(rocksdb::ReadOptions(), phrase, &message);
+    if (s.ok()) {
+        decodeMessage(message, array);
+    }
+
+    return array;
+}
+
+struct sortableGrid {
+    protozero::const_varint_iterator<uint64_t> it;
+    protozero::const_varint_iterator<uint64_t> end;
+    value_type unadjusted_lastval;
+    bool matches_language;
+};
 
 intarray __getmatching(MemoryCache const* c, std::string phrase, bool match_prefixes, langfield_type langfield) {
     intarray array;
@@ -212,6 +195,18 @@ intarray __getmatching(RocksDBCache const* c, std::string phrase, bool match_pre
 
         messages.emplace_back(std::make_tuple(rit->value().ToString(), matches_language));
     }
+
+    // short-circuit the priority queue merging logic if we only found one message
+    // as will be the norm for exact matches in translationless indexes
+    if (messages.size() == 1) {
+        if (std::get<1>(messages[0])) {
+            decodeAndBoostMessage(std::get<0>(messages[0]), array);
+        } else {
+            decodeMessage(std::get<0>(messages[0]), array);
+        }
+        return array;
+    }
+
     for (std::tuple<std::string, bool>& message : messages) {
         protozero::pbf_reader item(std::get<0>(message));
         bool matches_language = std::get<1>(message);
@@ -262,6 +257,7 @@ inline langfield_type langarrayToLangfield(Local<v8::Array> const& array) {
         }
         out = out | (static_cast<langfield_type>(1) << val);
     }
+    return out;
 }
 
 inline Local<v8::Array> langfieldToLangarray(langfield_type langfield) {
@@ -316,7 +312,7 @@ RocksDBCache::RocksDBCache()
 
 RocksDBCache::~RocksDBCache() { }
 
-inline void __packVec(intarray const& varr, std::unique_ptr<rocksdb::DB> const& db, std::string const& key) {
+inline void packVec(intarray const& varr, std::unique_ptr<rocksdb::DB> const& db, std::string const& key) {
     std::string message;
 
     protozero::pbf_writer item_writer(message);
@@ -377,7 +373,7 @@ NAN_METHOD(MemoryCache::pack)
                 // delta-encode values, sorted in descending order.
                 std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
 
-                __packVec(varr, db, item.first);
+                packVec(varr, db, item.first);
 
                 std::string prefix_t1 = "";
                 std::string prefix_t2 = "";
@@ -442,7 +438,7 @@ NAN_METHOD(MemoryCache::pack)
                 varr.resize(PREFIX_MAX_GRID_LENGTH);
             }
 
-            __packVec(varr, db, item.first);
+            packVec(varr, db, item.first);
         }
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
@@ -805,7 +801,7 @@ NAN_METHOD(RocksDBCache::merge)
 NAN_METHOD(MemoryCache::_set)
 {
     if (info.Length() < 2) {
-        return Nan::ThrowTypeError("expected two info: 'id', 'data'");
+        return Nan::ThrowTypeError("expected at least two info: id, data, [languages], [append]");
     }
     if (!info[0]->IsString()) {
         return Nan::ThrowTypeError("first arg must be a String");
@@ -825,9 +821,23 @@ NAN_METHOD(MemoryCache::_set)
         }
         std::string id(*utf8_id);
 
+        langfield_type langfield;
+        if (info.Length() > 2 && !(info[2]->IsNull() || info[2]->IsUndefined())) {
+            if (!info[2]->IsArray()) {
+                return Nan::ThrowTypeError("third arg, if supplied must be an Array");
+            }
+            langfield = langarrayToLangfield(Local<Array>::Cast(info[2]));
+        } else {
+            langfield = ALL_LANGUAGES;
+        }
+
+        bool append = info.Length() > 3 && info[3]->IsBoolean() && info[3]->BooleanValue();
+
         MemoryCache* c = node::ObjectWrap::Unwrap<MemoryCache>(info.This());
         arraycache & arrc = c->cache_;
         key_type key_id = static_cast<key_type>(id);
+        add_langfield(key_id, langfield);
+
         arraycache::iterator itr2 = arrc.find(key_id);
         if (itr2 == arrc.end()) {
             arrc.emplace(key_id,intarray());
@@ -835,7 +845,7 @@ NAN_METHOD(MemoryCache::_set)
         intarray & vv = arrc[key_id];
 
         unsigned array_size = data->Length();
-        if (info[2]->IsBoolean() && info[2]->BooleanValue()) {
+        if (append) {
             vv.reserve(vv.size() + array_size);
         } else {
             if (itr2 != arrc.end()) vv.clear();
@@ -856,7 +866,7 @@ template <typename T>
 inline NAN_METHOD(_genericget)
 {
     if (info.Length() < 1) {
-        return Nan::ThrowTypeError("expected one info: id");
+        return Nan::ThrowTypeError("expected at least one info: id, [languages]");
     }
     if (!info[0]->IsString()) {
         return Nan::ThrowTypeError("first arg must be a String");
@@ -868,10 +878,18 @@ inline NAN_METHOD(_genericget)
         }
         std::string id(*utf8_id);
 
-        bool ignorePrefixFlag = (info.Length() >= 2 && info[1]->IsBoolean()) ? info[1]->BooleanValue() : false;
+        langfield_type langfield;
+        if (info.Length() > 1 && !(info[1]->IsNull() || info[1]->IsUndefined())) {
+            if (!info[1]->IsArray()) {
+                return Nan::ThrowTypeError("second arg, if supplied must be an Array");
+            }
+            langfield = langarrayToLangfield(Local<Array>::Cast(info[1]));
+        } else {
+            langfield = ALL_LANGUAGES;
+        }
 
         T* c = node::ObjectWrap::Unwrap<T>(info.This());
-        intarray vector = __get(c, id, ignorePrefixFlag);
+        intarray vector = __get(c, id, langfield);
         if (!vector.empty()) {
             std::size_t size = vector.size();
             Local<Array> array = Nan::New<Array>(static_cast<int>(size));
@@ -907,7 +925,7 @@ inline NAN_METHOD(_genericgetmatching)
         return Nan::ThrowTypeError("first arg must be a String");
     }
     if (!info[1]->IsBoolean()) {
-        return Nan::ThrowTypeError("first arg must be a Bool");
+        return Nan::ThrowTypeError("second arg must be a Bool");
     }
     try {
         Nan::Utf8String utf8_id(info[0]);
@@ -1084,6 +1102,7 @@ struct Cover {
     uint32_t mask;
     double distance;
     double scoredist;
+    bool matches_language;
 };
 
 struct Context {
@@ -1132,12 +1151,14 @@ Cover numToCover(uint64_t num) {
     assert(((num >> 48) % POW2_3) >= static_cast<double>(std::numeric_limits<unsigned short>::min()));
     unsigned short score = static_cast<unsigned short>((num >> 48) % POW2_3);
     uint32_t id = static_cast<uint32_t>(num % POW2_20);
+    bool matches_language = static_cast<bool>(num & LANGUAGE_MATCH_BOOST);
     cover.x = x;
     cover.y = y;
     double relev = 0.4 + (0.2 * static_cast<double>((num >> 51) % POW2_2));
     cover.relev = relev;
     cover.score = score;
     cover.id = id;
+    cover.matches_language = matches_language;
 
     // These are not derived from decoding the input num but by
     // external values after initialization.
@@ -1264,6 +1285,7 @@ struct CoalesceBaton : carmen::noncopyable {
     std::vector<PhrasematchSubq> stack;
     std::vector<uint64_t> centerzxy;
     std::vector<uint64_t> bboxzxy;
+    langfield_type langfield;
     Nan::Persistent<v8::Function> callback;
     // return
     std::vector<Context> features;
@@ -1384,6 +1406,7 @@ void coalesceSingle(uv_work_t* req) {
             cover.idx = subq.idx;
             cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
             cover.relev = cover.relev * subq.weight;
+            if (!cover.matches_language) cover.relev *= .8;
             cover.distance = proximity ? tileDist(cx, cy, cover.x, cover.y) : 0;
             cover.scoredist = proximity ? scoredist(cz, cover.distance, cover.score) : cover.score;
 
@@ -1539,6 +1562,7 @@ void coalesceMulti(uv_work_t* req) {
                 cover.mask = subq.mask;
                 cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
                 cover.relev = cover.relev * subq.weight;
+                if (!cover.matches_language) cover.relev *= .8;
                 if (proximity) {
                     ZXY dxy = pxy2zxy(z, cover.x, cover.y, cz);
                     cover.distance = tileDist(cx, cy, dxy.x, dxy.y);
@@ -1648,6 +1672,7 @@ Local<Object> coverToObject(Cover const& cover) {
     object->Set(Nan::New("tmpid").ToLocalChecked(), Nan::New<Number>(cover.tmpid));
     object->Set(Nan::New("distance").ToLocalChecked(), Nan::New<Number>(cover.distance));
     object->Set(Nan::New("scoredist").ToLocalChecked(), Nan::New<Number>(cover.scoredist));
+    object->Set(Nan::New("matches_language").ToLocalChecked(), Nan::New<Boolean>(cover.matches_language));
     return object;
 }
 Local<Array> contextToArray(Context const& context) {
@@ -1911,6 +1936,18 @@ NAN_METHOD(coalesce) {
                 baton->bboxzxy.emplace_back(static_cast<uint32_t>(a_val));
             }
         }
+
+        langfield_type langfield = ALL_LANGUAGES;
+        if (options->Has(Nan::New("languages").ToLocalChecked())) {
+            Local<Value> c_array = options->Get(Nan::New("languages").ToLocalChecked());
+            if (!c_array->IsArray()) {
+                return Nan::ThrowTypeError("languages must be an array");
+            }
+            Local<Array> carray = Local<Array>::Cast(c_array);
+            langfield = langarrayToLangfield(carray);
+        }
+
+        baton->langfield = langfield;
 
         baton->callback.Reset(callback.As<Function>());
 
