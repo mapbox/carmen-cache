@@ -379,28 +379,23 @@ NAN_METHOD(MemoryCache::pack)
                 std::string prefix_t2 = "";
 
                 // add this to the memoized prefix array too, maybe
-                auto item_length = item.first.length();
-                if (item.first.at(item_length - 1) == '.') {
-                    // this is an entry that bans degens
-                    // so only include it if it itself smaller than the
-                    // prefix limit (minus dot), and leave it dot-suffixed
-                    if (item_length <= (MEMO_PREFIX_LENGTH_T1 + 1)) {
-                        prefix_t1 = "=1" + item.first;
-                    } else if (item_length > (MEMO_PREFIX_LENGTH_T1 + 1) && item_length <= (MEMO_PREFIX_LENGTH_T2 + 1)) {
-                        prefix_t2 = "=2" + item.first;
-                    }
+                auto phrase_length = item.first.find(LANGFIELD_SEPARATOR);
+                // use the full string for things shorter than the limit
+                // or the prefix otherwise
+                if (phrase_length < MEMO_PREFIX_LENGTH_T1) {
+                    prefix_t1 = "=1" + item.first;
                 } else {
-                    // use the full string for things shorter than the limit
-                    // or the prefix otherwise
-                    if (item_length < MEMO_PREFIX_LENGTH_T1) {
-                        prefix_t1 = "=1" + item.first;
+                    // get the prefix, then append the langfield back onto it again
+                    langfield_type langfield = extract_langfield(item.first);
+
+                    prefix_t1 = "=1" + item.first.substr(0, MEMO_PREFIX_LENGTH_T1);
+                    add_langfield(prefix_t1, langfield);
+
+                    if (phrase_length < MEMO_PREFIX_LENGTH_T2) {
+                        prefix_t2 = "=2" + item.first;
                     } else {
-                        prefix_t1 = "=1" + item.first.substr(0, MEMO_PREFIX_LENGTH_T1);
-                        if (item_length < MEMO_PREFIX_LENGTH_T2) {
-                            prefix_t2 = "=2" + item.first;
-                        } else {
-                            prefix_t2 = "=2" + item.first.substr(0, MEMO_PREFIX_LENGTH_T2);
-                        }
+                        prefix_t2 = "=2" + item.first.substr(0, MEMO_PREFIX_LENGTH_T2);
+                        add_langfield(prefix_t2, langfield);
                     }
                 }
 
