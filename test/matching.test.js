@@ -131,6 +131,30 @@ tape('getMatching', function(assert) {
             "all the language-matching results come first"
         );
 
+        var te_all_langs_with_prefix_0 = cache._getMatching("te", true, [0]);
+        var te_all_langs_with_prefix_0_matched = getByLanguageMatch(te_all_langs_with_prefix_0, true);
+        var te_all_langs_with_prefix_0_unmatched = getByLanguageMatch(te_all_langs_with_prefix_0, false);
+        assert.deepEqual(
+            getIds(te_all_langs_with_prefix_0),
+            [1, 2, 3, 11, 12, 13, 21, 22, 23, 31, 32, 33, 41, 42, 43, 51, 52, 53, 61, 62, 63],
+            "getMatching for 'te' with prefix match and language [0] includes all IDs for 'tentacle' and 'test' and 'testy'"
+        );
+        assert.deepEqual(
+            getIds(te_all_langs_with_prefix_0_matched),
+            [1, 2, 3, 11, 12, 13, 51, 52, 53, 61, 62, 63],
+            "getMatching for 'te' with prefix match and language [0] includes language_match: true for IDs for 'tentacle' and 'test' and 'testy' with language 0"
+        );
+        assert.deepEqual(
+            getIds(te_all_langs_with_prefix_0_unmatched),
+            [21, 22, 23, 31, 32, 33, 41, 42, 43],
+            "getMatching for 'te' with prefix match and language [0] includes language_match: false for IDs for 'tentacle' and 'test' and 'testy' without language 0"
+        );
+        assert.deepEqual(
+            getIds(te_all_langs_with_prefix_0.slice(0, te_all_langs_with_prefix_0_matched.length)),
+            getIds(te_all_langs_with_prefix_0_matched),
+            "all the language-matching results come first"
+        );
+
         var test_all_langs_with_prefix_1 = cache._getMatching("test", true, [1]);
         var test_all_langs_with_prefix_1_matched = getByLanguageMatch(test_all_langs_with_prefix_1, true);
         var test_all_langs_with_prefix_1_unmatched = getByLanguageMatch(test_all_langs_with_prefix_1, false);
