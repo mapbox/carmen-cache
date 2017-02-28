@@ -1340,15 +1340,9 @@ void coalesceSingle(uv_work_t* req) {
 
         // Load and concatenate grids for all ids in `phrases`
         intarray grids;
-        if (subq.prefix) {
-            grids = subq.type == TYPE_MEMORY ?
-                __getmatching(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, true, ALL_LANGUAGES) :
-                __getmatching(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, true, ALL_LANGUAGES);
-        } else {
-            grids = subq.type == TYPE_MEMORY ?
-                __getmatching(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, false, ALL_LANGUAGES) :
-                __getmatching(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, false, ALL_LANGUAGES);
-        }
+        grids = subq.type == TYPE_MEMORY ?
+            __getmatching(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, subq.prefix, ALL_LANGUAGES) :
+            __getmatching(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, subq.prefix, ALL_LANGUAGES);
 
         unsigned long m = grids.size();
         double relevMax = 0;
@@ -1499,15 +1493,9 @@ void coalesceMulti(uv_work_t* req) {
         for (auto const& subq : stack) {
             // Load and concatenate grids for all ids in `phrases`
             intarray grids;
-            if (subq.prefix) {
-                grids = subq.type == TYPE_MEMORY ?
-                    __getmatching(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, true, ALL_LANGUAGES) :
-                    __getmatching(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, true, ALL_LANGUAGES);
-            } else {
-                grids = subq.type == TYPE_MEMORY ?
-                    __getmatching(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, false, ALL_LANGUAGES) :
-                    __getmatching(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, false, ALL_LANGUAGES);
-            }
+            grids = subq.type == TYPE_MEMORY ?
+                __getmatching(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, subq.prefix, ALL_LANGUAGES) :
+                __getmatching(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, subq.prefix, ALL_LANGUAGES);
 
             bool first = i == 0;
             bool last = i == (stack.size() - 1);
