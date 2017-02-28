@@ -70,8 +70,9 @@ intarray __get(MemoryCache const* c, std::string phrase, langfield_type langfiel
     add_langfield(phrase, langfield);
     arraycache::const_iterator aitr = cache.find(phrase);
     if (aitr != cache.end()) {
-        return aitr->second;
+        array = aitr->second;
     }
+    std::sort(array.begin(), array.end(), std::greater<uint64_t>());
     return array;
 }
 
@@ -641,6 +642,8 @@ void mergeQueue(uv_work_t* req) {
             }
 
             std::string in_message2;
+            std::string max_key = "__MAX__";
+            auto max_key_length = max_key.length();
             rocksdb::Status s = db2->Get(rocksdb::ReadOptions(), key_id, &in_message2);
             if (s.ok()) {
                 // get input proto 2
@@ -651,7 +654,7 @@ void mergeQueue(uv_work_t* req) {
                 lastval = 0;
                 for (auto it = vals2.first; it != vals2.second; ++it) {
                     if (method == "freq") {
-                        if (key_id == "__MAX__") {
+                        if (key_id.compare(0, max_key_length, max_key) == 0) {
                             varr[0] = varr[0] > *it ? varr[0] : *it;
                         } else {
                             varr[0] = varr[0] + *it;

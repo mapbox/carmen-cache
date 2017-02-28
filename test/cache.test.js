@@ -12,6 +12,10 @@ var sorted = function(arr) {
     return [].concat(arr).sort();
 }
 
+var sortedDescending = function(arr) {
+    return [].concat(arr).sort(function (a, b) { return b - a; });
+}
+
 tape('list', function(assert) {
     var cache = new carmenCache.MemoryCache('a');
     cache._set('5', [0,1,2]);
@@ -29,11 +33,11 @@ tape('get / set / list / pack / load (simple)', function(assert) {
 
         assert.deepEqual(cache._get(id), undefined, id + ' not set');
         cache._set(id, [0,1,2]);
-        assert.deepEqual(cache._get(id), [0, 1, 2], id + ' set to 0,1,2');
+        assert.deepEqual(cache._get(id), sortedDescending([0, 1, 2]), id + ' set to 0,1,2');
         cache._set(id, [3,4,5]);
-        assert.deepEqual(cache._get(id), [3, 4, 5], id + ' set to 3,4,5');
+        assert.deepEqual(cache._get(id), sortedDescending([3, 4, 5]), id + ' set to 3,4,5');
         cache._set(id, [6,7,8], null, true);
-        assert.deepEqual(cache._get(id), [3, 4, 5, 6, 7, 8], id + ' set to 3,4,5,6,7,8');
+        assert.deepEqual(cache._get(id), sortedDescending([3, 4, 5, 6, 7, 8]), id + ' set to 3,4,5,6,7,8');
     }
 
     assert.deepEqual(sorted(cache.list().map(function(x) { return x[0]; })), sorted(ids), "mem ids match");
@@ -45,7 +49,7 @@ tape('get / set / list / pack / load (simple)', function(assert) {
     for (var i = 0; i < 5; i++) {
         var id = ids[i];
 
-        assert.deepEqual(cache._get(id), [3, 4, 5, 6, 7, 8], id + ' set to 3,4,5,6,7,8');
+        assert.deepEqual(cache._get(id), sortedDescending([3, 4, 5, 6, 7, 8]), id + ' set to 3,4,5,6,7,8');
     }
 
     assert.deepEqual(sorted(loader.list().map(function(x) { return x[0]; })), sorted(ids), "rocks ids match");
@@ -65,16 +69,16 @@ tape('get / set / list / pack / load (with lang codes)', function(assert) {
         cache._set(id, [0,1,2], [0]);
         cache._set(id, [7,8,9], [1]);
         cache._set(id, [12,13,14], [0,1]);
-        assert.deepEqual(cache._get(id, [0]), [0, 1, 2], id + ' for lang [0] set to 0,1,2');
-        assert.deepEqual(cache._get(id, [1]), [7, 8, 9], id + ' for lang [1] set to 7,8,9');
-        assert.deepEqual(cache._get(id, [0,1]), [12, 13, 14], id + ' for lang [0,1] set to 12,13,14');
+        assert.deepEqual(cache._get(id, [0]), sortedDescending([0, 1, 2]), id + ' for lang [0] set to 0,1,2');
+        assert.deepEqual(cache._get(id, [1]), sortedDescending([7, 8, 9]), id + ' for lang [1] set to 7,8,9');
+        assert.deepEqual(cache._get(id, [0,1]), sortedDescending([12, 13, 14]), id + ' for lang [0,1] set to 12,13,14');
         assert.false(cache._get(id), id + ' without lang code returns nothing');
         cache._set(id, [3,4,5], [0]);
-        assert.deepEqual(cache._get(id, [0]), [3,4,5], id + ' for lang [0] set to 3,4,5');
-        assert.deepEqual(cache._get(id, [0,1]), [12, 13, 14], id + ' for lang [0,1] still set to 12,13,14');
+        assert.deepEqual(cache._get(id, [0]), sortedDescending([3,4,5]), id + ' for lang [0] set to 3,4,5');
+        assert.deepEqual(cache._get(id, [0,1]), sortedDescending([12, 13, 14]), id + ' for lang [0,1] still set to 12,13,14');
         cache._set(id, [6,7,8], [0], true);
-        assert.deepEqual(cache._get(id, [0]), [3, 4, 5, 6, 7, 8], id + ' for lang [0] set to 3,4,5,6,7,8');
-        assert.deepEqual(cache._get(id, [0,1]), [12, 13, 14], id + ' for lang [0,1] still set to 12,13,14');
+        assert.deepEqual(cache._get(id, [0]), sortedDescending([3, 4, 5, 6, 7, 8]), id + ' for lang [0] set to 3,4,5,6,7,8');
+        assert.deepEqual(cache._get(id, [0,1]), sortedDescending([12, 13, 14]), id + ' for lang [0,1] still set to 12,13,14');
         assert.false(cache._get(id), id + ' without lang code still returns nothing');
 
         expected.push([id, [0]]);
@@ -91,11 +95,11 @@ tape('get / set / list / pack / load (with lang codes)', function(assert) {
     for (var i = 0; i < 5; i++) {
         var id = ids[i];
 
-        assert.deepEqual(cache._get(id, [1]), [7, 8, 9], id + ' for lang [1] set to 7,8,9');
-        assert.deepEqual(cache._get(id, [0,1]), [12, 13, 14], id + ' for lang [0,1] set to 12,13,14');
+        assert.deepEqual(cache._get(id, [1]), sortedDescending([7, 8, 9]), id + ' for lang [1] set to 7,8,9');
+        assert.deepEqual(cache._get(id, [0,1]), sortedDescending([12, 13, 14]), id + ' for lang [0,1] set to 12,13,14');
         assert.false(cache._get(id), id + ' without lang code returns nothing');
-        assert.deepEqual(cache._get(id, [0]), [3, 4, 5, 6, 7, 8], id + ' for lang [0] set to 3,4,5,6,7,8');
-        assert.deepEqual(cache._get(id, [0,1]), [12, 13, 14], id + ' for lang [0,1] still set to 12,13,14');
+        assert.deepEqual(cache._get(id, [0]), sortedDescending([3, 4, 5, 6, 7, 8]), id + ' for lang [0] set to 3,4,5,6,7,8');
+        assert.deepEqual(cache._get(id, [0,1]), sortedDescending([12, 13, 14]), id + ' for lang [0,1] still set to 12,13,14');
     }
 
     assert.deepEqual(sorted(cache.list().map(JSON.stringify)), sorted(expected.map(JSON.stringify)), "rocks ids and langs match");
@@ -111,7 +115,7 @@ tape('pack', function(assert) {
 
     // fake data
     var array = [];
-    for (var i=0;i<10000;++i) array.push(0);
+    for (var i=0;i<10000;++i) array.push(i);
 
     // now test packing data created via load
     var packer = new carmenCache.MemoryCache('a');
@@ -130,8 +134,8 @@ tape('pack', function(assert) {
     var directLoad = tmpfile();
     packer.pack(directLoad)
     var loader = new carmenCache.RocksDBCache('a', directLoad);
-    assert.deepEqual(loader._get('5'), array);
-    assert.deepEqual(loader._get('6'), array);
+    assert.deepEqual(loader._get('5'), sortedDescending(array));
+    assert.deepEqual(loader._get('6'), sortedDescending(array));
 
     assert.end();
 });
