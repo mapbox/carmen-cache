@@ -1341,8 +1341,8 @@ void coalesceSingle(uv_work_t* req) {
         // Load and concatenate grids for all ids in `phrases`
         intarray grids;
         grids = subq.type == TYPE_MEMORY ?
-            __getmatching(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, subq.prefix, ALL_LANGUAGES) :
-            __getmatching(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, subq.prefix, ALL_LANGUAGES);
+            __getmatching(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, subq.prefix, baton->langfield) :
+            __getmatching(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, subq.prefix, baton->langfield);
 
         unsigned long m = grids.size();
         double relevMax = 0;
@@ -1494,8 +1494,8 @@ void coalesceMulti(uv_work_t* req) {
             // Load and concatenate grids for all ids in `phrases`
             intarray grids;
             grids = subq.type == TYPE_MEMORY ?
-                __getmatching(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, subq.prefix, ALL_LANGUAGES) :
-                __getmatching(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, subq.prefix, ALL_LANGUAGES);
+                __getmatching(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, subq.prefix, baton->langfield) :
+                __getmatching(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, subq.prefix, baton->langfield);
 
             bool first = i == 0;
             bool last = i == (stack.size() - 1);

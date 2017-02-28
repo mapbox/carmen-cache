@@ -383,6 +383,112 @@ test('coalesce args', function(assert) {
 })();
 
 (function() {
+    var memcache = new MemoryCache('a', 0);
+    var grids = [];
+
+    memcache._set('1', [Grid.encode({
+        id: 1,
+        x: 1,
+        y: 1,
+        relev: 1,
+        score: 0
+    })], [0]);
+    memcache._set('1', [Grid.encode({
+        id: 2,
+        x: 1,
+        y: 1,
+        relev: 1,
+        score: 0
+    })], [1]);
+    memcache._set('1', [Grid.encode({
+        id: 3,
+        x: 1,
+        y: 1,
+        relev: 1,
+        score: 0
+    })], [0,1]);
+    memcache._set('1', [Grid.encode({
+        id: 4,
+        x: 1,
+        y: 1,
+        relev: 1,
+        score: 0
+    })], [2]);
+    var rockscache = toRocksCache(memcache);
+    [memcache, rockscache].forEach(function(cache) {
+        test('coalesceSingle, ALL_LANGUAGES: ' + cache.id, function(assert) {
+            coalesce([{
+                cache: cache,
+                mask: 1 << 0,
+                idx: 0,
+                zoom: 2,
+                weight: 1,
+                phrase: '1',
+                prefix: false,
+            }], {}, function(err, res) {
+                assert.ifError(err);
+                assert.equal(res.length, 4);
+                assert.deepEqual(res[0].relev, 1, '0.relev');
+                assert.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 1, idx: 0, relev: 1.0, score: 0, scoredist: 0, tmpid: 1, x: 1, y: 1 }, '0.0');
+                assert.deepEqual(res[1].relev, 1, '1.relev');
+                assert.deepEqual(res[1][0], { matches_language: true, distance: 0, id: 2, idx: 0, relev: 1.0, score: 0, scoredist: 0, tmpid: 2, x: 1, y: 1 }, '0.0');
+                assert.deepEqual(res[2].relev, 1, '2.relev');
+                assert.deepEqual(res[2][0], { matches_language: true, distance: 0, id: 3, idx: 0, relev: 1.0, score: 0, scoredist: 0, tmpid: 3, x: 1, y: 1 }, '0.0');
+                assert.deepEqual(res[3].relev, 1, '3.relev');
+                assert.deepEqual(res[3][0], { matches_language: true, distance: 0, id: 4, idx: 0, relev: 1.0, score: 0, scoredist: 0, tmpid: 4, x: 1, y: 1 }, '0.0');
+                assert.end();
+            });
+        });
+        test('coalesceSingle, [0]: ' + cache.id, function(assert) {
+            coalesce([{
+                cache: cache,
+                mask: 1 << 0,
+                idx: 0,
+                zoom: 2,
+                weight: 1,
+                phrase: '1',
+                prefix: false,
+            }], {languages: [0]}, function(err, res) {
+                assert.ifError(err);
+                assert.equal(res.length, 4);
+                assert.deepEqual(res[0].relev, 1, '0.relev');
+                assert.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 1, idx: 0, relev: 1.0, score: 0, scoredist: 0, tmpid: 1, x: 1, y: 1 }, '0.0');
+                assert.deepEqual(res[1].relev, 1, '1.relev');
+                assert.deepEqual(res[1][0], { matches_language: true, distance: 0, id: 3, idx: 0, relev: 1.0, score: 0, scoredist: 0, tmpid: 3, x: 1, y: 1 }, '0.0');
+                assert.deepEqual(res[2].relev, 0.8, '2.relev');
+                assert.deepEqual(res[2][0], { matches_language: false, distance: 0, id: 2, idx: 0, relev: 0.8, score: 0, scoredist: 0, tmpid: 2, x: 1, y: 1 }, '0.0');
+                assert.deepEqual(res[3].relev, 0.8, '3.relev');
+                assert.deepEqual(res[3][0], { matches_language: false, distance: 0, id: 4, idx: 0, relev: 0.8, score: 0, scoredist: 0, tmpid: 4, x: 1, y: 1 }, '0.0');
+                assert.end();
+            });
+        });
+        test('coalesceSingle, [3]: ' + cache.id, function(assert) {
+            coalesce([{
+                cache: cache,
+                mask: 1 << 0,
+                idx: 0,
+                zoom: 2,
+                weight: 1,
+                phrase: '1',
+                prefix: false,
+            }], {languages: [3]}, function(err, res) {
+                assert.ifError(err);
+                assert.equal(res.length, 4);
+                assert.deepEqual(res[0].relev, 0.8, '0.relev');
+                assert.deepEqual(res[0][0], { matches_language: false, distance: 0, id: 1, idx: 0, relev: 0.8, score: 0, scoredist: 0, tmpid: 1, x: 1, y: 1 }, '0.0');
+                assert.deepEqual(res[1].relev, 0.8, '1.relev');
+                assert.deepEqual(res[1][0], { matches_language: false, distance: 0, id: 2, idx: 0, relev: 0.8, score: 0, scoredist: 0, tmpid: 2, x: 1, y: 1 }, '0.0');
+                assert.deepEqual(res[2].relev, 0.8, '2.relev');
+                assert.deepEqual(res[2][0], { matches_language: false, distance: 0, id: 3, idx: 0, relev: 0.8, score: 0, scoredist: 0, tmpid: 3, x: 1, y: 1 }, '0.0');
+                assert.deepEqual(res[3].relev, 0.8, '3.relev');
+                assert.deepEqual(res[3][0], { matches_language: false, distance: 0, id: 4, idx: 0, relev: 0.8, score: 0, scoredist: 0, tmpid: 4, x: 1, y: 1 }, '0.0');
+                assert.end();
+            });
+        });
+    });
+})();
+
+(function() {
     var memA = new MemoryCache('a', 0);
     var memB = new MemoryCache('b', 0);
     memA._set('1', [
@@ -488,6 +594,135 @@ test('coalesce args', function(assert) {
                 assert.deepEqual(res[1].relev, 1, '1.relev');
                 assert.deepEqual(res[1][0], { matches_language: true, distance: 2, id: 2, idx: 1, relev: 0.5, score: 7, scoredist: 7, tmpid: 33554434, x: 2, y: 2 }, '1.0');
                 assert.deepEqual(res[1][1], { matches_language: true, distance: 8, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 1, x: 1, y: 1 }, '1.1');
+                assert.end();
+            });
+        });
+    });
+})();
+
+(function() {
+    var memA = new MemoryCache('a', 0);
+    var memB = new MemoryCache('b', 0);
+    memA._set('1', [
+        Grid.encode({
+            id: 1,
+            x: 1,
+            y: 1,
+            relev: 1,
+            score: 1
+        })
+    ]);
+    memB._set('1', [
+        Grid.encode({
+            id: 2,
+            x: 1,
+            y: 1,
+            relev: 1,
+            score: 1
+        })
+    ], [0]);
+    memB._set('1', [
+        Grid.encode({
+            id: 3,
+            x: 1,
+            y: 1,
+            relev: 1,
+            score: 1
+        })
+    ], [1]);
+    var rocksA = toRocksCache(memA);
+    var rocksB = toRocksCache(memB);
+
+    [[memA, memB], [rocksA, rocksB], [memA, rocksB]].forEach(function(caches) {
+        var a = caches[0],
+            b = caches[1];
+
+        test('coalesceMulti, ALL_LANGUAGES: ' + a.id + ', ' + b.id, function(assert) {
+            coalesce([{
+                cache: a,
+                mask: 1 << 1,
+                idx: 0,
+                zoom: 1,
+                weight: 0.5,
+                phrase: '1',
+                prefix: false,
+            }, {
+                cache: b,
+                mask: 1 << 0,
+                idx: 1,
+                zoom: 1,
+                weight: 0.5,
+                phrase: '1',
+                prefix: false,
+            }], {}, function(err, res) {
+                assert.ifError(err);
+                // sorts by relev, score
+                assert.deepEqual(res[0].relev, 1, '0.relev');
+                assert.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 2, idx: 1, relev: 0.5, score: 1, scoredist: 1, tmpid: 33554434, x: 1, y: 1 }, '0.0');
+                assert.deepEqual(res[0][1], { matches_language: true, distance: 0, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 1, x: 1, y: 1 }, '0.1');
+                assert.deepEqual(res[1].relev, 1, '1.relev');
+                assert.deepEqual(res[1][0], { matches_language: true, distance: 0, id: 3, idx: 1, relev: 0.5, score: 1, scoredist: 1, tmpid: 33554435, x: 1, y: 1 }, '1.0');
+                assert.deepEqual(res[1][1], { matches_language: true, distance: 0, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 1, x: 1, y: 1 }, '1.1');
+                assert.end();
+            });
+        });
+        test('coalesceMulti, [0]: ' + a.id + ', ' + b.id, function(assert) {
+            coalesce([{
+                cache: a,
+                mask: 1 << 1,
+                idx: 0,
+                zoom: 1,
+                weight: 0.5,
+                phrase: '1',
+                prefix: false,
+            }, {
+                cache: b,
+                mask: 1 << 0,
+                idx: 1,
+                zoom: 1,
+                weight: 0.5,
+                phrase: '1',
+                prefix: false,
+            }], {languages: [0]}, function(err, res) {
+                assert.ifError(err);
+                // sorts by relev, score
+                assert.deepEqual(res[0].relev, 1, '0.relev');
+                assert.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 2, idx: 1, relev: 0.5, score: 1, scoredist: 1, tmpid: 33554434, x: 1, y: 1 }, '0.0');
+                assert.deepEqual(res[0][1], { matches_language: true, distance: 0, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 1, x: 1, y: 1 }, '0.1');
+                // one of our indexes has languages and the other does not, so relev will be 0.9 because it's (.5 + .8*.5)
+                assert.deepEqual(res[1].relev, 0.9, '1.relev');
+                assert.deepEqual(res[1][0], { matches_language: false, distance: 0, id: 3, idx: 1, relev: 0.4, score: 1, scoredist: 1, tmpid: 33554435, x: 1, y: 1 }, '1.0');
+                assert.deepEqual(res[1][1], { matches_language: true, distance: 0, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 1, x: 1, y: 1 }, '1.1');
+                assert.end();
+            });
+        });
+        test('coalesceMulti, [3]: ' + a.id + ', ' + b.id, function(assert) {
+            coalesce([{
+                cache: a,
+                mask: 1 << 1,
+                idx: 0,
+                zoom: 1,
+                weight: 0.5,
+                phrase: '1',
+                prefix: false,
+            }, {
+                cache: b,
+                mask: 1 << 0,
+                idx: 1,
+                zoom: 1,
+                weight: 0.5,
+                phrase: '1',
+                prefix: false,
+            }], {languages: [3]}, function(err, res) {
+                assert.ifError(err);
+                // sorts by relev, score
+                assert.deepEqual(res[0].relev, 0.9, '0.relev');
+                assert.deepEqual(res[0][0], { matches_language: false, distance: 0, id: 2, idx: 1, relev: 0.4, score: 1, scoredist: 1, tmpid: 33554434, x: 1, y: 1 }, '0.0');
+                assert.deepEqual(res[0][1], { matches_language: true, distance: 0, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 1, x: 1, y: 1 }, '0.1');
+                // one of our indexes has languages and the other does not, so relev will be 0.9 because it's (.5 + .8*.5)
+                assert.deepEqual(res[1].relev, 0.9, '1.relev');
+                assert.deepEqual(res[1][0], { matches_language: false, distance: 0, id: 3, idx: 1, relev: 0.4, score: 1, scoredist: 1, tmpid: 33554435, x: 1, y: 1 }, '1.0');
+                assert.deepEqual(res[1][1], { matches_language: true, distance: 0, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 1, x: 1, y: 1 }, '1.1');
                 assert.end();
             });
         });
