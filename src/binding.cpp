@@ -187,7 +187,7 @@ intarray __getmatching(RocksDBCache const* c, std::string phrase, bool match_pre
     std::shared_ptr<rocksdb::DB> db = c->db;
 
     std::unique_ptr<rocksdb::Iterator> rit(db->NewIterator(rocksdb::ReadOptions()));
-    for (rit->Seek(phrase); rit->Valid() && rit->key().ToString().compare(0, phrase_length, phrase) == 0; rit->Next()) {
+    for (rit->Seek(phrase); rit->Valid() && rit->key().ToString().compare(0, phrase.size(), phrase) == 0; rit->Next()) {
         std::string key = rit->key().ToString();
 
         // grab the langfield from the end of the key
@@ -1031,7 +1031,8 @@ struct PhrasematchSubq {
                     bool pf,
                     unsigned short i,
                     unsigned short z,
-                    uint32_t m) :
+                    uint32_t m,
+                    langfield_type l) :
         cache(c),
         type(t),
         weight(w),
@@ -1039,7 +1040,8 @@ struct PhrasematchSubq {
         prefix(pf),
         idx(i),
         zoom(z),
-        mask(m) {}
+        mask(m),
+        langfield(l) {}
     void *cache;
     char type;
     double weight;
@@ -1048,6 +1050,7 @@ struct PhrasematchSubq {
     unsigned short idx;
     unsigned short zoom;
     uint32_t mask;
+    langfield_type langfield;
     PhrasematchSubq& operator=(PhrasematchSubq && c) = default;
     PhrasematchSubq(PhrasematchSubq && c) = default;
 };
@@ -1246,7 +1249,6 @@ struct CoalesceBaton : carmen::noncopyable {
     std::vector<PhrasematchSubq> stack;
     std::vector<uint64_t> centerzxy;
     std::vector<uint64_t> bboxzxy;
-    langfield_type langfield;
     Nan::Persistent<v8::Function> callback;
     // return
     std::vector<Context> features;
@@ -1341,8 +1343,8 @@ void coalesceSingle(uv_work_t* req) {
         // Load and concatenate grids for all ids in `phrases`
         intarray grids;
         grids = subq.type == TYPE_MEMORY ?
-            __getmatching(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, subq.prefix, baton->langfield) :
-            __getmatching(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, subq.prefix, baton->langfield);
+            __getmatching(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, subq.prefix, subq.langfield) :
+            __getmatching(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, subq.prefix, subq.langfield);
 
         unsigned long m = grids.size();
         double relevMax = 0;
@@ -1494,8 +1496,8 @@ void coalesceMulti(uv_work_t* req) {
             // Load and concatenate grids for all ids in `phrases`
             intarray grids;
             grids = subq.type == TYPE_MEMORY ?
-                __getmatching(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, subq.prefix, baton->langfield) :
-                __getmatching(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, subq.prefix, baton->langfield);
+                __getmatching(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, subq.prefix, subq.langfield) :
+                __getmatching(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, subq.prefix, subq.langfield);
 
             bool first = i == 0;
             bool last = i == (stack.size() - 1);
@@ -1716,6 +1718,7 @@ NAN_METHOD(coalesce) {
             unsigned short idx;
             unsigned short zoom;
             uint32_t mask;
+            langfield_type langfield;
 
             // TODO: this is verbose: we could write some generic functions to do this robust conversion per type
             if (!jsStack->Has(Nan::New("idx").ToLocalChecked())) {
@@ -1798,6 +1801,16 @@ NAN_METHOD(coalesce) {
                 mask = static_cast<uint32_t>(_mask);
             }
 
+            langfield = ALL_LANGUAGES;
+            if (jsStack->Has(Nan::New("languages").ToLocalChecked())) {
+                Local<Value> c_array = jsStack->Get(Nan::New("languages").ToLocalChecked());
+                if (!c_array->IsArray()) {
+                    return Nan::ThrowTypeError("languages must be an array");
+                }
+                Local<Array> carray = Local<Array>::Cast(c_array);
+                langfield = langarrayToLangfield(carray);
+            }
+
             if (!jsStack->Has(Nan::New("cache").ToLocalChecked())) {
                 return Nan::ThrowTypeError("missing cache property");
             } else {
@@ -1823,7 +1836,8 @@ NAN_METHOD(coalesce) {
                         prefix,
                         idx,
                         zoom,
-                        mask
+                        mask,
+                        langfield
                     );
                 } else {
                     baton->stack.emplace_back(
@@ -1834,7 +1848,8 @@ NAN_METHOD(coalesce) {
                         prefix,
                         idx,
                         zoom,
-                        mask
+                        mask,
+                        langfield
                     );
                 }
             }
@@ -1885,18 +1900,6 @@ NAN_METHOD(coalesce) {
                 baton->bboxzxy.emplace_back(static_cast<uint32_t>(a_val));
             }
         }
-
-        langfield_type langfield = ALL_LANGUAGES;
-        if (options->Has(Nan::New("languages").ToLocalChecked())) {
-            Local<Value> c_array = options->Get(Nan::New("languages").ToLocalChecked());
-            if (!c_array->IsArray()) {
-                return Nan::ThrowTypeError("languages must be an array");
-            }
-            Local<Array> carray = Local<Array>::Cast(c_array);
-            langfield = langarrayToLangfield(carray);
-        }
-
-        baton->langfield = langfield;
 
         baton->callback.Reset(callback.As<Function>());
 
