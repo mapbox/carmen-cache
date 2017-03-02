@@ -448,7 +448,8 @@ test('coalesce args', function(assert) {
                 weight: 1,
                 phrase: '1',
                 prefix: false,
-            }], {languages: [0]}, function(err, res) {
+                languages: [0]
+            }], {}, function(err, res) {
                 assert.ifError(err);
                 assert.equal(res.length, 4);
                 assert.deepEqual(res[0].relev, 1, '0.relev');
@@ -471,7 +472,8 @@ test('coalesce args', function(assert) {
                 weight: 1,
                 phrase: '1',
                 prefix: false,
-            }], {languages: [3]}, function(err, res) {
+                languages: [3]
+            }], {}, function(err, res) {
                 assert.ifError(err);
                 assert.equal(res.length, 4);
                 assert.deepEqual(res[0].relev, 0.8, '0.relev');
@@ -683,7 +685,8 @@ test('coalesce args', function(assert) {
                 weight: 0.5,
                 phrase: '1',
                 prefix: false,
-            }], {languages: [0]}, function(err, res) {
+                languages: [0]
+            }], {}, function(err, res) {
                 assert.ifError(err);
                 // sorts by relev, score
                 assert.deepEqual(res[0].relev, 1, '0.relev');
@@ -713,7 +716,8 @@ test('coalesce args', function(assert) {
                 weight: 0.5,
                 phrase: '1',
                 prefix: false,
-            }], {languages: [3]}, function(err, res) {
+                languages: [3]
+            }], {}, function(err, res) {
                 assert.ifError(err);
                 // sorts by relev, score
                 assert.deepEqual(res[0].relev, 0.9, '0.relev');
