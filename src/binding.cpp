@@ -46,18 +46,36 @@ constexpr uint64_t LANGUAGE_MATCH_BOOST = (const uint64_t)(1) << 63;
 // we centralize both the adding of the field and extracting of the field here to keep from having
 // to handle that optimization everywhere
 inline langfield_type extract_langfield(std::string const& s) {
-    if (s.find(LANGFIELD_SEPARATOR) == s.length() - 1) {
+    size_t length = s.length();
+    size_t langfield_start = s.find(LANGFIELD_SEPARATOR) + 1;
+    size_t distance_from_end = length - langfield_start;
+
+    if (distance_from_end == 0) {
         return ALL_LANGUAGES;
     } else {
-        return *(reinterpret_cast<const unsigned __int128*>(&s[s.length() - sizeof(langfield_type)]));
+        langfield_type result(0);
+        memcpy(&result, s.data() + langfield_start, distance_from_end);
+        return result;
     }
 }
 
 inline void add_langfield(std::string & s, langfield_type langfield) {
     if (langfield != ALL_LANGUAGES) {
-        s.reserve(sizeof(LANGFIELD_SEPARATOR) + sizeof(langfield_type));
+        char* lf_as_char = reinterpret_cast<char*>(&langfield);
+
+        // we only want to copy over as many bytes as we're using
+        // so find the last byte that's not zero, and copy until there
+        // NOTE: this assumes little-endianness, where the bytes
+        // in use will be first rather than last
+        size_t highest(0);
+        for (size_t i = 0; i < sizeof(langfield_type); i++) {
+            if (lf_as_char[i] != 0) highest = i;
+        }
+        size_t field_length = highest + 1;
+
+        s.reserve(sizeof(LANGFIELD_SEPARATOR) + field_length);
         s.push_back(LANGFIELD_SEPARATOR);
-        s.append(reinterpret_cast<char*>(&langfield), sizeof(langfield_type));
+        s.append(lf_as_char, field_length);
     } else {
         s.push_back(LANGFIELD_SEPARATOR);
     }
@@ -247,12 +265,13 @@ intarray __getmatching(RocksDBCache const* c, std::string phrase, bool match_pre
     return array;
 }
 
+constexpr unsigned MAX_LANG = (sizeof(langfield_type) * 8) - 1;
 inline langfield_type langarrayToLangfield(Local<v8::Array> const& array) {
     size_t array_size = array->Length();
     langfield_type out = 0;
     for (unsigned i = 0; i < array_size; i++) {
         unsigned int val = static_cast<unsigned int>(array->Get(i)->NumberValue());
-        if (val >= sizeof(langfield_type)) {
+        if (val > MAX_LANG) {
             // this should probably throw something
             continue;
         }
@@ -265,7 +284,7 @@ inline Local<v8::Array> langfieldToLangarray(langfield_type langfield) {
     Local<Array> langs = Nan::New<Array>();
 
     unsigned idx = 0;
-    for (unsigned i = 0; i < sizeof(langfield_type); i++) {
+    for (unsigned i = 0; i <= MAX_LANG; i++) {
         if (langfield & (static_cast<langfield_type>(1) << i)) {
             langs->Set(idx++,Nan::New(i));
         }

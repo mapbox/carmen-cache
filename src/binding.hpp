@@ -28,6 +28,8 @@
 #include <tuple>
 
 #include <cassert>
+#include <cstring>
+
 #include "rocksdb/db.h"
 
 namespace carmen {
