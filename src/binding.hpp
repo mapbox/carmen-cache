@@ -95,7 +95,7 @@ public:
 #define MEMO_PREFIX_LENGTH_T2 7
 #define PREFIX_MAX_GRID_LENGTH 500000
 
-#define ALL_LANGUAGES std::numeric_limits<unsigned __int128>::max()
+constexpr langfield_type ALL_LANGUAGES = ~(langfield_type)(0);
 #define LANGFIELD_SEPARATOR '|'
 
 #define TYPE_MEMORY 1
