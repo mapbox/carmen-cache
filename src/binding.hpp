@@ -91,8 +91,8 @@ public:
 #define CACHE_MESSAGE 1
 #define CACHE_ITEM 1
 
-#define MEMO_PREFIX_LENGTH_T1 4
-#define MEMO_PREFIX_LENGTH_T2 7
+#define MEMO_PREFIX_LENGTH_T1 3
+#define MEMO_PREFIX_LENGTH_T2 6
 #define PREFIX_MAX_GRID_LENGTH 500000
 
 constexpr langfield_type ALL_LANGUAGES = ~(langfield_type)(0);
