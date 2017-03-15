@@ -1,5 +1,8 @@
 #!/bin/bash
 
+set -eu
+set -o pipefail
+
 if [ ! -d ./mason ]; then
     git clone --branch v0.5.0 --single-branch https://github.com/mapbox/mason.git
     ./mason/mason install bzip2 1.0.6
