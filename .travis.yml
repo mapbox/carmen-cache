@@ -19,18 +19,11 @@ matrix:
      # Linux
      - os: linux
        compiler: clang
-       env: NODE_VERSION="0.10" # node abi 11
-     - os: linux
-       compiler: clang
        env: NODE_VERSION="4" # node abi 46
      - os: linux
        compiler: clang
        env: NODE_VERSION="6" # node abi 48
      # OS X
-     - os: osx
-       compiler: clang
-       env: NODE_VERSION="0.10" # node abi 11
-       osx_image: xcode8.2
      - os: osx
        compiler: clang
        env: NODE_VERSION="4" # node abi 46
