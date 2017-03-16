@@ -8,31 +8,105 @@ fs.mkdirSync(tmpdir);
 var tmpidx = 0;
 var tmpfile = function() { return tmpdir + "/" + (tmpidx++) + ".dat"; };
 
-tape('#list', function(assert) {
+var sorted = function(arr) {
+    return [].concat(arr).sort();
+}
+
+var sortedDescending = function(arr) {
+    return [].concat(arr).sort(function (a, b) { return b - a; });
+}
+
+tape('list', function(assert) {
     var cache = new carmenCache.MemoryCache('a');
     cache._set('5', [0,1,2]);
-    assert.deepEqual(cache.list(), ['5']);
+    assert.deepEqual(cache.list().map(function(x) { return x[0]; }), ['5']);
     assert.end();
 });
 
-tape('#get + #set', function(assert) {
+tape('get / set / list / pack / load (simple)', function(assert) {
     var cache = new carmenCache.MemoryCache('a');
 
+    var ids = [];
     for (var i = 0; i < 5; i++) {
         var id = Math.random().toString(36).replace(/[^a-z]+/g, '').substr(0, 5);
+        ids.push(id);
+
         assert.deepEqual(cache._get(id), undefined, id + ' not set');
         cache._set(id, [0,1,2]);
-        assert.deepEqual(cache._get(id), [0, 1, 2], id + ' set to 0,1,2');
+        assert.deepEqual(cache._get(id), sortedDescending([0, 1, 2]), id + ' set to 0,1,2');
         cache._set(id, [3,4,5]);
-        assert.deepEqual(cache._get(id), [3, 4, 5], id + ' set to 3,4,5');
-        cache._set(id, [6,7,8], true);
-        assert.deepEqual(cache._get(id), [3, 4, 5, 6, 7, 8], id + ' set to 3,4,5,6,7,8');
+        assert.deepEqual(cache._get(id), sortedDescending([3, 4, 5]), id + ' set to 3,4,5');
+        cache._set(id, [6,7,8], null, true);
+        assert.deepEqual(cache._get(id), sortedDescending([3, 4, 5, 6, 7, 8]), id + ' set to 3,4,5,6,7,8');
     }
 
+    assert.deepEqual(sorted(cache.list().map(function(x) { return x[0]; })), sorted(ids), "mem ids match");
+
+    var pack = tmpfile();
+    cache.pack(pack);
+    var loader = new carmenCache.RocksDBCache('b', pack);
+
+    for (var i = 0; i < 5; i++) {
+        var id = ids[i];
+
+        assert.deepEqual(cache._get(id), sortedDescending([3, 4, 5, 6, 7, 8]), id + ' set to 3,4,5,6,7,8');
+    }
+
+    assert.deepEqual(sorted(loader.list().map(function(x) { return x[0]; })), sorted(ids), "rocks ids match");
     assert.end();
 });
 
-tape('#pack', function(assert) {
+tape('get / set / list / pack / load (with lang codes)', function(assert) {
+    var cache = new carmenCache.MemoryCache('a');
+
+    var ids = [];
+    var expected = [];
+    for (var i = 0; i < 5; i++) {
+        var id = Math.random().toString(36).replace(/[^a-z]+/g, '').substr(0, 5);
+        ids.push(id);
+
+        assert.deepEqual(cache._get(id), undefined, id + ' not set');
+        cache._set(id, [0,1,2], [0]);
+        cache._set(id, [7,8,9], [1]);
+        cache._set(id, [12,13,14], [0,1]);
+        assert.deepEqual(cache._get(id, [0]), sortedDescending([0, 1, 2]), id + ' for lang [0] set to 0,1,2');
+        assert.deepEqual(cache._get(id, [1]), sortedDescending([7, 8, 9]), id + ' for lang [1] set to 7,8,9');
+        assert.deepEqual(cache._get(id, [0,1]), sortedDescending([12, 13, 14]), id + ' for lang [0,1] set to 12,13,14');
+        assert.false(cache._get(id), id + ' without lang code returns nothing');
+        cache._set(id, [3,4,5], [0]);
+        assert.deepEqual(cache._get(id, [0]), sortedDescending([3,4,5]), id + ' for lang [0] set to 3,4,5');
+        assert.deepEqual(cache._get(id, [0,1]), sortedDescending([12, 13, 14]), id + ' for lang [0,1] still set to 12,13,14');
+        cache._set(id, [6,7,8], [0], true);
+        assert.deepEqual(cache._get(id, [0]), sortedDescending([3, 4, 5, 6, 7, 8]), id + ' for lang [0] set to 3,4,5,6,7,8');
+        assert.deepEqual(cache._get(id, [0,1]), sortedDescending([12, 13, 14]), id + ' for lang [0,1] still set to 12,13,14');
+        assert.false(cache._get(id), id + ' without lang code still returns nothing');
+
+        expected.push([id, [0]]);
+        expected.push([id, [1]]);
+        expected.push([id, [0,1]]);
+    }
+
+    assert.deepEqual(sorted(cache.list().map(JSON.stringify)), sorted(expected.map(JSON.stringify)), "mem ids and langs match");
+
+    var pack = tmpfile();
+    cache.pack(pack);
+    var loader = new carmenCache.RocksDBCache('b', pack);
+
+    for (var i = 0; i < 5; i++) {
+        var id = ids[i];
+
+        assert.deepEqual(cache._get(id, [1]), sortedDescending([7, 8, 9]), id + ' for lang [1] set to 7,8,9');
+        assert.deepEqual(cache._get(id, [0,1]), sortedDescending([12, 13, 14]), id + ' for lang [0,1] set to 12,13,14');
+        assert.false(cache._get(id), id + ' without lang code returns nothing');
+        assert.deepEqual(cache._get(id, [0]), sortedDescending([3, 4, 5, 6, 7, 8]), id + ' for lang [0] set to 3,4,5,6,7,8');
+        assert.deepEqual(cache._get(id, [0,1]), sortedDescending([12, 13, 14]), id + ' for lang [0,1] still set to 12,13,14');
+    }
+
+    assert.deepEqual(sorted(cache.list().map(JSON.stringify)), sorted(expected.map(JSON.stringify)), "rocks ids and langs match");
+    assert.end();
+});
+
+tape('pack', function(assert) {
     var cache = new carmenCache.MemoryCache('a');
     cache._set('5', [0,1,2]);
     // set should replace data
@@ -41,7 +115,7 @@ tape('#pack', function(assert) {
 
     // fake data
     var array = [];
-    for (var i=0;i<10000;++i) array.push(0);
+    for (var i=0;i<10000;++i) array.push(i);
 
     // now test packing data created via load
     var packer = new carmenCache.MemoryCache('a');
@@ -60,69 +134,8 @@ tape('#pack', function(assert) {
     var directLoad = tmpfile();
     packer.pack(directLoad)
     var loader = new carmenCache.RocksDBCache('a', directLoad);
-    assert.deepEqual(loader._get('5'), array);
-    assert.deepEqual(loader._get('6'), array);
+    assert.deepEqual(loader._get('5'), sortedDescending(array));
+    assert.deepEqual(loader._get('6'), sortedDescending(array));
 
-    assert.end();
-});
-
-tape('#load', function(assert) {
-    var cache = new carmenCache.MemoryCache('a');
-    assert.equal(cache.id, 'a');
-
-    assert.equal(cache._get('5'), undefined);
-    assert.deepEqual(cache.list(), []);
-
-    cache._set('5', [0,1,2]);
-    assert.deepEqual(cache._get('5'), [0,1,2]);
-    assert.deepEqual(cache.list(), ['5']);
-
-    cache._set('21', [5,6]);
-    assert.deepEqual(cache._get('21'), [5,6]);
-    assert.deepEqual(cache.list(), ['21', '5'], 'keys in type');
-
-    // cache A serializes data, cache B loads serialized data.
-    var pack = tmpfile();
-    cache.pack(pack);
-    var loader = new carmenCache.RocksDBCache('b', pack);
-    assert.deepEqual(loader._get('21'), [6,5]);
-    assert.deepEqual(loader.list(), ['21', '5'], 'keys in shard');
-    assert.end();
-});
-
-tape('#dot suffix', function(assert) {
-    var cache = new carmenCache.MemoryCache('mem');
-
-    cache._set('test', [2,1,0]);
-    cache._set('test.', [7,6,5,4]);
-    cache._set('something', [4,3,2]);
-    cache._set('else.', [9,8,7]);
-
-    // cache A serializes data, cache B loads serialized data.
-    var pack = tmpfile();
-    cache.pack(pack);
-    var loader = new carmenCache.RocksDBCache('packed', pack);
-
-    [cache, loader].forEach(function(c) {
-        assert.deepEqual(c._get('test'), [2,1,0], 'exact get without dot where both exist for ' + c.id);
-        assert.deepEqual(c._get('test.'), [7,6,5,4], 'exact get with dot where both exist for ' + c.id);
-        assert.deepEqual(c._get('something'), [4,3,2], 'exact get without dot where non-dot exists for ' + c.id);
-        assert.deepEqual(c._get('something.'), undefined, 'exact get with dot where non-dot exists for ' + c.id);
-        assert.deepEqual(c._get('else'), undefined, 'exact get without dot where dot exists for ' + c.id);
-        assert.deepEqual(c._get('else.'), [9,8,7], 'exact get with dot where dot exists for ' + c.id);
-
-        assert.deepEqual(c._get('test', true), [7,6,5,4,2,1,0], 'ignore-prefix get where both exist for ' + c.id);
-        assert.deepEqual(c._get('something', true), [4,3,2], 'ignore-prefix get where non-dot exists for ' + c.id);
-        assert.deepEqual(c._get('else', true), [9,8,7], 'ignore-prefix get where dot exists for ' + c.id);
-
-        assert.deepEqual(c._getByPrefix('te'), [2,1,0], 'partial getbyprefix where both exist for ' + c.id);
-        assert.deepEqual(c._getByPrefix('test'), [7,6,5,4,2,1,0], 'complete getbyprefix where both exist for ' + c.id);
-        assert.deepEqual(c._getByPrefix('so'), [4,3,2], 'partial getbyprefix where non-dot exists for ' + c.id);
-        assert.deepEqual(c._getByPrefix('something'), [4,3,2], 'complete getbyprefix where non-dot exists for ' + c.id);
-        assert.deepEqual(c._getByPrefix('el'), undefined, 'partial getbyprefix where dot exists for ' + c.id);
-        assert.deepEqual(c._getByPrefix('else'), [9,8,7], 'complete getbyprefix where dot exists for ' + c.id);
-    });
-
-    assert.deepEqual(loader.list('grid'), [ 'else.', 'something', 'test', 'test.' ], 'keys in shard');
     assert.end();
 });

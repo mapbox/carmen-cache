@@ -5,7 +5,6 @@
 #include <cmath>
 #include <cassert>
 #include <cstring>
-#include <limits>
 #include <algorithm>
 #include <memory>
 
@@ -36,173 +35,261 @@ rocksdb::Status OpenForReadOnlyDB(const rocksdb::Options& options, const std::st
     return status;
 }
 
-intarray __get(MemoryCache const* c, std::string id, bool ignorePrefixFlag) {
+constexpr uint64_t LANGUAGE_MATCH_BOOST = (const uint64_t)(1) << 63;
+
+// in general, the key format including language field is <key_text><separator character><8-byte langfield>
+// but as a size optimization for language-less indexes, we omit the langfield
+// if it would otherwise have been ALL_LANGUAGES (all 1's), so if the first occurence
+// of the separator character is also the last character in the string, we just retur ALL_LANGUAGES
+// otherwise we extract it from the string
+//
+// we centralize both the adding of the field and extracting of the field here to keep from having
+// to handle that optimization everywhere
+inline langfield_type extract_langfield(std::string const& s) {
+    size_t length = s.length();
+    size_t langfield_start = s.find(LANGFIELD_SEPARATOR) + 1;
+    size_t distance_from_end = length - langfield_start;
+
+    if (distance_from_end == 0) {
+        return ALL_LANGUAGES;
+    } else {
+        langfield_type result(0);
+        memcpy(&result, s.data() + langfield_start, distance_from_end);
+        return result;
+    }
+}
+
+inline void add_langfield(std::string & s, langfield_type langfield) {
+    if (langfield != ALL_LANGUAGES) {
+        char* lf_as_char = reinterpret_cast<char*>(&langfield);
+
+        // we only want to copy over as many bytes as we're using
+        // so find the last byte that's not zero, and copy until there
+        // NOTE: this assumes little-endianness, where the bytes
+        // in use will be first rather than last
+        size_t highest(0);
+        for (size_t i = 0; i < sizeof(langfield_type); i++) {
+            if (lf_as_char[i] != 0) highest = i;
+        }
+        size_t field_length = highest + 1;
+
+        s.reserve(sizeof(LANGFIELD_SEPARATOR) + field_length);
+        s.push_back(LANGFIELD_SEPARATOR);
+        s.append(lf_as_char, field_length);
+    } else {
+        s.push_back(LANGFIELD_SEPARATOR);
+    }
+}
+
+intarray __get(MemoryCache const* c, std::string phrase, langfield_type langfield) {
     arraycache const& cache = c->cache_;
     intarray array;
 
-    arraycache::const_iterator aitr = cache.find(id);
-    if (aitr == cache.end()) {
-        if (ignorePrefixFlag) {
-            arraycache::const_iterator aitr2 = cache.find(id + ".");
-            if (aitr2 != cache.end()) {
-                // we only found . suffix
-                return aitr2->second;
-            }
-        }
-        // we didn't find the non-.-suffix version and didn't look for the .-suffix version
-    } else {
-        if (ignorePrefixFlag) {
-            arraycache::const_iterator aitr2 = cache.find(id + ".");
-            if (aitr2 == cache.end()) {
-                // we found only non-.-suffix
-                return aitr->second;
-            } else {
-                // we found both; make a copy
-                std::vector<uint64_t> combined = aitr->second;
-                combined.insert(combined.end(), aitr2->second.begin(), aitr2->second.end());
-                std::inplace_merge(combined.begin(), combined.begin() + aitr->second.size(), combined.end(), std::greater<uint64_t>());
-                return combined;
-            }
-        }
-        // we found the non-.-suffix version (but didn't look for the .-suffix version)
-        return aitr->second;
+    add_langfield(phrase, langfield);
+    arraycache::const_iterator aitr = cache.find(phrase);
+    if (aitr != cache.end()) {
+        array = aitr->second;
     }
+    std::sort(array.begin(), array.end(), std::greater<uint64_t>());
     return array;
 }
 
-intarray __get(RocksDBCache const* c, std::string id, bool ignorePrefixFlag) {
+inline void decodeMessage(std::string const & message, intarray & array) {
+    protozero::pbf_reader item(message);
+    item.next(CACHE_ITEM);
+    auto vals = item.get_packed_uint64();
+    uint64_t lastval = 0;
+    // delta decode values.
+    for (auto it = vals.first; it != vals.second; ++it) {
+        if (lastval == 0) {
+            lastval = *it;
+            array.emplace_back(lastval);
+        } else {
+            lastval = lastval - *it;
+            array.emplace_back(lastval);
+        }
+    }
+}
+
+inline void decodeAndBoostMessage(std::string const & message, intarray & array) {
+    protozero::pbf_reader item(message);
+    item.next(CACHE_ITEM);
+    auto vals = item.get_packed_uint64();
+    uint64_t lastval = 0;
+    // delta decode values.
+    for (auto it = vals.first; it != vals.second; ++it) {
+        if (lastval == 0) {
+            lastval = *it;
+            array.emplace_back(lastval | LANGUAGE_MATCH_BOOST);
+        } else {
+            lastval = lastval - *it;
+            array.emplace_back(lastval | LANGUAGE_MATCH_BOOST);
+        }
+    }
+}
+
+intarray __get(RocksDBCache const* c, std::string phrase, langfield_type langfield) {
     std::shared_ptr<rocksdb::DB> db = c->db;
     intarray array;
 
-    std::string search_id = id;
-    std::vector<size_t> end_positions;
-    for (uint32_t i = 0; i < 2; i++) {
-        std::string message;
-        rocksdb::Status s = db->Get(rocksdb::ReadOptions(), search_id, &message);
-        if (s.ok()) {
-            protozero::pbf_reader item(message);
-            item.next(CACHE_ITEM);
-            auto vals = item.get_packed_uint64();
-            uint64_t lastval = 0;
-            // delta decode values.
-            for (auto it = vals.first; it != vals.second; ++it) {
-                if (lastval == 0) {
-                    lastval = *it;
-                    array.emplace_back(lastval);
-                } else {
-                    lastval = lastval - *it;
-                    array.emplace_back(lastval);
-                }
-            }
-        }
-        end_positions.emplace_back(array.size());
-        if (i == 0) {
-            if (!ignorePrefixFlag) {
-                break;
-            } else {
-                search_id = search_id + ".";
-            }
-        }
+    add_langfield(phrase, langfield);
+    std::string message;
+    rocksdb::Status s = db->Get(rocksdb::ReadOptions(), phrase, &message);
+    if (s.ok()) {
+        decodeMessage(message, array);
     }
 
-    if (end_positions.size() == 2 && end_positions[0] != 0 && end_positions[0] != end_positions[1]) {
-        // we've found things for both the non-dot version and the dot version
-        // so we need to merge them so the order is sorted
-        std::inplace_merge(array.begin(), array.begin() + end_positions[0], array.end(), std::greater<uint64_t>());
-    }
     return array;
 }
 
 struct sortableGrid {
     protozero::const_varint_iterator<uint64_t> it;
     protozero::const_varint_iterator<uint64_t> end;
+    value_type unadjusted_lastval;
+    bool matches_language;
 };
 
-intarray __getbyprefix(MemoryCache const* c, std::string prefix) {
+intarray __getmatching(MemoryCache const* c, std::string phrase, bool match_prefixes, langfield_type langfield) {
     intarray array;
-    size_t prefix_length = prefix.length();
-    const char* prefix_cstr = prefix.c_str();
+
+    if (!match_prefixes) phrase.push_back(LANGFIELD_SEPARATOR);
+    size_t phrase_length = phrase.length();
+    const char* phrase_data = phrase.data();
 
     // Load values from memory cache
 
     for (auto const& item : c->cache_) {
-        const char* item_cstr = item.first.c_str();
+        const char* item_data = item.first.data();
         size_t item_length = item.first.length();
-        // here, we skip this iteration if either the key is shorter than
-        // the prefix, or, if the key has the no-prefix flag, its length
-        // without the flag isn't the same as the item length (which will
-        // make the prefix comparison in the next step effectively an
-        // equality check)
-        if (
-            item_length < prefix_length ||
-            (item_cstr[item_length - 1] == '.' && item_length != prefix_length + 1)
-        ) {
-            continue;
-        }
-        if (memcmp(prefix_cstr, item_cstr, prefix_length) == 0) {
-            array.insert(array.end(), item.second.begin(), item.second.end());
+
+        if (item_length < phrase_length) continue;
+
+        if (memcmp(phrase_data, item_data, phrase_length) == 0) {
+            langfield_type message_langfield = extract_langfield(item.first);
+
+            if (message_langfield & langfield) {
+                array.reserve(array.size() + item.second.size());
+                for (auto const& grid : item.second) {
+                    array.emplace_back(grid | LANGUAGE_MATCH_BOOST);
+                }
+            } else {
+                array.insert(array.end(), item.second.begin(), item.second.end());
+            }
         }
     }
     std::sort(array.begin(), array.end(), std::greater<uint64_t>());
     return array;
 }
 
-intarray __getbyprefix(RocksDBCache const* c, std::string prefix) {
+intarray __getmatching(RocksDBCache const* c, std::string phrase, bool match_prefixes, langfield_type langfield) {
     intarray array;
-    size_t prefix_length = prefix.length();
+
+    if (!match_prefixes) phrase.push_back(LANGFIELD_SEPARATOR);
+    size_t phrase_length = phrase.length();
 
     // Load values from message cache
-    std::vector<std::string> messages;
+    std::vector<std::tuple<std::string, bool>> messages;
     std::vector<sortableGrid> grids;
 
-    if (prefix_length <= MEMO_PREFIX_LENGTH_T1) {
-        prefix = "=1" + prefix.substr(0, MEMO_PREFIX_LENGTH_T1);
-    } else if (prefix_length <= MEMO_PREFIX_LENGTH_T2) {
-        prefix = "=2" + prefix.substr(0, MEMO_PREFIX_LENGTH_T2);
+    if (match_prefixes) {
+        // if this is an autocomplete scan, use the prefix cache
+        if (phrase_length <= MEMO_PREFIX_LENGTH_T1) {
+            phrase = "=1" + phrase.substr(0, MEMO_PREFIX_LENGTH_T1);
+        } else if (phrase_length <= MEMO_PREFIX_LENGTH_T2) {
+            phrase = "=2" + phrase.substr(0, MEMO_PREFIX_LENGTH_T2);
+        }
     }
+
     radix_max_heap::pair_radix_max_heap<uint64_t, size_t> rh;
 
     std::shared_ptr<rocksdb::DB> db = c->db;
 
     std::unique_ptr<rocksdb::Iterator> rit(db->NewIterator(rocksdb::ReadOptions()));
-    for (rit->Seek(prefix); rit->Valid() && rit->key().ToString().compare(0, prefix.size(), prefix) == 0; rit->Next()) {
-        std::string key_id = rit->key().ToString();
+    for (rit->Seek(phrase); rit->Valid() && rit->key().ToString().compare(0, phrase.size(), phrase) == 0; rit->Next()) {
+        std::string key = rit->key().ToString();
 
-        // same skip operation as for the memory cache; see above
-        if (
-            key_id.length() < prefix.length() ||
-            (key_id.at(key_id.length() - 1) == '.' && key_id.length() != prefix.length() + 1)
-        ) {
-            continue;
-        }
+        // grab the langfield from the end of the key
+        langfield_type message_langfield = extract_langfield(key);
+        bool matches_language = (bool)(message_langfield & langfield);
 
-        messages.emplace_back(rit->value().ToString());
+        messages.emplace_back(std::make_tuple(rit->value().ToString(), matches_language));
     }
-    for (std::string& message : messages) {
-        protozero::pbf_reader item(message);
+
+    // short-circuit the priority queue merging logic if we only found one message
+    // as will be the norm for exact matches in translationless indexes
+    if (messages.size() == 1) {
+        if (std::get<1>(messages[0])) {
+            decodeAndBoostMessage(std::get<0>(messages[0]), array);
+        } else {
+            decodeMessage(std::get<0>(messages[0]), array);
+        }
+        return array;
+    }
+
+    for (std::tuple<std::string, bool>& message : messages) {
+        protozero::pbf_reader item(std::get<0>(message));
+        bool matches_language = std::get<1>(message);
+
         item.next(CACHE_ITEM);
         auto vals = item.get_packed_uint64();
 
         if (vals.first != vals.second) {
-            grids.emplace_back(sortableGrid{vals.first, vals.second});
-            rh.push(*(vals.first), grids.size() - 1);
+            value_type unadjusted_lastval = *(vals.first);
+            grids.emplace_back(sortableGrid{
+                vals.first,
+                vals.second,
+                unadjusted_lastval,
+                matches_language
+            });
+            rh.push(matches_language ? unadjusted_lastval | LANGUAGE_MATCH_BOOST : unadjusted_lastval, grids.size() - 1);
         }
     }
 
     while (!rh.empty() && array.size() < PREFIX_MAX_GRID_LENGTH) {
         size_t gridIdx = rh.top_value();
-        uint64_t lastval = rh.top_key();
+        uint64_t gridId = rh.top_key();
         rh.pop();
 
-        array.emplace_back(lastval);
-        grids[gridIdx].it++;
-        if (grids[gridIdx].it != grids[gridIdx].end) {
-            lastval = lastval - *(grids[gridIdx].it);
-            rh.push(lastval, gridIdx);
+        array.emplace_back(gridId);
+        sortableGrid* sg = &(grids[gridIdx]);
+        sg->it++;
+        if (sg->it != sg->end) {
+            sg->unadjusted_lastval -= *(grids[gridIdx].it);
+            rh.push(
+                sg->matches_language ? sg->unadjusted_lastval | LANGUAGE_MATCH_BOOST : sg->unadjusted_lastval,
+                gridIdx
+            );
         }
     }
 
     return array;
+}
+
+constexpr unsigned MAX_LANG = (sizeof(langfield_type) * 8) - 1;
+inline langfield_type langarrayToLangfield(Local<v8::Array> const& array) {
+    size_t array_size = array->Length();
+    langfield_type out = 0;
+    for (unsigned i = 0; i < array_size; i++) {
+        unsigned int val = static_cast<unsigned int>(array->Get(i)->NumberValue());
+        if (val > MAX_LANG) {
+            // this should probably throw something
+            continue;
+        }
+        out = out | (static_cast<langfield_type>(1) << val);
+    }
+    return out;
+}
+
+inline Local<v8::Array> langfieldToLangarray(langfield_type langfield) {
+    Local<Array> langs = Nan::New<Array>();
+
+    unsigned idx = 0;
+    for (unsigned i = 0; i <= MAX_LANG; i++) {
+        if (langfield & (static_cast<langfield_type>(1) << i)) {
+            langs->Set(idx++,Nan::New(i));
+        }
+    }
+    return langs;
 }
 
 void MemoryCache::Initialize(Handle<Object> target) {
@@ -214,7 +301,7 @@ void MemoryCache::Initialize(Handle<Object> target) {
     Nan::SetPrototypeMethod(t, "list", MemoryCache::list);
     Nan::SetPrototypeMethod(t, "_set", _set);
     Nan::SetPrototypeMethod(t, "_get", _get);
-    Nan::SetPrototypeMethod(t, "_getByPrefix", _getbyprefix);
+    Nan::SetPrototypeMethod(t, "_getMatching", _getmatching);
     target->Set(Nan::New("MemoryCache").ToLocalChecked(), t->GetFunction());
     constructor.Reset(t);
 }
@@ -233,7 +320,7 @@ void RocksDBCache::Initialize(Handle<Object> target) {
     Nan::SetPrototypeMethod(t, "pack", RocksDBCache::pack);
     Nan::SetPrototypeMethod(t, "list", RocksDBCache::list);
     Nan::SetPrototypeMethod(t, "_get", _get);
-    Nan::SetPrototypeMethod(t, "_getByPrefix", _getbyprefix);
+    Nan::SetPrototypeMethod(t, "_getMatching", _getmatching);
     Nan::SetMethod(t, "merge", merge);
     target->Set(Nan::New("RocksDBCache").ToLocalChecked(), t->GetFunction());
     constructor.Reset(t);
@@ -245,7 +332,7 @@ RocksDBCache::RocksDBCache()
 
 RocksDBCache::~RocksDBCache() { }
 
-inline void __packVec(intarray const& varr, std::unique_ptr<rocksdb::DB> const& db, std::string const& key) {
+inline void packVec(intarray const& varr, std::unique_ptr<rocksdb::DB> const& db, std::string const& key) {
     std::string message;
 
     protozero::pbf_writer item_writer(message);
@@ -306,34 +393,29 @@ NAN_METHOD(MemoryCache::pack)
                 // delta-encode values, sorted in descending order.
                 std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
 
-                __packVec(varr, db, item.first);
+                packVec(varr, db, item.first);
 
                 std::string prefix_t1 = "";
                 std::string prefix_t2 = "";
 
                 // add this to the memoized prefix array too, maybe
-                auto item_length = item.first.length();
-                if (item.first.at(item_length - 1) == '.') {
-                    // this is an entry that bans degens
-                    // so only include it if it itself smaller than the
-                    // prefix limit (minus dot), and leave it dot-suffixed
-                    if (item_length <= (MEMO_PREFIX_LENGTH_T1 + 1)) {
-                        prefix_t1 = "=1" + item.first;
-                    } else if (item_length > (MEMO_PREFIX_LENGTH_T1 + 1) && item_length <= (MEMO_PREFIX_LENGTH_T2 + 1)) {
-                        prefix_t2 = "=2" + item.first;
-                    }
+                auto phrase_length = item.first.find(LANGFIELD_SEPARATOR);
+                // use the full string for things shorter than the limit
+                // or the prefix otherwise
+                if (phrase_length < MEMO_PREFIX_LENGTH_T1) {
+                    prefix_t1 = "=1" + item.first;
                 } else {
-                    // use the full string for things shorter than the limit
-                    // or the prefix otherwise
-                    if (item_length < MEMO_PREFIX_LENGTH_T1) {
-                        prefix_t1 = "=1" + item.first;
+                    // get the prefix, then append the langfield back onto it again
+                    langfield_type langfield = extract_langfield(item.first);
+
+                    prefix_t1 = "=1" + item.first.substr(0, MEMO_PREFIX_LENGTH_T1);
+                    add_langfield(prefix_t1, langfield);
+
+                    if (phrase_length < MEMO_PREFIX_LENGTH_T2) {
+                        prefix_t2 = "=2" + item.first;
                     } else {
-                        prefix_t1 = "=1" + item.first.substr(0, MEMO_PREFIX_LENGTH_T1);
-                        if (item_length < MEMO_PREFIX_LENGTH_T2) {
-                            prefix_t2 = "=2" + item.first;
-                        } else {
-                            prefix_t2 = "=2" + item.first.substr(0, MEMO_PREFIX_LENGTH_T2);
-                        }
+                        prefix_t2 = "=2" + item.first.substr(0, MEMO_PREFIX_LENGTH_T2);
+                        add_langfield(prefix_t2, langfield);
                     }
                 }
 
@@ -371,7 +453,7 @@ NAN_METHOD(MemoryCache::pack)
                 varr.resize(PREFIX_MAX_GRID_LENGTH);
             }
 
-            __packVec(varr, db, item.first);
+            packVec(varr, db, item.first);
         }
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
@@ -579,6 +661,8 @@ void mergeQueue(uv_work_t* req) {
             }
 
             std::string in_message2;
+            std::string max_key = "__MAX__";
+            auto max_key_length = max_key.length();
             rocksdb::Status s = db2->Get(rocksdb::ReadOptions(), key_id, &in_message2);
             if (s.ok()) {
                 // get input proto 2
@@ -589,7 +673,7 @@ void mergeQueue(uv_work_t* req) {
                 lastval = 0;
                 for (auto it = vals2.first; it != vals2.second; ++it) {
                     if (method == "freq") {
-                        if (key_id == "__MAX__") {
+                        if (key_id.compare(0, max_key_length, max_key) == 0) {
                             varr[0] = varr[0] > *it ? varr[0] : *it;
                         } else {
                             varr[0] = varr[0] + *it;
@@ -668,7 +752,17 @@ NAN_METHOD(MemoryCache::list)
 
         unsigned idx = 0;
         for (auto const& item : c->cache_) {
-            ids->Set(idx++,Nan::New(item.first).ToLocalChecked());
+            Local<Array> out = Nan::New<Array>();
+            out->Set(0, Nan::New(item.first.substr(0, item.first.find(LANGFIELD_SEPARATOR))).ToLocalChecked());
+
+            langfield_type langfield = extract_langfield(item.first);
+            if (langfield == ALL_LANGUAGES) {
+                out->Set(1, Nan::Null());
+            } else {
+                out->Set(1, langfieldToLangarray(langfield));
+            }
+
+            ids->Set(idx++, out);
         }
 
         info.GetReturnValue().Set(ids);
@@ -693,7 +787,18 @@ NAN_METHOD(RocksDBCache::list)
         for (it->SeekToFirst(); it->Valid(); it->Next()) {
             std::string key_id = it->key().ToString();
             if (key_id.at(0) == '=') continue;
-            ids->Set(idx++, Nan::New(key_id).ToLocalChecked());
+
+            Local<Array> out = Nan::New<Array>();
+            out->Set(0, Nan::New(key_id.substr(0, key_id.find(LANGFIELD_SEPARATOR))).ToLocalChecked());
+
+            langfield_type langfield = extract_langfield(key_id);
+            if (langfield == ALL_LANGUAGES) {
+                out->Set(1, Nan::Null());
+            } else {
+                out->Set(1, langfieldToLangarray(langfield));
+            }
+
+            ids->Set(idx++, out);
         }
 
         info.GetReturnValue().Set(ids);
@@ -734,7 +839,7 @@ NAN_METHOD(RocksDBCache::merge)
 NAN_METHOD(MemoryCache::_set)
 {
     if (info.Length() < 2) {
-        return Nan::ThrowTypeError("expected two info: 'id', 'data'");
+        return Nan::ThrowTypeError("expected at least two info: id, data, [languages], [append]");
     }
     if (!info[0]->IsString()) {
         return Nan::ThrowTypeError("first arg must be a String");
@@ -754,9 +859,23 @@ NAN_METHOD(MemoryCache::_set)
         }
         std::string id(*utf8_id);
 
+        langfield_type langfield;
+        if (info.Length() > 2 && !(info[2]->IsNull() || info[2]->IsUndefined())) {
+            if (!info[2]->IsArray()) {
+                return Nan::ThrowTypeError("third arg, if supplied must be an Array");
+            }
+            langfield = langarrayToLangfield(Local<Array>::Cast(info[2]));
+        } else {
+            langfield = ALL_LANGUAGES;
+        }
+
+        bool append = info.Length() > 3 && info[3]->IsBoolean() && info[3]->BooleanValue();
+
         MemoryCache* c = node::ObjectWrap::Unwrap<MemoryCache>(info.This());
         arraycache & arrc = c->cache_;
         key_type key_id = static_cast<key_type>(id);
+        add_langfield(key_id, langfield);
+
         arraycache::iterator itr2 = arrc.find(key_id);
         if (itr2 == arrc.end()) {
             arrc.emplace(key_id,intarray());
@@ -764,7 +883,7 @@ NAN_METHOD(MemoryCache::_set)
         intarray & vv = arrc[key_id];
 
         unsigned array_size = data->Length();
-        if (info[2]->IsBoolean() && info[2]->BooleanValue()) {
+        if (append) {
             vv.reserve(vv.size() + array_size);
         } else {
             if (itr2 != arrc.end()) vv.clear();
@@ -785,7 +904,7 @@ template <typename T>
 inline NAN_METHOD(_genericget)
 {
     if (info.Length() < 1) {
-        return Nan::ThrowTypeError("expected one info: id");
+        return Nan::ThrowTypeError("expected at least one info: id, [languages]");
     }
     if (!info[0]->IsString()) {
         return Nan::ThrowTypeError("first arg must be a String");
@@ -797,10 +916,18 @@ inline NAN_METHOD(_genericget)
         }
         std::string id(*utf8_id);
 
-        bool ignorePrefixFlag = (info.Length() >= 2 && info[1]->IsBoolean()) ? info[1]->BooleanValue() : false;
+        langfield_type langfield;
+        if (info.Length() > 1 && !(info[1]->IsNull() || info[1]->IsUndefined())) {
+            if (!info[1]->IsArray()) {
+                return Nan::ThrowTypeError("second arg, if supplied must be an Array");
+            }
+            langfield = langarrayToLangfield(Local<Array>::Cast(info[1]));
+        } else {
+            langfield = ALL_LANGUAGES;
+        }
 
         T* c = node::ObjectWrap::Unwrap<T>(info.This());
-        intarray vector = __get(c, id, ignorePrefixFlag);
+        intarray vector = __get(c, id, langfield);
         if (!vector.empty()) {
             std::size_t size = vector.size();
             Local<Array> array = Nan::New<Array>(static_cast<int>(size));
@@ -824,49 +951,6 @@ NAN_METHOD(MemoryCache::_get) {
 
 NAN_METHOD(RocksDBCache::_get) {
     return _genericget<RocksDBCache>(info);
-}
-
-template <typename T>
-inline NAN_METHOD(_genericgetbyprefix)
-{
-    if (info.Length() < 1) {
-        return Nan::ThrowTypeError("expected one info: id");
-    }
-    if (!info[0]->IsString()) {
-        return Nan::ThrowTypeError("first arg must be a String");
-    }
-    try {
-        Nan::Utf8String utf8_id(info[0]);
-        if (utf8_id.length() < 1) {
-            return Nan::ThrowTypeError("first arg must be a String");
-        }
-        std::string id(*utf8_id);
-
-        T* c = node::ObjectWrap::Unwrap<T>(info.This());
-        intarray vector = __getbyprefix(c, id);
-        if (!vector.empty()) {
-            std::size_t size = vector.size();
-            Local<Array> array = Nan::New<Array>(static_cast<int>(size));
-            for (uint32_t i = 0; i < size; ++i) {
-                array->Set(i, Nan::New<Number>(vector[i]));
-            }
-            info.GetReturnValue().Set(array);
-            return;
-        } else {
-            info.GetReturnValue().Set(Nan::Undefined());
-            return;
-        }
-    } catch (std::exception const& ex) {
-        return Nan::ThrowTypeError(ex.what());
-    }
-}
-
-NAN_METHOD(MemoryCache::_getbyprefix) {
-    return _genericgetbyprefix<MemoryCache>(info);
-}
-
-NAN_METHOD(RocksDBCache::_getbyprefix) {
-    return _genericgetbyprefix<RocksDBCache>(info);
 }
 
 NAN_METHOD(MemoryCache::New)
@@ -966,7 +1050,8 @@ struct PhrasematchSubq {
                     bool pf,
                     unsigned short i,
                     unsigned short z,
-                    uint32_t m) :
+                    uint32_t m,
+                    langfield_type l) :
         cache(c),
         type(t),
         weight(w),
@@ -974,7 +1059,8 @@ struct PhrasematchSubq {
         prefix(pf),
         idx(i),
         zoom(z),
-        mask(m) {}
+        mask(m),
+        langfield(l) {}
     void *cache;
     char type;
     double weight;
@@ -983,6 +1069,7 @@ struct PhrasematchSubq {
     unsigned short idx;
     unsigned short zoom;
     uint32_t mask;
+    langfield_type langfield;
     PhrasematchSubq& operator=(PhrasematchSubq && c) = default;
     PhrasematchSubq(PhrasematchSubq && c) = default;
 };
@@ -998,6 +1085,7 @@ struct Cover {
     uint32_t mask;
     double distance;
     double scoredist;
+    bool matches_language;
 };
 
 struct Context {
@@ -1046,12 +1134,14 @@ Cover numToCover(uint64_t num) {
     assert(((num >> 48) % POW2_3) >= static_cast<double>(std::numeric_limits<unsigned short>::min()));
     unsigned short score = static_cast<unsigned short>((num >> 48) % POW2_3);
     uint32_t id = static_cast<uint32_t>(num % POW2_20);
+    bool matches_language = static_cast<bool>(num & LANGUAGE_MATCH_BOOST);
     cover.x = x;
     cover.y = y;
     double relev = 0.4 + (0.2 * static_cast<double>((num >> 51) % POW2_2));
     cover.relev = relev;
     cover.score = score;
     cover.id = id;
+    cover.matches_language = matches_language;
 
     // These are not derived from decoding the input num but by
     // external values after initialization.
@@ -1271,15 +1361,9 @@ void coalesceSingle(uv_work_t* req) {
 
         // Load and concatenate grids for all ids in `phrases`
         intarray grids;
-        if (subq.prefix) {
-            grids = subq.type == TYPE_MEMORY ?
-                __getbyprefix(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase) :
-                __getbyprefix(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase);
-        } else {
-            grids = subq.type == TYPE_MEMORY ?
-                __get(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, true) :
-                __get(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, true);
-        }
+        grids = subq.type == TYPE_MEMORY ?
+            __getmatching(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, subq.prefix, subq.langfield) :
+            __getmatching(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, subq.prefix, subq.langfield);
 
         unsigned long m = grids.size();
         double relevMax = 0;
@@ -1298,6 +1382,7 @@ void coalesceSingle(uv_work_t* req) {
             cover.idx = subq.idx;
             cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
             cover.relev = cover.relev * subq.weight;
+            if (!cover.matches_language) cover.relev *= .8;
             cover.distance = proximity ? tileDist(cx, cy, cover.x, cover.y) : 0;
             cover.scoredist = proximity ? scoredist(cz, cover.distance, cover.score) : cover.score;
 
@@ -1429,15 +1514,9 @@ void coalesceMulti(uv_work_t* req) {
         for (auto const& subq : stack) {
             // Load and concatenate grids for all ids in `phrases`
             intarray grids;
-            if (subq.prefix) {
-                grids = subq.type == TYPE_MEMORY ?
-                    __getbyprefix(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase) :
-                    __getbyprefix(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase);
-            } else {
-                grids = subq.type == TYPE_MEMORY ?
-                    __get(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, true) :
-                    __get(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, true);
-            }
+            grids = subq.type == TYPE_MEMORY ?
+                __getmatching(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, subq.prefix, subq.langfield) :
+                __getmatching(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, subq.prefix, subq.langfield);
 
             bool first = i == 0;
             bool last = i == (stack.size() - 1);
@@ -1453,6 +1532,7 @@ void coalesceMulti(uv_work_t* req) {
                 cover.mask = subq.mask;
                 cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
                 cover.relev = cover.relev * subq.weight;
+                if (!cover.matches_language) cover.relev *= .8;
                 if (proximity) {
                     ZXY dxy = pxy2zxy(z, cover.x, cover.y, cz);
                     cover.distance = tileDist(cx, cy, dxy.x, dxy.y);
@@ -1562,6 +1642,7 @@ Local<Object> coverToObject(Cover const& cover) {
     object->Set(Nan::New("tmpid").ToLocalChecked(), Nan::New<Number>(cover.tmpid));
     object->Set(Nan::New("distance").ToLocalChecked(), Nan::New<Number>(cover.distance));
     object->Set(Nan::New("scoredist").ToLocalChecked(), Nan::New<Number>(cover.scoredist));
+    object->Set(Nan::New("matches_language").ToLocalChecked(), Nan::New<Boolean>(cover.matches_language));
     return object;
 }
 Local<Array> contextToArray(Context const& context) {
@@ -1656,6 +1737,7 @@ NAN_METHOD(coalesce) {
             unsigned short idx;
             unsigned short zoom;
             uint32_t mask;
+            langfield_type langfield;
 
             // TODO: this is verbose: we could write some generic functions to do this robust conversion per type
             if (!jsStack->Has(Nan::New("idx").ToLocalChecked())) {
@@ -1738,6 +1820,16 @@ NAN_METHOD(coalesce) {
                 mask = static_cast<uint32_t>(_mask);
             }
 
+            langfield = ALL_LANGUAGES;
+            if (jsStack->Has(Nan::New("languages").ToLocalChecked())) {
+                Local<Value> c_array = jsStack->Get(Nan::New("languages").ToLocalChecked());
+                if (!c_array->IsArray()) {
+                    return Nan::ThrowTypeError("languages must be an array");
+                }
+                Local<Array> carray = Local<Array>::Cast(c_array);
+                langfield = langarrayToLangfield(carray);
+            }
+
             if (!jsStack->Has(Nan::New("cache").ToLocalChecked())) {
                 return Nan::ThrowTypeError("missing cache property");
             } else {
@@ -1763,7 +1855,8 @@ NAN_METHOD(coalesce) {
                         prefix,
                         idx,
                         zoom,
-                        mask
+                        mask,
+                        langfield
                     );
                 } else {
                     baton->stack.emplace_back(
@@ -1774,7 +1867,8 @@ NAN_METHOD(coalesce) {
                         prefix,
                         idx,
                         zoom,
-                        mask
+                        mask,
+                        langfield
                     );
                 }
             }
@@ -1849,6 +1943,73 @@ NAN_METHOD(coalesce) {
 
     info.GetReturnValue().Set(Nan::Undefined());
     return;
+}
+
+template <typename T>
+inline NAN_METHOD(_genericgetmatching)
+{
+    if (info.Length() < 2) {
+        return Nan::ThrowTypeError("expected two or three info: id, match_prefixes, [languages]");
+    }
+    if (!info[0]->IsString()) {
+        return Nan::ThrowTypeError("first arg must be a String");
+    }
+    if (!info[1]->IsBoolean()) {
+        return Nan::ThrowTypeError("second arg must be a Bool");
+    }
+    try {
+        Nan::Utf8String utf8_id(info[0]);
+        if (utf8_id.length() < 1) {
+            return Nan::ThrowTypeError("first arg must be a String");
+        }
+        std::string id(*utf8_id);
+
+        bool match_prefixes = info[1]->BooleanValue();
+
+        langfield_type langfield;
+        if (info.Length() > 2 && !(info[2]->IsNull() || info[2]->IsUndefined())) {
+            if (!info[2]->IsArray()) {
+                return Nan::ThrowTypeError("third arg, if supplied must be an Array");
+            }
+            langfield = langarrayToLangfield(Local<Array>::Cast(info[2]));
+        } else {
+            langfield = ALL_LANGUAGES;
+        }
+
+        T* c = node::ObjectWrap::Unwrap<T>(info.This());
+        intarray vector = __getmatching(c, id, match_prefixes, langfield);
+        if (!vector.empty()) {
+            std::size_t size = vector.size();
+            Local<Array> array = Nan::New<Array>(static_cast<int>(size));
+            for (uint32_t i = 0; i < size; ++i) {
+                auto obj = coverToObject(numToCover(vector[i]));
+
+                // these values don't make any sense outside the context of coalesce, so delete them
+                // it's a little clunky to set and then delete them, but this function as exposed
+                // to node is only used in debugging/testing, so, meh
+                obj->Delete(Nan::New("idx").ToLocalChecked());
+                obj->Delete(Nan::New("tmpid").ToLocalChecked());
+                obj->Delete(Nan::New("distance").ToLocalChecked());
+                obj->Delete(Nan::New("scoredist").ToLocalChecked());
+                array->Set(i, obj);
+            }
+            info.GetReturnValue().Set(array);
+            return;
+        } else {
+            info.GetReturnValue().Set(Nan::Undefined());
+            return;
+        }
+    } catch (std::exception const& ex) {
+        return Nan::ThrowTypeError(ex.what());
+    }
+}
+
+NAN_METHOD(MemoryCache::_getmatching) {
+    return _genericgetmatching<MemoryCache>(info);
+}
+
+NAN_METHOD(RocksDBCache::_getmatching) {
+    return _genericgetmatching<RocksDBCache>(info);
 }
 
 extern "C" {

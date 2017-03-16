@@ -19,6 +19,7 @@
 #include <list>
 #include <vector>
 #include <deque>
+#include <limits>
 #include <algorithm>
 #include "radix_max_heap.h"
 #pragma clang diagnostic pop
@@ -27,6 +28,8 @@
 #include <tuple>
 
 #include <cassert>
+#include <cstring>
+
 #include "rocksdb/db.h"
 
 namespace carmen {
@@ -42,6 +45,7 @@ protected:
 
 typedef std::string key_type;
 typedef uint64_t value_type;
+typedef unsigned __int128 langfield_type;
 // fully cached item
 typedef std::vector<value_type> intarray;
 typedef std::vector<key_type> keyarray;
@@ -56,7 +60,7 @@ public:
     static NAN_METHOD(pack);
     static NAN_METHOD(list);
     static NAN_METHOD(_get);
-    static NAN_METHOD(_getbyprefix);
+    static NAN_METHOD(_getmatching);
     static NAN_METHOD(_set);
     static NAN_METHOD(coalesce);
     explicit MemoryCache();
@@ -75,7 +79,7 @@ public:
     static NAN_METHOD(merge);
     static NAN_METHOD(list);
     static NAN_METHOD(_get);
-    static NAN_METHOD(_getbyprefix);
+    static NAN_METHOD(_getmatching);
     static NAN_METHOD(_set);
     static NAN_METHOD(coalesce);
     explicit RocksDBCache();
@@ -87,9 +91,12 @@ public:
 #define CACHE_MESSAGE 1
 #define CACHE_ITEM 1
 
-#define MEMO_PREFIX_LENGTH_T1 4
-#define MEMO_PREFIX_LENGTH_T2 7
+#define MEMO_PREFIX_LENGTH_T1 3
+#define MEMO_PREFIX_LENGTH_T2 6
 #define PREFIX_MAX_GRID_LENGTH 500000
+
+constexpr langfield_type ALL_LANGUAGES = ~(langfield_type)(0);
+#define LANGFIELD_SEPARATOR '|'
 
 #define TYPE_MEMORY 1
 #define TYPE_ROCKSDB 2
