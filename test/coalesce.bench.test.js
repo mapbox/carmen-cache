@@ -27,7 +27,7 @@ var mp36 = Math.pow(2,36);
                 if (process.env.BUILDTYPE == 'debug') {
                     expected_ops = 500
                 }
-                assert.equal(ops < expected_ops, true, 'coalesceSingle @ ' + ops + 'ms > ' + expected_ops);
+                assert.equal(ops < expected_ops, true, 'coalesceSingle @ ' + ops + 'ms < ' + expected_ops + 'ms');
                 assert.end();
                 return;
             }
@@ -54,7 +54,7 @@ var mp36 = Math.pow(2,36);
                 if (process.env.BUILDTYPE == 'debug') {
                     expected_ops = 500
                 }
-                assert.equal(ops < expected_ops, true, 'coalesceSingle + proximity @ ' + ops + 'ms > ' + expected_ops);
+                assert.equal(ops < expected_ops, true, 'coalesceSingle + proximity @ ' + ops + 'ms < ' + expected_ops + 'ms');
                 assert.end();
                 return;
             }
@@ -108,7 +108,7 @@ var mp36 = Math.pow(2,36);
                 if (process.env.BUILDTYPE == 'debug') {
                     expected_ops = 1000
                 }
-                assert.equal(ops < expected_ops, true, 'coalesceMulti @ ' + ops + 'ms > ' + expected_ops);
+                assert.equal(ops < expected_ops, true, 'coalesceMulti @ ' + ops + 'ms < ' + expected_ops + 'ms');
                 assert.end();
                 return;
             }
@@ -136,7 +136,7 @@ var mp36 = Math.pow(2,36);
                 if (process.env.BUILDTYPE == 'debug') {
                     expected_ops = 1000
                 }
-                assert.equal(ops < expected_ops, true, 'coalesceMulti + proximity @' + ops + 'ms > ' + expected_ops);
+                assert.equal(ops < expected_ops, true, 'coalesceMulti + proximity @' + ops + 'ms < ' + expected_ops + 'ms');
                 assert.end();
                 return;
             }
