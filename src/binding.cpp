@@ -1418,7 +1418,7 @@ void coalesceSingle(uv_work_t* req) {
         uint32_t lastid = 0;
         std::size_t added = 0;
         std::vector<Context> contexts;
-        std::size_t max_contexts = 40;
+        std::size_t max_contexts = std::min(covers.size(),static_cast<std::size_t>(40));
         contexts.reserve(max_contexts);
         for (auto && cover : covers) {
             // Stop at 40 contexts
