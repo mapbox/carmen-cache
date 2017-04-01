@@ -1299,7 +1299,7 @@ void coalesceFinalize(CoalesceBaton* baton, std::vector<Context> && contexts) {
         std::size_t total = 0;
         std::map<uint64_t,bool> sets;
         std::map<uint64_t,bool>::iterator sit;
-        std::size_t max_contexts = 40;
+        std::size_t max_contexts = std::min(contexts.size(),static_cast<std::size_t>(40));
         baton->features.reserve(max_contexts);
         for (auto && context : contexts) {
             // Maximum allowance of coalesced features: 40.
