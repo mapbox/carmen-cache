@@ -19,7 +19,7 @@ var mp36 = Math.pow(2,36);
         mask: 1 << 0
     }];
     test('coalesceSingle', function(assert) {
-        if (process.env.COVERAGE) return assert.end();
+        if (process.env.COVERAGE && process.env.COVERAGE == 'true') return assert.end();
 
         var time = +new Date;
         function run(remaining) {
@@ -44,7 +44,7 @@ var mp36 = Math.pow(2,36);
         run(runs);
     });
     test('coalesceSingle proximity', function(assert) {
-        if (process.env.COVERAGE) return assert.end();
+        if (process.env.COVERAGE && process.env.COVERAGE == 'true') return assert.end();
 
         var time = +new Date;
         function run(remaining) {
@@ -96,7 +96,7 @@ var mp36 = Math.pow(2,36);
         prefix: false,
     }];
     test('coalesceMulti', function(assert) {
-        if (process.env.COVERAGE) return assert.end();
+        if (process.env.COVERAGE && process.env.COVERAGE == 'true') return assert.end();
 
         var time = +new Date;
         function run(remaining) {
@@ -122,7 +122,7 @@ var mp36 = Math.pow(2,36);
         run(runs);
     });
     test('coalesceMulti proximity', function(assert) {
-        if (process.env.COVERAGE) return assert.end();
+        if (process.env.COVERAGE && process.env.COVERAGE == 'true') return assert.end();
 
         var time = +new Date;
         function run(remaining) {
