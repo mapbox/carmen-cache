@@ -1093,6 +1093,7 @@ struct Context {
     uint32_t mask;
     double relev;
 
+    Context() = delete;
     Context(Context const& c) = delete;
     Context& operator=(Context const& c) = delete;
     Context(Cover && cov,
@@ -1294,12 +1295,12 @@ double scoredist(unsigned zoom, double distance, double score) {
 
 void coalesceFinalize(CoalesceBaton* baton, std::vector<Context> && contexts) {
     if (!contexts.empty()) {
+        std::size_t max_contexts = std::min(contexts.size(),static_cast<std::size_t>(40));
         // Coalesce stack, generate relevs.
         double relevMax = contexts[0].relev;
         std::size_t total = 0;
         std::map<uint64_t,bool> sets;
         std::map<uint64_t,bool>::iterator sit;
-        std::size_t max_contexts = std::min(contexts.size(),static_cast<std::size_t>(40));
         baton->features.reserve(max_contexts);
         for (auto && context : contexts) {
             // Maximum allowance of coalesced features: 40.
@@ -1413,12 +1414,13 @@ void coalesceSingle(uv_work_t* req) {
         }
 
         // sort grids by distance to proximity point
-        std::sort(covers.begin(), covers.end(), coverSortByRelev);
+        std::size_t num_covers = covers.size();
+        std::size_t max_contexts = std::min(num_covers,static_cast<std::size_t>(80));
+        std::partial_sort(covers.begin(), covers.begin()+max_contexts, covers.end(), coverSortByRelev);
 
         uint32_t lastid = 0;
         std::size_t added = 0;
         std::vector<Context> contexts;
-        std::size_t max_contexts = std::min(covers.size(),static_cast<std::size_t>(40));
         contexts.reserve(max_contexts);
         for (auto && cover : covers) {
             // Stop at 40 contexts
@@ -1624,8 +1626,10 @@ void coalesceMulti(uv_work_t* req) {
                 contexts.emplace_back(std::move(context));
             }
         }
+        std::size_t num_contexts = contexts.size();
+        std::size_t max_contexts = std::min(num_contexts,static_cast<std::size_t>(150));
+        std::partial_sort(contexts.begin(), contexts.begin()+max_contexts, contexts.end(), contextSortByRelev);
 
-        std::sort(contexts.begin(), contexts.end(), contextSortByRelev);
         coalesceFinalize(baton, std::move(contexts));
     } catch (std::exception const& ex) {
        baton->error = ex.what();
