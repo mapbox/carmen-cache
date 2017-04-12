@@ -1267,7 +1267,7 @@ struct CoalesceBaton : carmen::noncopyable {
     // params
     std::vector<PhrasematchSubq> stack;
     std::vector<uint64_t> centerzxy;
-    std::vector<uint64_t> bboxzxy;
+    std::vector<std::vector<uint64_t>> bboxzxy;
     Nan::Persistent<v8::Function> callback;
     // return
     std::vector<Context> features;
@@ -1348,10 +1348,10 @@ void coalesceSingle(uv_work_t* req) {
         unsigned maxx;
         unsigned maxy;
         if (bbox) {
-            minx = static_cast<unsigned>(baton->bboxzxy[1]);
-            miny = static_cast<unsigned>(baton->bboxzxy[2]);
-            maxx = static_cast<unsigned>(baton->bboxzxy[3]);
-            maxy = static_cast<unsigned>(baton->bboxzxy[4]);
+            minx = static_cast<unsigned>(baton->bboxzxy[1][0]);
+            miny = static_cast<unsigned>(baton->bboxzxy[2][0]);
+            maxx = static_cast<unsigned>(baton->bboxzxy[3][0]);
+            maxy = static_cast<unsigned>(baton->bboxzxy[4][0]);
         } else {
             minx = 0;
             miny = 0;
@@ -1496,11 +1496,13 @@ void coalesceMulti(uv_work_t* req) {
         unsigned maxx;
         unsigned maxy;
         if (bbox) {
-            bboxz = static_cast<unsigned>(baton->bboxzxy[0]);
-            minx = static_cast<unsigned>(baton->bboxzxy[1]);
-            miny = static_cast<unsigned>(baton->bboxzxy[2]);
-            maxx = static_cast<unsigned>(baton->bboxzxy[3]);
-            maxy = static_cast<unsigned>(baton->bboxzxy[4]);
+            std::cout << "Found bbox" << std::endl;
+            std::cout << bbox << std::endl;
+            bboxz = static_cast<unsigned>(baton->bboxzxy[0][0]);
+            minx = static_cast<unsigned>(baton->bboxzxy[1][0]);
+            miny = static_cast<unsigned>(baton->bboxzxy[2][0]);
+            maxx = static_cast<unsigned>(baton->bboxzxy[3][0]);
+            maxy = static_cast<unsigned>(baton->bboxzxy[4][0]);
         } else {
             bboxz = 0;
             minx = 0;
@@ -1903,20 +1905,29 @@ NAN_METHOD(coalesce) {
                 return Nan::ThrowTypeError("bboxzxy must be an array");
             }
             Local<Array> carray = Local<Array>::Cast(c_array);
-            if (carray->Length() != 5) {
-                return Nan::ThrowTypeError("bboxzxy must be an array of 5 numbers");
-            }
             baton->bboxzxy.reserve(carray->Length());
-            for (uint32_t i = 0; i < carray->Length(); ++i) {
-                Local<Value> item = carray->Get(i);
-                if (!item->IsNumber()) {
-                    return Nan::ThrowTypeError("bboxzxy values must be number");
+            for (uint32_t x = 0; x < carray->Length(); ++x) {
+                Local<Value> array_item = carray->Get(x);
+                if (!array_item->IsArray()) {
+                    return Nan::ThrowTypeError("bboxzxy must be an array of arrays");
                 }
-                int64_t a_val = item->IntegerValue();
-                if (a_val < 0 || a_val > std::numeric_limits<uint32_t>::max()) {
-                    return Nan::ThrowTypeError("encountered bboxzxy value too large to fit in uint32_t");
+                Local<Array> arrayitem = Local<Array>::Cast(array_item);
+                if (arrayitem->Length() != 5) {
+                    return Nan::ThrowTypeError("bboxzxy must be an array of 5 numbers");
                 }
-                baton->bboxzxy.emplace_back(static_cast<uint32_t>(a_val));
+                baton->bboxzxy.emplace_back();
+                baton->bboxzxy[x].reserve(arrayitem->Length());
+                for (uint32_t i = 0; i < arrayitem->Length(); ++i) {
+                    Local<Value> item = arrayitem->Get(i);
+                    if (!item->IsNumber()) {
+                        return Nan::ThrowTypeError("bboxzxy values must be number");
+                    }
+                    int64_t a_val = item->IntegerValue();
+                    if (a_val < 0 || a_val > std::numeric_limits<uint32_t>::max()) {
+                        return Nan::ThrowTypeError("encountered bboxzxy value too large to fit in uint32_t");
+                    }
+                    baton->bboxzxy[x].emplace_back(static_cast<uint32_t>(a_val));
+                }
             }
         }
 

@@ -156,19 +156,19 @@ test('coalesce args', function(assert) {
     }, /bboxzxy must be an array/, 'throws');
 
     assert.throws(function() {
-        coalesce([valid_subq], { bboxzxy:[0,0,0,0] },function(){} );
+        coalesce([valid_subq], { bboxzxy:[[0,0,0,0]] },function(){} );
     }, /bboxzxy must be an array of 5 numbers/, 'throws');
 
     assert.throws(function() {
-        coalesce([valid_subq], { bboxzxy:['',0,0,0,0] },function(){} );
+        coalesce([valid_subq], { bboxzxy:[['',0,0,0,0]] },function(){} );
     }, /bboxzxy values must be number/, 'throws');
 
     assert.throws(function() {
-        coalesce([valid_subq], { bboxzxy:[-1,0,0,0,0] },function(){} );
+        coalesce([valid_subq], { bboxzxy:[[-1,0,0,0,0]] },function(){} );
     }, /encountered bboxzxy value too large to fit in uint32_t/, 'throws');
 
     assert.throws(function() {
-        coalesce([valid_subq], { bboxzxy:[4294967296,0,0,0,0] },function(){} );
+        coalesce([valid_subq], { bboxzxy:[[4294967296,0,0,0,0]] },function(){} );
     }, /encountered bboxzxy value too large to fit in uint32_t/, 'throws');
 
     assert.throws(function() {
@@ -326,7 +326,7 @@ test('coalesce args', function(assert) {
                 phrase: '1',
                 prefix: false,
             }], {
-                bboxzxy: [2, 1, 1, 1, 1]
+                bboxzxy: [[2, 1, 1, 1, 1]]
             }, function(err, res) {
                 assert.ifError(err);
                 assert.deepEqual(res[0].relev, 1, '1.relev');
@@ -974,7 +974,7 @@ test('coalesce args', function(assert) {
                 phrase: '1',
                 prefix: false,
             }], {
-                bboxzxy: [1, 0, 0, 1, 0]
+                bboxzxy: [[1, 0, 0, 1, 0]]
             }, function(err, res) {
                 assert.ifError(err);
                 assert.deepEqual(res.length, 2, '2 results: 1/0/0, 2/3/0');
@@ -999,7 +999,7 @@ test('coalesce args', function(assert) {
                 phrase: '1',
                 prefix: false,
             }], {
-                bboxzxy: [2, 0, 0, 1, 3]
+                bboxzxy: [[2, 0, 0, 1, 3]]
             }, function(err, res) {
                 assert.ifError(err);
                 assert.deepEqual(res.length, 2, '2 results: 1/0/0, 2/0/3');
@@ -1024,7 +1024,7 @@ test('coalesce args', function(assert) {
                 phrase: '1',
                 prefix: false,
             }], {
-                bboxzxy: [6, 14, 30, 15, 64]
+                bboxzxy: [[6, 14, 30, 15, 64]]
             }, function(err, res) {
                 assert.ifError(err);
                 assert.deepEqual(res.length, 2, '2 results: 1/0/0, 2/0/3');
@@ -1049,7 +1049,7 @@ test('coalesce args', function(assert) {
                 phrase: '1',
                 prefix: false,
             }], {
-                bboxzxy: [1, 0, 0, 1, 0]
+                bboxzxy: [[1, 0, 0, 1, 0]]
             }, function(err, res) {
                 assert.ifError(err);
                 assert.deepEqual(res.length, 2, '2 results: 5/20/7, 2/3/0');
