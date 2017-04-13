@@ -1341,24 +1341,6 @@ void coalesceSingle(uv_work_t* req) {
             cy = 0;
         }
 
-        // bbox (optional)
-        bool bbox = !baton->bboxzxy.empty();
-        unsigned minx;
-        unsigned miny;
-        unsigned maxx;
-        unsigned maxy;
-        if (bbox) {
-            minx = static_cast<unsigned>(baton->bboxzxy[1][0]);
-            miny = static_cast<unsigned>(baton->bboxzxy[2][0]);
-            maxx = static_cast<unsigned>(baton->bboxzxy[3][0]);
-            maxy = static_cast<unsigned>(baton->bboxzxy[4][0]);
-        } else {
-            minx = 0;
-            miny = 0;
-            maxx = 0;
-            maxy = 0;
-        }
-
         // Load and concatenate grids for all ids in `phrases`
         intarray grids;
         grids = subq.type == TYPE_MEMORY ?
@@ -1397,8 +1379,21 @@ void coalesceSingle(uv_work_t* req) {
             if (relevMax - cover.relev >= 0.25) break;
             if (cover.relev > relevMax) relevMax = cover.relev;
 
+            // bbox (optional)
+            bool bbox = !baton->bboxzxy.empty();
             if (bbox) {
-                if (cover.x < minx || cover.y < miny || cover.x > maxx || cover.y > maxy) continue;
+                bool outside = false;
+                for (uint32_t x = 0; x < baton->bboxzxy.size(); ++x) {
+                    unsigned minx = static_cast<unsigned>(baton->bboxzxy[x][1]);
+                    unsigned miny = static_cast<unsigned>(baton->bboxzxy[x][2]);
+                    unsigned maxx = static_cast<unsigned>(baton->bboxzxy[x][3]);
+                    unsigned maxy = static_cast<unsigned>(baton->bboxzxy[x][4]);
+                    if (cover.x < minx || cover.y < miny || cover.x > maxx || cover.y > maxy) {
+                        outside = true;
+                        break;
+                    }
+                }
+                if (outside) continue;
             }
 
             covers.emplace_back(cover);
@@ -1488,29 +1483,6 @@ void coalesceMulti(uv_work_t* req) {
             cy = 0;
         }
 
-        // bbox (optional)
-        bool bbox = !baton->bboxzxy.empty();
-        unsigned bboxz;
-        unsigned minx;
-        unsigned miny;
-        unsigned maxx;
-        unsigned maxy;
-        if (bbox) {
-            std::cout << "Found bbox" << std::endl;
-            std::cout << bbox << std::endl;
-            bboxz = static_cast<unsigned>(baton->bboxzxy[0][0]);
-            minx = static_cast<unsigned>(baton->bboxzxy[1][0]);
-            miny = static_cast<unsigned>(baton->bboxzxy[2][0]);
-            maxx = static_cast<unsigned>(baton->bboxzxy[3][0]);
-            maxy = static_cast<unsigned>(baton->bboxzxy[4][0]);
-        } else {
-            bboxz = 0;
-            minx = 0;
-            miny = 0;
-            maxx = 0;
-            maxy = 0;
-        }
-
         std::vector<Context> contexts;
         std::size_t i = 0;
         for (auto const& subq : stack) {
@@ -1544,10 +1516,24 @@ void coalesceMulti(uv_work_t* req) {
                     cover.scoredist = cover.score;
                 }
 
+                // bbox (optional)
+                bool bbox = !baton->bboxzxy.empty();
                 if (bbox) {
-                    ZXY min = bxy2zxy(bboxz, minx, miny, z, false);
-                    ZXY max = bxy2zxy(bboxz, maxx, maxy, z, true);
-                    if (cover.x < min.x || cover.y < min.y || cover.x > max.x || cover.y > max.y) continue;
+                    bool outside = false;
+                    for (uint32_t x = 0; x < baton->bboxzxy.size(); ++x) {
+                        unsigned bboxz = static_cast<unsigned>(baton->bboxzxy[x][0]);
+                        unsigned minx = static_cast<unsigned>(baton->bboxzxy[x][1]);
+                        unsigned miny = static_cast<unsigned>(baton->bboxzxy[x][2]);
+                        unsigned maxx = static_cast<unsigned>(baton->bboxzxy[x][3]);
+                        unsigned maxy = static_cast<unsigned>(baton->bboxzxy[x][4]);
+                        ZXY min = bxy2zxy(bboxz, minx, miny, z, false);
+                        ZXY max = bxy2zxy(bboxz, maxx, maxy, z, true);
+                        if (cover.x < min.x || cover.y < min.y || cover.x > max.x || cover.y > max.y) {
+                            outside = true;
+                            break;
+                        }
+                        if (outside) continue;
+                    }
                 }
 
                 uint64_t zxy = (z * POW2_28) + (cover.x * POW2_14) + (cover.y);
