@@ -19,11 +19,12 @@
     "node-pre-gyp": "~0.6.32", 
     "nan": "~2.5.1",
     "protozero": "~1.5.1"
-  }, 
+  },
+  "bundledDependencies":["node-pre-gyp"],
   "scripts": {
     "test": "tape test/*.test.js", 
     "install": "node-pre-gyp install --fallback-to-build", 
-    "preinstall": "npm install node-pre-gyp"
+    "preinstall": "npm ls"
   }, 
   "devDependencies": {
     "tape": "^4.6.3"
