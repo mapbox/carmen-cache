@@ -11,10 +11,10 @@
       'hard_dependency': 1,
       'actions': [
         {
-          'action_name': 'install_mason',
-          'inputs': ['./install_mason.sh'],
+          'action_name': 'install_deps',
+          'inputs': ['./scripts/install_deps.sh'],
           'outputs': ['./mason_packages'],
-          'action': ['./install_mason.sh']
+          'action': ['./scripts/install_deps.sh']
         }
       ]
     },
@@ -28,7 +28,6 @@
       "include_dirs" : [
           'src/',
           '<!(node -e \'require("nan")\')',
-          '<!(node -e \'require("protozero")\')',
           './mason_packages/.link/include/'
       ],
       "libraries": [
