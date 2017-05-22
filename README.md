@@ -1,6 +1,6 @@
 [![Build Status](https://travis-ci.org/mapbox/carmen-cache.svg)](https://travis-ci.org/mapbox/carmen-cache)
 [![Coverity](https://scan.coverity.com/projects/5667/badge.svg)](https://scan.coverity.com/projects/5667)
-[![Coverage Status](https://coveralls.io/repos/mapbox/carmen-cache/badge.svg)](https://coveralls.io/r/mapbox/carmen-cache)
+[![codecov](https://codecov.io/gh/mapbox/carmen-cache/branch/master/graph/badge.svg)](https://codecov.io/gh/mapbox/carmen-cache)
 
 carmen-cache
 ------------
