@@ -13,6 +13,6 @@ function install() {
 source local.env
 
 install bzip2 1.0.6
-install rocksdb 4.13
+install rocksdb 5.3.6
 install clang++ 3.9.1
 install protozero 1.5.1
