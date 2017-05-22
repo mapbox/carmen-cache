@@ -24,7 +24,7 @@
   "scripts": {
     "test": "tape test/*.test.js", 
     "install": "node-pre-gyp install --fallback-to-build", 
-    "prepublish": "npm ls"
+    "preinstall": "npm ls"
   }, 
   "devDependencies": {
     "tape": "^4.6.3"

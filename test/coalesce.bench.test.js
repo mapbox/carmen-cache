@@ -19,13 +19,15 @@ var mp36 = Math.pow(2,36);
         mask: 1 << 0
     }];
     test('coalesceSingle', function(assert) {
-        if (process.env.COVERAGE && process.env.COVERAGE == 'true') return assert.end();
-
         var time = +new Date;
         function run(remaining) {
             if (!remaining) {
                 var ops = (+new Date-time)/runs;
-                assert.equal(ops < 30, true, 'coalesceSingle @ ' + ops + 'ms');
+                var expected_ops = 30;
+                if (process.env.BUILDTYPE == 'debug') {
+                    expected_ops = 500
+                }
+                assert.equal(ops < expected_ops, true, 'coalesceSingle @ ' + ops + 'ms < ' + expected_ops + 'ms');
                 assert.end();
                 return;
             }
@@ -44,13 +46,15 @@ var mp36 = Math.pow(2,36);
         run(runs);
     });
     test('coalesceSingle proximity', function(assert) {
-        if (process.env.COVERAGE && process.env.COVERAGE == 'true') return assert.end();
-
         var time = +new Date;
         function run(remaining) {
             if (!remaining) {
                 var ops = (+new Date-time)/runs;
-                assert.equal(ops < 30, true, 'coalesceSingle + proximity @ ' + ops + 'ms');
+                var expected_ops = 30;
+                if (process.env.BUILDTYPE == 'debug') {
+                    expected_ops = 500
+                }
+                assert.equal(ops < expected_ops, true, 'coalesceSingle + proximity @ ' + ops + 'ms < ' + expected_ops + 'ms');
                 assert.end();
                 return;
             }
@@ -96,13 +100,15 @@ var mp36 = Math.pow(2,36);
         prefix: false,
     }];
     test('coalesceMulti', function(assert) {
-        if (process.env.COVERAGE && process.env.COVERAGE == 'true') return assert.end();
-
         var time = +new Date;
         function run(remaining) {
             if (!remaining) {
                 var ops = (+new Date-time)/runs;
-                assert.equal(ops < 60, true, 'coalesceMulti @ ' + ops + 'ms');
+                var expected_ops = 60;
+                if (process.env.BUILDTYPE == 'debug') {
+                    expected_ops = 1000
+                }
+                assert.equal(ops < expected_ops, true, 'coalesceMulti @ ' + ops + 'ms < ' + expected_ops + 'ms');
                 assert.end();
                 return;
             }
@@ -122,13 +128,15 @@ var mp36 = Math.pow(2,36);
         run(runs);
     });
     test('coalesceMulti proximity', function(assert) {
-        if (process.env.COVERAGE && process.env.COVERAGE == 'true') return assert.end();
-
         var time = +new Date;
         function run(remaining) {
             if (!remaining) {
                 var ops = (+new Date-time)/runs;
-                assert.equal(ops < 60, true, 'coalesceMulti + proximity @ ' + ops + 'ms');
+                var expected_ops = 60;
+                if (process.env.BUILDTYPE == 'debug') {
+                    expected_ops = 1000
+                }
+                assert.equal(ops < expected_ops, true, 'coalesceMulti + proximity @' + ops + 'ms < ' + expected_ops + 'ms');
                 assert.end();
                 return;
             }
@@ -150,4 +158,3 @@ var mp36 = Math.pow(2,36);
         run(runs);
     });
 })();
-
