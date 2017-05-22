@@ -23,8 +23,7 @@
   "bundledDependencies":["node-pre-gyp"],
   "scripts": {
     "test": "tape test/*.test.js", 
-    "install": "node-pre-gyp install --fallback-to-build", 
-    "preinstall": "npm ls"
+    "install": "node-pre-gyp install --fallback-to-build"
   }, 
   "devDependencies": {
     "tape": "^4.6.3"
