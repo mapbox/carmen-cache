@@ -25,6 +25,7 @@ To build from source run:
 
 ```
 make
+npm test
 ```
 
 This will automatically:
