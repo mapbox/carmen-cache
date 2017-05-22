@@ -26,7 +26,8 @@
     "install": "node-pre-gyp install --fallback-to-build"
   }, 
   "devDependencies": {
-    "tape": "^4.6.3"
+    "tape": "^4.6.3",
+    "aws-sdk": "^2.55.0"
   }, 
   "main": "./index.js", 
   "description": "C++ protobuf cache used by carmen"
