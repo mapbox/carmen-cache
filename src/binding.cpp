@@ -1414,9 +1414,9 @@ void coalesceSingle(uv_work_t* req) {
         }
 
         // sort grids by distance to proximity point
-        std::size_t num_covers = covers.size();
+        // TODO: partial_sort here would be ideal
+        std::sort(covers.begin(), covers.end(), coverSortByRelev);
         std::size_t max_contexts = std::min(num_covers,static_cast<std::size_t>(80));
-        std::partial_sort(covers.begin(), covers.begin()+max_contexts, covers.end(), coverSortByRelev);
 
         uint32_t lastid = 0;
         std::size_t added = 0;
@@ -1626,10 +1626,8 @@ void coalesceMulti(uv_work_t* req) {
                 contexts.emplace_back(std::move(context));
             }
         }
-        std::size_t num_contexts = contexts.size();
-        std::size_t max_contexts = std::min(num_contexts,static_cast<std::size_t>(150));
-        std::partial_sort(contexts.begin(), contexts.begin()+max_contexts, contexts.end(), contextSortByRelev);
-
+        // TODO: partial_sort here would be ideal
+        std::sort(contexts.begin(), contexts.end(), contextSortByRelev);
         coalesceFinalize(baton, std::move(contexts));
     } catch (std::exception const& ex) {
        baton->error = ex.what();
