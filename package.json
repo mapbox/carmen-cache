@@ -1,11 +1,4 @@
 {
-  "binary": {
-    "module_name": "carmen", 
-    "host": "https://mapbox-node-binary.s3.amazonaws.com", 
-    "remote_path": "./{name}/v{version}", 
-    "package_name": "{node_abi}-{platform}-{arch}.tar.gz", 
-    "module_path": "./lib/"
-  }, 
   "name": "@mapbox/carmen-cache", 
   "license": "BSD-2-Clause", 
   "author": "Mapbox (https://www.mapbox.com)", 
@@ -30,5 +23,12 @@
     "aws-sdk": "^2.55.0"
   }, 
   "main": "./index.js", 
-  "description": "C++ protobuf cache used by carmen"
+  "description": "C++ protobuf cache used by carmen",
+  "binary": {
+    "module_name": "carmen",
+    "host": "https://mapbox-node-binary.s3.amazonaws.com",
+    "remote_path": "./{name}/v{version}/{configuration}/{toolset}/",
+    "package_name": "{node_abi}-{platform}-{arch}.tar.gz",
+    "module_path": "./lib/"
+  }
 }
