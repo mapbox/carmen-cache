@@ -1416,7 +1416,7 @@ void coalesceSingle(uv_work_t* req) {
         // sort grids by distance to proximity point
         // TODO: partial_sort here would be ideal
         std::sort(covers.begin(), covers.end(), coverSortByRelev);
-        std::size_t max_contexts = std::min(num_covers,static_cast<std::size_t>(80));
+        std::size_t max_contexts = std::min(covers.size(),static_cast<std::size_t>(40));
 
         uint32_t lastid = 0;
         std::size_t added = 0;
