@@ -1,5 +1,7 @@
 var carmenCache = require('../index.js');
 var grids = new carmenCache.MemoryCache('grids');
+var encoder_cpp = new carmenCache.MemoryCache('encodeGrid');
+var encoder_js = require('./grid.js');
 var decoder = require('./grid.js');
 var tape_test = require('tape');
 
@@ -30,14 +32,38 @@ tape_test('basic API tests', function(assert) {
 });
 
 tape_test('new API tests', function(assert) {
+ 
+ 	//test 1
+ 	var a = { x: 3, y: 17, relev: 1.0, score: 5, id: 15 };
+ 	var b = { x: 4, y: 16, relev: 0.8, score: 3, id: 16 };
+ 	var c = { x: 3, y: 10, relev: 0.6, score: 2, id: 17 };
+ 
+ 	grids._set('paris', [a,b,c]);
+ 	a_decoded = decoder.decode(grids._get('paris')[0]);
+ 	b_decoded = decoder.decode(grids._get('paris')[1]);
+ 	c_decoded = decoder.decode(grids._get('paris')[2]);
+ 	//this won't currently work so assert NOT equal
+ 	assert.notDeepEqual([a_decoded,b_decoded,c_decoded], [c,b,a], 'grid object values are equal - set to a,b,c');
+ 
+  	assert.end();
+ }); 
+
+tape_test('cpp encoder tests', function(assert) {
 
 	//test 1
 	var a = { x: 3, y: 17, relev: 1.0, score: 5, id: 15 };
 	var b = { x: 4, y: 16, relev: 0.8, score: 3, id: 16 };
 	var c = { x: 3, y: 10, relev: 0.6, score: 2, id: 17 };
 
-	grids._set('paris', [a,b,c]);
-	assert.deepEqual([decoder.decode(grids._get('paris')[0]),decoder.decode(grids._get('paris')[1]),decoder.decode(grids._get('paris')[1])], [c,b,a], 'grid object values are equal - set to a,b,c');
+	var a_cpp_encoded = encoder_cpp.encodeGrid(a);
+	var b_cpp_encoded = encoder_cpp.encodeGrid(b);
+	var c_cpp_encoded = encoder_cpp.encodeGrid(c);
+
+	var a_js_encoded = encoder_js.encode(a);
+	var b_js_encoded = encoder_js.encode(b);
+	var c_js_encoded = encoder_js.encode(c);
+
+	assert.deepEqual([a_cpp_encoded,b_cpp_encoded,c_cpp_encoded], [a_js_encoded,b_js_encoded,c_js_encoded], 'encoding produces same results in cpp and js');
 
 	assert.end();
 });

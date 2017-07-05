@@ -302,6 +302,7 @@ void MemoryCache::Initialize(Handle<Object> target) {
     Nan::SetPrototypeMethod(t, "_set", _set);
     Nan::SetPrototypeMethod(t, "_get", _get);
     Nan::SetPrototypeMethod(t, "_getMatching", _getmatching);
+    Nan::SetPrototypeMethod(t, "encodeGrid", MemoryCache::encodeGrid);
     target->Set(Nan::New("MemoryCache").ToLocalChecked(), t->GetFunction());
     constructor.Reset(t);
 }
@@ -900,6 +901,134 @@ NAN_METHOD(MemoryCache::_set)
     return;
 }
 
+//relev = 5 bits
+//count = 3 bits
+//reason = 12 bits
+//* 1 bit gap
+//id = 32 bits
+constexpr double _pow(double x, int y)
+{
+    return y == 0 ? 1.0 : x * _pow(x, y-1);
+}
+
+constexpr uint64_t POW2_51 = static_cast<uint64_t>(_pow(2.0,51));
+constexpr uint64_t POW2_48 = static_cast<uint64_t>(_pow(2.0,48));
+constexpr uint64_t POW2_34 = static_cast<uint64_t>(_pow(2.0,34));
+constexpr uint64_t POW2_28 = static_cast<uint64_t>(_pow(2.0,28));
+constexpr uint64_t POW2_25 = static_cast<uint64_t>(_pow(2.0,25));
+constexpr uint64_t POW2_20 = static_cast<uint64_t>(_pow(2.0,20));
+constexpr uint64_t POW2_14 = static_cast<uint64_t>(_pow(2.0,14));
+constexpr uint64_t POW2_3 = static_cast<uint64_t>(_pow(2.0,3));
+constexpr uint64_t POW2_2 = static_cast<uint64_t>(_pow(2.0,2));
+
+NAN_METHOD(MemoryCache::encodeGrid){
+
+    //declare expected parameters for grid
+    unsigned short x;
+    unsigned short y;
+    double relev;
+    unsigned short score;
+    uint32_t id;
+
+    //check that all five paramters expected for grid were included
+    if (info.Length() < 1) {
+        return Nan::ThrowTypeError("expected at least five info: x, y, relev, score, id");
+    }
+    //check that all parameters are number type
+    if(!info[0]->IsObject()) {
+        return Nan::ThrowTypeError("param must be of type object");
+    }
+
+    Local<Object> jsStack = info[0]->ToObject();
+    if(jsStack->IsNull() || jsStack->IsUndefined()){
+        return Nan::ThrowTypeError("must be valid object");
+    }
+
+    //verify paramter x and do appropriate type conversions
+    if(!jsStack->Has(Nan::New("x").ToLocalChecked())) {
+        return Nan::ThrowTypeError("missing x value");
+    } else{
+        Local<Value> grid_val = jsStack->Get(Nan::New("x").ToLocalChecked());
+        if(!grid_val->IsNumber()) {
+            return Nan::ThrowTypeError("x value must be a number");
+        }
+        int64_t _x = grid_val->IntegerValue();
+        if(_x < 0 || _x > std::numeric_limits<unsigned short>::max()) {
+            return Nan::ThrowTypeError("encountered x value too large to fit in unsigned short");
+        }
+        x = static_cast<unsigned short>(_x);
+    }
+
+    //verify paramter y and do appropriate type conversion
+    if(!jsStack->Has(Nan::New("y").ToLocalChecked())) {
+        return Nan::ThrowTypeError("missing y value");
+    } else {
+        Local<Value> grid_val = jsStack->Get(Nan::New("y").ToLocalChecked());
+        if(!grid_val->IsNumber()) {
+            return Nan::ThrowTypeError("y value must be a number");
+        }
+        int64_t _y = grid_val->IntegerValue();
+        if(_y < 0 || _y > std::numeric_limits<unsigned short>::max()) {
+            return Nan::ThrowTypeError("encountered y value too large to fit in unsigned short");
+        }
+        y = static_cast<unsigned short>(_y);
+    }
+
+    //verify parameter relev and do appropriate type conversions
+    if(!jsStack->Has(Nan::New("relev").ToLocalChecked())) {
+        return Nan::ThrowTypeError("missing relev value");
+    } else {
+        Local<Value> grid_val = jsStack->Get(Nan::New("relev").ToLocalChecked());
+        if(!grid_val->IsNumber()) {
+            return Nan::ThrowTypeError("relev value must be a number");
+        }
+        double _relev = grid_val->NumberValue();
+        if(_relev < 0 || _relev > std::numeric_limits<double>::max()) {
+            return Nan::ThrowTypeError("encountered relev value too large to fit in double");
+        }
+        relev = _relev;
+        relev = std::max(static_cast<uint32_t>(0), std::min(static_cast<uint32_t>(3), static_cast<uint32_t>(std::nearbyint((relev - 0.4) / 0.2))));
+    }
+
+    //verify parameter score and do appropriate type conversions
+    if(!jsStack->Has(Nan::New("score").ToLocalChecked())) {
+        return Nan::ThrowTypeError("missing score value");
+    } else {
+        Local<Value> grid_val = jsStack->Get(Nan::New("score").ToLocalChecked());
+        if(!grid_val->IsNumber()) {
+            return Nan::ThrowTypeError("score value must be a number");
+        }
+        int64_t _score = grid_val->IntegerValue();
+        if(_score < 0 || _score > std::numeric_limits<unsigned short>::max()) {
+            return Nan::ThrowTypeError("encountered score value too large to fit in unsigned short");
+        }
+        score = static_cast<unsigned short>(_score);
+        score = std::max(static_cast<unsigned short>(0), std::min(static_cast<unsigned short>(7), score));
+    }
+    
+    //verify parameter id and do appropriate type conversions
+    if(!jsStack->Has(Nan::New("id").ToLocalChecked())) {
+        return Nan::ThrowTypeError("missing id value");
+    }
+    else {
+        Local<Value> grid_val = jsStack->Get(Nan::New("id").ToLocalChecked());
+        if(!grid_val->IsNumber()) {
+            return Nan::ThrowTypeError("id value must be a number");
+        }
+        int64_t _id = grid_val->IntegerValue();
+        if(_id < 0 || _id > std::numeric_limits<uint32_t>::max()) {
+            return Nan::ThrowTypeError("encountered id value too large to fit in uint32_t");
+        }
+        id = static_cast<uint32_t>(_id);
+    }
+
+    uint64_t encoded_grid;
+    encoded_grid = (relev * POW2_51) + (score * POW2_48) + (y * POW2_34) + (x * POW2_20) + id;
+
+    info.GetReturnValue().Set(Nan::New<v8::Number>(encoded_grid));
+    return;
+}
+
 template <typename T>
 inline NAN_METHOD(_genericget)
 {
@@ -1021,26 +1150,6 @@ NAN_METHOD(RocksDBCache::New)
     info.GetReturnValue().Set(Nan::Undefined());
     return;
 }
-
-//relev = 5 bits
-//count = 3 bits
-//reason = 12 bits
-//* 1 bit gap
-//id = 32 bits
-constexpr double _pow(double x, int y)
-{
-    return y == 0 ? 1.0 : x * _pow(x, y-1);
-}
-
-constexpr uint64_t POW2_51 = static_cast<uint64_t>(_pow(2.0,51));
-constexpr uint64_t POW2_48 = static_cast<uint64_t>(_pow(2.0,48));
-constexpr uint64_t POW2_34 = static_cast<uint64_t>(_pow(2.0,34));
-constexpr uint64_t POW2_28 = static_cast<uint64_t>(_pow(2.0,28));
-constexpr uint64_t POW2_25 = static_cast<uint64_t>(_pow(2.0,25));
-constexpr uint64_t POW2_20 = static_cast<uint64_t>(_pow(2.0,20));
-constexpr uint64_t POW2_14 = static_cast<uint64_t>(_pow(2.0,14));
-constexpr uint64_t POW2_3 = static_cast<uint64_t>(_pow(2.0,3));
-constexpr uint64_t POW2_2 = static_cast<uint64_t>(_pow(2.0,2));
 
 struct PhrasematchSubq {
     PhrasematchSubq(void *c,
