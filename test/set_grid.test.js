@@ -37,7 +37,10 @@ tape_test('new API tests', function(assert) {
 	var c = { x: 3, y: 10, relev: 0.6, score: 2, id: 17 };
 
 	grids._set('paris', [a,b,c]);
-	assert.deepEqual([decoder.decode(grids._get('paris')[0]),decoder.decode(grids._get('paris')[1]),decoder.decode(grids._get('paris')[1])], [c,b,a], 'grid object values are equal - set to a,b,c');
+	assert.deepEqual([
+		decoder.decode(grids._get('paris')[0]),
+		decoder.decode(grids._get('paris')[1]),
+		decoder.decode(grids._get('paris')[1])], [c,b,a], 'grid object values are equal - set to a,b,c');
 
 	assert.end();
 });
