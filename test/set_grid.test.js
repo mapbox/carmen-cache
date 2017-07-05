@@ -31,22 +31,22 @@ tape_test('basic API tests', function(assert) {
 
 });
 
-tape_test('new API tests', function(assert) {
+//tape_test('new API tests', function(assert) {
  
  	//test 1
- 	var a = { x: 3, y: 17, relev: 1.0, score: 5, id: 15 };
- 	var b = { x: 4, y: 16, relev: 0.8, score: 3, id: 16 };
- 	var c = { x: 3, y: 10, relev: 0.6, score: 2, id: 17 };
+ 	//var a = { x: 3, y: 17, relev: 1.0, score: 5, id: 15 };
+ 	//var b = { x: 4, y: 16, relev: 0.8, score: 3, id: 16 };
+ 	//var c = { x: 3, y: 10, relev: 0.6, score: 2, id: 17 };
  
- 	grids._set('paris', [a,b,c]);
- 	a_decoded = decoder.decode(grids._get('paris')[0]);
- 	b_decoded = decoder.decode(grids._get('paris')[1]);
- 	c_decoded = decoder.decode(grids._get('paris')[2]);
+ 	//grids._set('paris', [a,b,c]);
+ 	//a_decoded = decoder.decode(grids._get('paris')[0]);
+ 	//b_decoded = decoder.decode(grids._get('paris')[1]);
+ 	//c_decoded = decoder.decode(grids._get('paris')[2]);
  	//this won't currently work so assert NOT equal
- 	assert.notDeepEqual([a_decoded,b_decoded,c_decoded], [c,b,a], 'grid object values are equal - set to a,b,c');
+ 	//assert.notDeepEqual([a_decoded,b_decoded,c_decoded], [c,b,a], 'grid object values are equal - set to a,b,c');
  
-  	assert.end();
- }); 
+  	//assert.end();
+ //}); 
 
 tape_test('cpp encoder tests', function(assert) {
 
