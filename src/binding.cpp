@@ -930,60 +930,60 @@ NAN_METHOD(MemoryCache::encodeGrid){
     unsigned short score;
     uint32_t id;
 
-    //check that all five paramters expected for grid were included
+    //check that minimum of one parameter for grid was included
     if (info.Length() < 1) {
-        return Nan::ThrowTypeError("expected at least five info: x, y, relev, score, id");
-    }
-    //check that all parameters are number type
-    if(!info[0]->IsObject()) {
-        return Nan::ThrowTypeError("param must be of type object");
+        return Nan::ThrowTypeError("expected at least one object");
     }
 
+    //check that all parameters is object type and object is valid
+    if (!info[0]->IsObject()) {
+        return Nan::ThrowTypeError("param must be of type object");
+    }
     Local<Object> jsStack = info[0]->ToObject();
-    if(jsStack->IsNull() || jsStack->IsUndefined()){
+    if (jsStack->IsNull() || jsStack->IsUndefined()) {
         return Nan::ThrowTypeError("must be valid object");
     }
 
     //verify paramter x and do appropriate type conversions
-    if(!jsStack->Has(Nan::New("x").ToLocalChecked())) {
+    if (!jsStack->Has(Nan::New("x").ToLocalChecked())) {
         return Nan::ThrowTypeError("missing x value");
-    } else{
+    } else {
         Local<Value> grid_val = jsStack->Get(Nan::New("x").ToLocalChecked());
-        if(!grid_val->IsNumber()) {
+        if (!grid_val->IsNumber()) {
             return Nan::ThrowTypeError("x value must be a number");
         }
         int64_t _x = grid_val->IntegerValue();
-        if(_x < 0 || _x > std::numeric_limits<unsigned short>::max()) {
+        if (_x < 0 || _x > std::numeric_limits<unsigned short>::max()) {
             return Nan::ThrowTypeError("encountered x value too large to fit in unsigned short");
         }
         x = static_cast<unsigned short>(_x);
     }
 
     //verify paramter y and do appropriate type conversion
-    if(!jsStack->Has(Nan::New("y").ToLocalChecked())) {
+    if (!jsStack->Has(Nan::New("y").ToLocalChecked())) {
         return Nan::ThrowTypeError("missing y value");
     } else {
         Local<Value> grid_val = jsStack->Get(Nan::New("y").ToLocalChecked());
-        if(!grid_val->IsNumber()) {
+        if (!grid_val->IsNumber()) {
             return Nan::ThrowTypeError("y value must be a number");
         }
         int64_t _y = grid_val->IntegerValue();
-        if(_y < 0 || _y > std::numeric_limits<unsigned short>::max()) {
+        if (_y < 0 || _y > std::numeric_limits<unsigned short>::max()) {
             return Nan::ThrowTypeError("encountered y value too large to fit in unsigned short");
         }
         y = static_cast<unsigned short>(_y);
     }
 
     //verify parameter relev and do appropriate type conversions
-    if(!jsStack->Has(Nan::New("relev").ToLocalChecked())) {
+    if (!jsStack->Has(Nan::New("relev").ToLocalChecked())) {
         return Nan::ThrowTypeError("missing relev value");
     } else {
         Local<Value> grid_val = jsStack->Get(Nan::New("relev").ToLocalChecked());
-        if(!grid_val->IsNumber()) {
+        if (!grid_val->IsNumber()) {
             return Nan::ThrowTypeError("relev value must be a number");
         }
         double _relev = grid_val->NumberValue();
-        if(_relev < 0 || _relev > std::numeric_limits<double>::max()) {
+        if (_relev < 0 || _relev > std::numeric_limits<double>::max()) {
             return Nan::ThrowTypeError("encountered relev value too large to fit in double");
         }
         relev = _relev;
@@ -991,15 +991,15 @@ NAN_METHOD(MemoryCache::encodeGrid){
     }
 
     //verify parameter score and do appropriate type conversions
-    if(!jsStack->Has(Nan::New("score").ToLocalChecked())) {
+    if (!jsStack->Has(Nan::New("score").ToLocalChecked())) {
         return Nan::ThrowTypeError("missing score value");
     } else {
         Local<Value> grid_val = jsStack->Get(Nan::New("score").ToLocalChecked());
-        if(!grid_val->IsNumber()) {
+        if (!grid_val->IsNumber()) {
             return Nan::ThrowTypeError("score value must be a number");
         }
         int64_t _score = grid_val->IntegerValue();
-        if(_score < 0 || _score > std::numeric_limits<unsigned short>::max()) {
+        if (_score < 0 || _score > std::numeric_limits<unsigned short>::max()) {
             return Nan::ThrowTypeError("encountered score value too large to fit in unsigned short");
         }
         score = static_cast<unsigned short>(_score);
@@ -1007,24 +1007,25 @@ NAN_METHOD(MemoryCache::encodeGrid){
     }
     
     //verify parameter id and do appropriate type conversions
-    if(!jsStack->Has(Nan::New("id").ToLocalChecked())) {
+    if (!jsStack->Has(Nan::New("id").ToLocalChecked())) {
         return Nan::ThrowTypeError("missing id value");
-    }
-    else {
+    } else {
         Local<Value> grid_val = jsStack->Get(Nan::New("id").ToLocalChecked());
-        if(!grid_val->IsNumber()) {
+        if (!grid_val->IsNumber()) {
             return Nan::ThrowTypeError("id value must be a number");
         }
         int64_t _id = grid_val->IntegerValue();
-        if(_id < 0 || _id > std::numeric_limits<uint32_t>::max()) {
+        if (_id < 0 || _id > std::numeric_limits<uint32_t>::max()) {
             return Nan::ThrowTypeError("encountered id value too large to fit in uint32_t");
         }
         id = static_cast<uint32_t>(_id);
     }
 
+    //create numerical represntation of grid
     uint64_t encoded_grid;
     encoded_grid = (relev * POW2_51) + (score * POW2_48) + (y * POW2_34) + (x * POW2_20) + id;
 
+    //return grid value
     info.GetReturnValue().Set(Nan::New<v8::Number>(encoded_grid));
     return;
 }
