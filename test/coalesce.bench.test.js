@@ -106,7 +106,7 @@ var mp36 = Math.pow(2,36);
                 var ops = (+new Date-time)/runs;
                 var expected_ops = 60;
                 if (process.env.BUILDTYPE == 'debug') {
-                    expected_ops = 1000
+                    expected_ops = 2000
                 }
                 assert.equal(ops < expected_ops, true, 'coalesceMulti @ ' + ops + 'ms < ' + expected_ops + 'ms');
                 assert.end();
