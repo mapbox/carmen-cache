@@ -63,6 +63,7 @@ public:
     static NAN_METHOD(_getmatching);
     static NAN_METHOD(_set);
     static NAN_METHOD(coalesce);
+    static NAN_METHOD(encodeGrid);
     explicit MemoryCache();
     void _ref() { Ref(); }
     void _unref() { Unref(); }
