@@ -24,14 +24,14 @@ Nan::Persistent<FunctionTemplate> RocksDBCache::constructor;
 rocksdb::Status OpenDB(const rocksdb::Options& options, const std::string& name, std::unique_ptr<rocksdb::DB>& dbptr) {
     rocksdb::DB* db;
     rocksdb::Status status = rocksdb::DB::Open(options, name, &db);
-    dbptr = std::move(std::unique_ptr<rocksdb::DB>(db));
+    dbptr = std::unique_ptr<rocksdb::DB>(db);
     return status;
 }
 
 rocksdb::Status OpenForReadOnlyDB(const rocksdb::Options& options, const std::string& name, std::unique_ptr<rocksdb::DB>& dbptr) {
     rocksdb::DB* db;
     rocksdb::Status status = rocksdb::DB::OpenForReadOnly(options, name, &db);
-    dbptr = std::move(std::unique_ptr<rocksdb::DB>(db));
+    dbptr = std::unique_ptr<rocksdb::DB>(db);
     return status;
 }
 
@@ -993,7 +993,6 @@ NAN_METHOD(RocksDBCache::New)
         if (!info[1]->IsString()) {
             return Nan::ThrowTypeError("second argument 'filename' must be a String");
         }
-        RocksDBCache* im = new RocksDBCache();
 
         Nan::Utf8String utf8_filename(info[1]);
         if (utf8_filename.length() < 1) {
@@ -1005,12 +1004,12 @@ NAN_METHOD(RocksDBCache::New)
         rocksdb::Options options;
         options.create_if_missing = true;
         rocksdb::Status status = OpenForReadOnlyDB(options, filename, db);
-        im->db = std::move(db);
 
         if (!status.ok()) {
             return Nan::ThrowTypeError("unable to open rocksdb file for loading");
         }
-
+        RocksDBCache* im = new RocksDBCache();
+        im->db = std::move(db);
         im->Wrap(info.This());
         info.This()->Set(Nan::New("id").ToLocalChecked(), info[0]);
         info.GetReturnValue().Set(info.This());
