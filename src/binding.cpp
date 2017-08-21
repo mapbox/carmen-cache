@@ -47,7 +47,8 @@ constexpr uint64_t LANGUAGE_MATCH_BOOST = (const uint64_t)(1) << 63;
 // to handle that optimization everywhere
 inline langfield_type extract_langfield(std::string const& s) {
     size_t length = s.length();
-    size_t langfield_start = s.find(LANGFIELD_SEPARATOR) + 1;
+    size_t zxyfield_start = s.find(LANGFIELD_SEPARATOR) + 1;
+    size_t langfield_start = s.find(LANGFIELD_SEPARATOR, zxyfield_start) + 1;
     size_t distance_from_end = length - langfield_start;
 
     if (distance_from_end == 0) {
@@ -57,6 +58,10 @@ inline langfield_type extract_langfield(std::string const& s) {
         memcpy(&result, s.data() + langfield_start, distance_from_end);
         return result;
     }
+}
+
+inline void add_zxyfield(std::string & s) {
+    s.push_back(LANGFIELD_SEPARATOR);
 }
 
 inline void add_langfield(std::string & s, langfield_type langfield) {
@@ -85,6 +90,7 @@ intarray __get(MemoryCache const* c, std::string phrase, langfield_type langfiel
     arraycache const& cache = c->cache_;
     intarray array;
 
+    add_zxyfield(phrase);
     add_langfield(phrase, langfield);
     arraycache::const_iterator aitr = cache.find(phrase);
     if (aitr != cache.end()) {
@@ -132,6 +138,7 @@ intarray __get(RocksDBCache const* c, std::string phrase, langfield_type langfie
     std::shared_ptr<rocksdb::DB> db = c->db;
     intarray array;
 
+    add_zxyfield(phrase);
     add_langfield(phrase, langfield);
     std::string message;
     rocksdb::Status s = db->Get(rocksdb::ReadOptions(), phrase, &message);
@@ -409,12 +416,14 @@ NAN_METHOD(MemoryCache::pack)
                     langfield_type langfield = extract_langfield(item.first);
 
                     prefix_t1 = "=1" + item.first.substr(0, MEMO_PREFIX_LENGTH_T1);
+                    add_zxyfield(prefix_t1);
                     add_langfield(prefix_t1, langfield);
 
                     if (phrase_length < MEMO_PREFIX_LENGTH_T2) {
                         prefix_t2 = "=2" + item.first;
                     } else {
                         prefix_t2 = "=2" + item.first.substr(0, MEMO_PREFIX_LENGTH_T2);
+                        add_zxyfield(prefix_t2);
                         add_langfield(prefix_t2, langfield);
                     }
                 }
@@ -874,6 +883,7 @@ NAN_METHOD(MemoryCache::_set)
         MemoryCache* c = node::ObjectWrap::Unwrap<MemoryCache>(info.This());
         arraycache & arrc = c->cache_;
         key_type key_id = static_cast<key_type>(id);
+        add_zxyfield(key_id);
         add_langfield(key_id, langfield);
 
         arraycache::iterator itr2 = arrc.find(key_id);
