@@ -20,6 +20,7 @@ using namespace v8;
 
 Nan::Persistent<FunctionTemplate> MemoryCache::constructor;
 Nan::Persistent<FunctionTemplate> RocksDBCache::constructor;
+Nan::Persistent<FunctionTemplate> NormalizationCache::constructor;
 
 rocksdb::Status OpenDB(const rocksdb::Options& options, const std::string& name, std::unique_ptr<rocksdb::DB>& dbptr) {
     rocksdb::DB* db;
@@ -2011,10 +2012,253 @@ NAN_METHOD(RocksDBCache::_getmatching) {
     return _genericgetmatching<RocksDBCache>(info);
 }
 
+void NormalizationCache::Initialize(Handle<Object> target) {
+    Nan::HandleScope scope;
+    Local<FunctionTemplate> t = Nan::New<FunctionTemplate>(RocksDBCache::New);
+    t->InstanceTemplate()->SetInternalFieldCount(1);
+    t->SetClassName(Nan::New("NormalizationCache").ToLocalChecked());
+    Nan::SetPrototypeMethod(t, "get", get);
+    Nan::SetPrototypeMethod(t, "getPrefixRange", getprefixrange);
+    Nan::SetPrototypeMethod(t, "getAll", getall);
+    Nan::SetPrototypeMethod(t, "writeBatch", writebatch);
+
+    target->Set(Nan::New("NormalizationCache").ToLocalChecked(), t->GetFunction());
+    constructor.Reset(t);
+}
+
+NormalizationCache::NormalizationCache()
+  : ObjectWrap(),
+    db() {}
+
+NormalizationCache::~NormalizationCache() { }
+
+class UInt32Comparator : public rocksdb::Comparator {
+    public:
+        // Three-way comparison function:
+        // if a < b: negative result
+        // if a > b: positive result
+        // else: zero result
+        int Compare(const rocksdb::Slice& a, const rocksdb::Slice& b) const {
+            uint32_t ia = a.size() >= sizeof(uint32_t) ? *reinterpret_cast<const uint32_t*>(a.data()) : 0;
+            uint32_t ib = b.size() >= sizeof(uint32_t) ? *reinterpret_cast<const uint32_t*>(b.data()) : 0;
+
+            if (ia < ib) return -1;
+            if (ia > ib) return +1;
+            return 0;
+        }
+
+    // Ignore the following methods for now:
+    const char* Name() const { return "UInt32Comparator"; }
+    void FindShortestSeparator(std::string*, const rocksdb::Slice&) const { }
+    void FindShortSuccessor(std::string*) const { }
+};
+
+NAN_METHOD(NormalizationCache::New) {
+    if (!info.IsConstructCall()) {
+        return Nan::ThrowTypeError("Cannot call constructor as function, you need to use 'new' keyword");
+    }
+    try {
+        if (info.Length() < 2) {
+            return Nan::ThrowTypeError("expected arguments 'filename' and 'read-only'");
+        }
+        if (!info[0]->IsString()) {
+            return Nan::ThrowTypeError("first argument 'filename' must be a String");
+        }
+        if (!info[1]->IsBoolean()) {
+            return Nan::ThrowTypeError("second argument 'read-only' must be a Boolean");
+        }
+
+        Nan::Utf8String utf8_filename(info[0]);
+        if (utf8_filename.length() < 1) {
+            return Nan::ThrowTypeError("first arg must be a String");
+        }
+        std::string filename(*utf8_filename);
+        bool read_only = info[1]->BooleanValue();
+
+        std::unique_ptr<rocksdb::DB> db;
+        rocksdb::Options options;
+        options.create_if_missing = true;
+        UInt32Comparator cmp;
+        options.comparator = &cmp;
+
+        rocksdb::Status status;
+        if (read_only) {
+            status = OpenForReadOnlyDB(options, filename, db);
+        } else {
+            status = OpenDB(options, filename, db);
+        }
+
+        if (!status.ok()) {
+            return Nan::ThrowTypeError("unable to open rocksdb file for normalization cache");
+        }
+        NormalizationCache* im = new NormalizationCache();
+        im->db = std::move(db);
+        im->Wrap(info.This());
+        info.This()->Set(Nan::New("id").ToLocalChecked(), info[0]);
+        info.GetReturnValue().Set(info.This());
+        return;
+    } catch (std::exception const& ex) {
+        return Nan::ThrowTypeError(ex.what());
+    }
+    info.GetReturnValue().Set(Nan::Undefined());
+    return;
+}
+
+NAN_METHOD(NormalizationCache::get) {
+    if (info.Length() < 1) {
+        return Nan::ThrowTypeError("expected one info: id");
+    }
+    if (!info[0]->IsNumber()) {
+        return Nan::ThrowTypeError("first arg must be a Number");
+    }
+
+    uint32_t id = static_cast<uint32_t>(info[0]->IntegerValue());
+    std::string sid(reinterpret_cast<const char*>(&id), sizeof(uint32_t));
+
+    NormalizationCache* c = node::ObjectWrap::Unwrap<NormalizationCache>(info.This());
+    std::shared_ptr<rocksdb::DB> db = c->db;
+
+    std::string message;
+    bool found;
+    rocksdb::Status s = db->Get(rocksdb::ReadOptions(), sid, &message);
+    found = s.ok();
+
+    if (found && message.size() > sizeof (uint32_t)) {
+        uint32_t out = *reinterpret_cast<const uint32_t*>(message.data());
+        info.GetReturnValue().Set(Nan::New(out));
+        return;
+    } else {
+        info.GetReturnValue().Set(Nan::Undefined());
+        return;
+    }
+}
+
+NAN_METHOD(NormalizationCache::getprefixrange) {
+    if (info.Length() < 1) {
+        return Nan::ThrowTypeError("expected at least two info: start_id, count, [scan_max], [return_max]");
+    }
+    if (!info[0]->IsNumber()) {
+        return Nan::ThrowTypeError("first arg must be a Number");
+    }
+    if (!info[1]->IsNumber()) {
+        return Nan::ThrowTypeError("second arg must be a Number");
+    }
+
+    uint32_t scan_max = 100;
+    uint32_t return_max = 10;
+    if (info.Length() > 2) {
+        if (!info[2]->IsNumber()) {
+            return Nan::ThrowTypeError("third arg, if supplied, must be a Number");
+        } else {
+            scan_max = static_cast<uint32_t>(info[2]->IntegerValue());
+        }
+    }
+    if (info.Length() > 3) {
+        if (!info[3]->IsNumber()) {
+            return Nan::ThrowTypeError("third arg, if supplied, must be a Number");
+        } else {
+            return_max = static_cast<uint32_t>(info[3]->IntegerValue());
+        }
+    }
+
+    uint32_t start_id = static_cast<uint32_t>(info[0]->IntegerValue());
+    std::string sid(reinterpret_cast<const char*>(&start_id), sizeof(uint32_t));
+    uint32_t count = static_cast<uint32_t>(info[1]->IntegerValue());
+    uint32_t ceiling = start_id + count;
+
+    uint32_t scan_count = 0, return_count = 0;
+
+    Local<Array> out = Nan::New<Array>();
+    unsigned out_idx = 0;
+
+    NormalizationCache* c = node::ObjectWrap::Unwrap<NormalizationCache>(info.This());
+    std::shared_ptr<rocksdb::DB> db = c->db;
+
+    std::unique_ptr<rocksdb::Iterator> rit(db->NewIterator(rocksdb::ReadOptions()));
+    for (rit->Seek(sid); rit->Valid(); rit->Next()) {
+        std::string skey = rit->key().ToString();
+        uint32_t key = *reinterpret_cast<const uint32_t*>(skey.data());
+
+        if (key >= ceiling) break;
+
+        uint32_t val = *reinterpret_cast<const uint32_t*>(rit->value().ToString().data());
+        if (val < start_id || start_id >= ceiling) {
+            out->Set(out_idx++,Nan::New(val));
+
+            return_count++;
+            if (return_count >= return_max) break;
+        }
+
+        scan_count++;
+        if (scan_count >= scan_max) break;
+    }
+
+    info.GetReturnValue().Set(out);
+    return;
+}
+
+NAN_METHOD(NormalizationCache::getall) {
+    Local<Array> out = Nan::New<Array>();
+    unsigned out_idx = 0;
+
+    NormalizationCache* c = node::ObjectWrap::Unwrap<NormalizationCache>(info.This());
+    std::shared_ptr<rocksdb::DB> db = c->db;
+
+    std::unique_ptr<rocksdb::Iterator> rit(db->NewIterator(rocksdb::ReadOptions()));
+    for (rit->SeekToFirst(); rit->Valid(); rit->Next()) {
+        std::string skey = rit->key().ToString();
+        uint32_t key = *reinterpret_cast<const uint32_t*>(skey.data());
+
+        uint32_t val = *reinterpret_cast<const uint32_t*>(rit->value().ToString().data());
+
+        Local<Array> row = Nan::New<Array>();
+        row->Set(0, Nan::New(key));
+        row->Set(1, Nan::New(val));
+
+        out->Set(out_idx++, row);
+    }
+
+    info.GetReturnValue().Set(out);
+    return;
+}
+
+NAN_METHOD(NormalizationCache::writebatch) {
+    if (info.Length() < 1) {
+        return Nan::ThrowTypeError("expected one info: data");
+    }
+    if (!info[0]->IsArray()) {
+        return Nan::ThrowTypeError("second arg must be an Array");
+    }
+    Local<Array> data = Local<Array>::Cast(info[0]);
+    if (data->IsNull() || data->IsUndefined()) {
+        return Nan::ThrowTypeError("an array expected for second argument");
+    }
+
+    NormalizationCache* c = node::ObjectWrap::Unwrap<NormalizationCache>(info.This());
+    std::shared_ptr<rocksdb::DB> db = c->db;
+
+    rocksdb::WriteBatch batch;
+    for (uint32_t i = 0; i < data->Length(); i++) {
+        Local<Array> row = Local<Array>::Cast(data->Get(i));
+        uint32_t key = static_cast<uint32_t>(row->Get(0)->IntegerValue());
+        uint32_t value = static_cast<uint32_t>(row->Get(1)->IntegerValue());
+
+        std::string skey(reinterpret_cast<const char*>(&key));
+        std::string svalue(reinterpret_cast<const char*>(&value));
+
+        batch.Put(skey, svalue);
+    }
+    db->Write(rocksdb::WriteOptions(), &batch);
+
+    info.GetReturnValue().Set(Nan::Undefined());
+    return;
+}
+
 extern "C" {
     static void start(Handle<Object> target) {
         MemoryCache::Initialize(target);
         RocksDBCache::Initialize(target);
+        NormalizationCache::Initialize(target);
         Nan::SetMethod(target, "coalesce", coalesce);
     }
 }
