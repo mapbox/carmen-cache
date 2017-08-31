@@ -1255,9 +1255,9 @@ inline bool contextSortByRelev(Context const& a, Context const& b) noexcept {
 }
 
 inline double tileDist(unsigned px, unsigned py, unsigned tileX, unsigned tileY) {
-    const double dx = static_cast<double>(px - tileX);
-    const double dy = static_cast<double>(py - tileY);
-    const double distance = dx * dx + dy * dy;
+    const double dx = static_cast<double>(abs(px - tileX));
+    const double dy = static_cast<double>(abs(py - tileY));
+    const double distance = sqrt((dx * dx) + (dy * dy));
 
     return distance;
 }
@@ -1280,14 +1280,14 @@ struct CoalesceBaton : carmen::noncopyable {
 double scoredist(unsigned zoom, double distance, double score) {
     if (distance == 0.0) distance = 0.01;
     double scoredist = 0;
-    if (zoom >= 13) scoredist = 32.0 / distance;
-    if (zoom == 12) scoredist = 24.0 / distance;
-    if (zoom == 11) scoredist = 16.0 / distance;
-    if (zoom == 10) scoredist = 10.0 / distance;
-    if (zoom == 9)  scoredist = 6.0 / distance;
-    if (zoom == 8)  scoredist = 3.5 / distance;
-    if (zoom == 7)  scoredist = 2.0 / distance;
-    if (zoom <= 6)  scoredist = 1.125 / distance;
+    if (zoom >= 13) scoredist = 320.0 / distance;
+    if (zoom == 12) scoredist = 240.0 / distance;
+    if (zoom == 11) scoredist = 160.0 / distance;
+    if (zoom == 10) scoredist = 100.0 / distance;
+    if (zoom == 9)  scoredist = 60.0 / distance;
+    if (zoom == 8)  scoredist = 30.5 / distance;
+    if (zoom == 7)  scoredist = 20.0 / distance;
+    if (zoom <= 6)  scoredist = 10.125 / distance;
     return score > scoredist ? score : scoredist;
 }
 
