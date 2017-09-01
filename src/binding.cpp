@@ -1268,7 +1268,7 @@ struct CoalesceBaton : carmen::noncopyable {
     std::vector<PhrasematchSubq> stack;
     std::vector<uint64_t> centerzxy;
     std::vector<uint64_t> bboxzxy;
-    unsigned radius;
+    double radius;
     Nan::Persistent<v8::Function> callback;
     // return
     std::vector<Context> features;
@@ -1291,7 +1291,7 @@ double scoredist(unsigned zoom, double distance, double score, double radius) {
     // a tile unit value at the appropriate zoom first.
     //
     // 32 tiles is about 40 miles at z14, use this as our mile <=> tile conversion.
-    scoredist = ((radius*(32.0/40.0)) / _pow(1.5, 14 - zoom)) / distance;
+    scoredist = ((radius*(32.0/40.0)) / _pow(1.5, 14 - static_cast<int>(zoom))) / distance;
 
     return score > scoredist ? score : scoredist;
 }
@@ -1888,9 +1888,9 @@ NAN_METHOD(coalesce) {
             if (_radius < 0 || _radius > std::numeric_limits<unsigned>::max()) {
                 return Nan::ThrowTypeError("encountered radius too large to fit in unsigned");
             }
-            baton->radius = static_cast<unsigned>(_radius);
+            baton->radius = static_cast<double>(_radius);
         } else {
-            baton->radius = 40;
+            baton->radius = 40.0;
         }
 
         if (options->Has(Nan::New("centerzxy").ToLocalChecked())) {
