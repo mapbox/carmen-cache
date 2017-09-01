@@ -50,8 +50,9 @@ var test = require('tape');
             zoom: 14,
             weight: 1,
             phrase: '1',
-            prefix: false,
+            prefix: false
         }], {
+            tileradius: 160,
             centerzxy: [14, 100 + 10, 100 + 15]
         }, function(err, res) {
             assert.ifError(err);
@@ -69,8 +70,9 @@ var test = require('tape');
             zoom: 14,
             weight: 1,
             phrase: '1',
-            prefix: false,
+            prefix: false
         }], {
+            tileradius: 160,
             centerzxy: [14, 100 + 10, 100 - 15]
         }, function(err, res) {
             assert.ifError(err);
@@ -88,8 +90,9 @@ var test = require('tape');
             zoom: 14,
             weight: 1,
             phrase: '1',
-            prefix: false,
+            prefix: false
         }], {
+            tileradius: 160,
             centerzxy: [14, 100 - 10, 100 - 15]
         }, function(err, res) {
             assert.ifError(err);
@@ -107,8 +110,9 @@ var test = require('tape');
             zoom: 14,
             weight: 1,
             phrase: '1',
-            prefix: false,
+            prefix: false
         }], {
+            tileradius: 160,
             centerzxy: [14, 100 - 10, 100 + 15]
         }, function(err, res) {
             assert.ifError(err);

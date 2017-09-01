@@ -1255,8 +1255,8 @@ inline bool contextSortByRelev(Context const& a, Context const& b) noexcept {
 }
 
 inline double tileDist(unsigned px, unsigned py, unsigned tileX, unsigned tileY) {
-    const double dx = static_cast<double>(abs(px - tileX));
-    const double dy = static_cast<double>(abs(py - tileY));
+    const double dx = static_cast<double>(static_cast<signed>(px) - static_cast<signed>(tileX));
+    const double dy = static_cast<double>(static_cast<signed>(py) - static_cast<signed>(tileY));
     const double distance = sqrt((dx * dx) + (dy * dy));
 
     return distance;
@@ -1268,6 +1268,7 @@ struct CoalesceBaton : carmen::noncopyable {
     std::vector<PhrasematchSubq> stack;
     std::vector<uint64_t> centerzxy;
     std::vector<uint64_t> bboxzxy;
+    unsigned tileradius;
     Nan::Persistent<v8::Function> callback;
     // return
     std::vector<Context> features;
@@ -1275,19 +1276,19 @@ struct CoalesceBaton : carmen::noncopyable {
     std::string error;
 };
 
-// 32 tiles is about 40 miles at z14.
-// Simulates 40 mile cutoff in carmen.
-double scoredist(unsigned zoom, double distance, double score) {
+// tileradius can be set to a certain tile distance to use for weighting
+// radius of scoredist effect. e.g. 32 tiles is about 40 miles at z14.
+double scoredist(unsigned zoom, double distance, double score, double tileradius) {
     if (distance == 0.0) distance = 0.01;
     double scoredist = 0;
-    if (zoom >= 13) scoredist = 320.0 / distance;
-    if (zoom == 12) scoredist = 240.0 / distance;
-    if (zoom == 11) scoredist = 160.0 / distance;
-    if (zoom == 10) scoredist = 100.0 / distance;
-    if (zoom == 9)  scoredist = 60.0 / distance;
-    if (zoom == 8)  scoredist = 30.5 / distance;
-    if (zoom == 7)  scoredist = 20.0 / distance;
-    if (zoom <= 6)  scoredist = 10.125 / distance;
+    if (zoom >= 13) scoredist = (tileradius * 1.00) / distance;
+    if (zoom == 12) scoredist = (tileradius * 0.75) / distance;
+    if (zoom == 11) scoredist = (tileradius * 0.50) / distance;
+    if (zoom == 10) scoredist = (tileradius * 0.35) / distance;
+    if (zoom == 9)  scoredist = (tileradius * 0.20) / distance;
+    if (zoom == 8)  scoredist = (tileradius * 0.10) / distance;
+    if (zoom == 7)  scoredist = (tileradius * 0.06) / distance;
+    if (zoom <= 6)  scoredist = (tileradius * 0.03) / distance;
     return score > scoredist ? score : scoredist;
 }
 
@@ -1384,7 +1385,7 @@ void coalesceSingle(uv_work_t* req) {
             cover.relev = cover.relev * subq.weight;
             if (!cover.matches_language) cover.relev *= .9;
             cover.distance = proximity ? tileDist(cx, cy, cover.x, cover.y) : 0;
-            cover.scoredist = proximity ? scoredist(cz, cover.distance, cover.score) : cover.score;
+            cover.scoredist = proximity ? scoredist(cz, cover.distance, cover.score, baton->tileradius) : cover.score;
 
             // only add cover id if it's got a higer scoredist
             if (lastId == cover.id && cover.scoredist <= lastScoredist) continue;
@@ -1536,7 +1537,7 @@ void coalesceMulti(uv_work_t* req) {
                 if (proximity) {
                     ZXY dxy = pxy2zxy(z, cover.x, cover.y, cz);
                     cover.distance = tileDist(cx, cy, dxy.x, dxy.y);
-                    cover.scoredist = scoredist(cz, cover.distance, cover.score);
+                    cover.scoredist = scoredist(cz, cover.distance, cover.score, baton->tileradius);
                 } else {
                     cover.distance = 0;
                     cover.scoredist = cover.score;
@@ -1872,6 +1873,20 @@ NAN_METHOD(coalesce) {
                     );
                 }
             }
+        }
+
+        if (options->Has(Nan::New("tileradius").ToLocalChecked())) {
+            Local<Value> prop_val = options->Get(Nan::New("tileradius").ToLocalChecked());
+            if (!prop_val->IsNumber()) {
+                return Nan::ThrowTypeError("tileradius must be a number");
+            }
+            int64_t _tileradius = prop_val->IntegerValue();
+            if (_tileradius < 0 || _tileradius > std::numeric_limits<unsigned>::max()) {
+                return Nan::ThrowTypeError("encountered tileradius too large to fit in unsigned");
+            }
+            baton->tileradius = static_cast<unsigned>(_tileradius);
+        } else {
+            baton->tileradius = 40;
         }
 
         if (options->Has(Nan::New("centerzxy").ToLocalChecked())) {
