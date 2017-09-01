@@ -52,7 +52,7 @@ var test = require('tape');
             phrase: '1',
             prefix: false
         }], {
-            tileradius: 160,
+            radius: 200,
             centerzxy: [14, 100 + 10, 100 + 15]
         }, function(err, res) {
             assert.ifError(err);
@@ -72,7 +72,7 @@ var test = require('tape');
             phrase: '1',
             prefix: false
         }], {
-            tileradius: 160,
+            radius: 200,
             centerzxy: [14, 100 + 10, 100 - 15]
         }, function(err, res) {
             assert.ifError(err);
@@ -92,7 +92,7 @@ var test = require('tape');
             phrase: '1',
             prefix: false
         }], {
-            tileradius: 160,
+            radius: 200,
             centerzxy: [14, 100 - 10, 100 - 15]
         }, function(err, res) {
             assert.ifError(err);
@@ -112,7 +112,7 @@ var test = require('tape');
             phrase: '1',
             prefix: false
         }], {
-            tileradius: 160,
+            radius: 200,
             centerzxy: [14, 100 - 10, 100 + 15]
         }, function(err, res) {
             assert.ifError(err);

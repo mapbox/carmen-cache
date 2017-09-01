@@ -152,12 +152,12 @@ test('coalesce args', function(assert) {
     }
 
     assert.throws(function() {
-        coalesce([valid_subq], { tileradius:null },function(){} );
-    }, /tileradius must be a number/, 'throws');
+        coalesce([valid_subq], { radius:null },function(){} );
+    }, /radius must be a number/, 'throws');
 
     assert.throws(function() {
-        coalesce([valid_subq], { tileradius:5e9 },function(){} );
-    }, /encountered tileradius too large to fit in unsigned/, 'throws');
+        coalesce([valid_subq], { radius:5e9 },function(){} );
+    }, /encountered radius too large to fit in unsigned/, 'throws');
 
     assert.throws(function() {
         coalesce([valid_subq], { bboxzxy:null },function(){} );
@@ -316,7 +316,7 @@ test('coalesce args', function(assert) {
             }, function(err, res) {
                 assert.ifError(err);
                 assert.deepEqual(res[0].relev, 1, '0.relev');
-                assert.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 3, idx: 0, relev: 1.0, score: 1, scoredist: 120, tmpid: 3, x: 3, y: 3 }, '0.0');
+                assert.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 3, idx: 0, relev: 1.0, score: 1, scoredist: 124.85901539399482, tmpid: 3, x: 3, y: 3 }, '0.0');
                 assert.deepEqual(res[1].relev, 1, '1.relev');
                 assert.deepEqual(res[1][0], { matches_language: true, distance: 2.8284271247461903, id: 1, idx: 0, relev: 1.0, score: 7, scoredist: 7, tmpid: 1, x: 1, y: 1 }, '1.0');
                 assert.deepEqual(res[2].relev, 0.8, '2.relev');
@@ -599,7 +599,7 @@ test('coalesce args', function(assert) {
                 assert.ifError(err);
                 // sorts by relev, score
                 assert.deepEqual(res[0].relev, 1, '0.relev');
-                assert.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 3, idx: 1, relev: 0.5, score: 1, scoredist: 120, tmpid: 33554435, x: 3, y: 3 }, '0.0');
+                assert.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 3, idx: 1, relev: 0.5, score: 1, scoredist: 124.85901539399482, tmpid: 33554435, x: 3, y: 3 }, '0.0');
                 assert.deepEqual(res[0][1], { matches_language: true, distance: 2.8284271247461903, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 1, x: 1, y: 1 }, '0.1');
                 assert.deepEqual(res[1].relev, 1, '1.relev');
                 assert.deepEqual(res[1][0], { matches_language: true, distance: 1.4142135623730951, id: 2, idx: 1, relev: 0.5, score: 7, scoredist: 7, tmpid: 33554434, x: 2, y: 2 }, '1.0');
