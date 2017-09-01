@@ -1255,9 +1255,9 @@ inline bool contextSortByRelev(Context const& a, Context const& b) noexcept {
 }
 
 inline double tileDist(unsigned px, unsigned py, unsigned tileX, unsigned tileY) {
-    const double dx = static_cast<double>(px - tileX);
-    const double dy = static_cast<double>(py - tileY);
-    const double distance = dx * dx + dy * dy;
+    const double dx = static_cast<double>(px) - static_cast<double>(tileX);
+    const double dy = static_cast<double>(py) - static_cast<double>(tileY);
+    const double distance = sqrt((dx * dx) + (dy * dy));
 
     return distance;
 }
@@ -1268,6 +1268,7 @@ struct CoalesceBaton : carmen::noncopyable {
     std::vector<PhrasematchSubq> stack;
     std::vector<uint64_t> centerzxy;
     std::vector<uint64_t> bboxzxy;
+    double radius;
     Nan::Persistent<v8::Function> callback;
     // return
     std::vector<Context> features;
@@ -1275,19 +1276,23 @@ struct CoalesceBaton : carmen::noncopyable {
     std::string error;
 };
 
-// 32 tiles is about 40 miles at z14.
-// Simulates 40 mile cutoff in carmen.
-double scoredist(unsigned zoom, double distance, double score) {
+// Equivalent of scoredist() function in carmen
+// Combines score and distance into a single score that can be used for sorting.
+// Unlike carmen the effect is not scaled by zoom level as regardless of index
+// the score value at this stage is a 0-7 scalar (by comparison, in carmen, scores
+// for indexes with features covering lower zooms often have exponentially higher
+// scores - example: country@z9 vs poi@z14).
+double scoredist(unsigned zoom, double distance, double score, double radius) {
+    if (zoom < 6) zoom = 6;
     if (distance == 0.0) distance = 0.01;
     double scoredist = 0;
-    if (zoom >= 13) scoredist = 32.0 / distance;
-    if (zoom == 12) scoredist = 24.0 / distance;
-    if (zoom == 11) scoredist = 16.0 / distance;
-    if (zoom == 10) scoredist = 10.0 / distance;
-    if (zoom == 9)  scoredist = 6.0 / distance;
-    if (zoom == 8)  scoredist = 3.5 / distance;
-    if (zoom == 7)  scoredist = 2.0 / distance;
-    if (zoom <= 6)  scoredist = 1.125 / distance;
+
+    // Since distance is in tiles we calculate scoredist by converting the miles into
+    // a tile unit value at the appropriate zoom first.
+    //
+    // 32 tiles is about 40 miles at z14, use this as our mile <=> tile conversion.
+    scoredist = ((radius*(32.0/40.0)) / _pow(1.5, 14 - static_cast<int>(zoom))) / distance;
+
     return score > scoredist ? score : scoredist;
 }
 
@@ -1384,7 +1389,7 @@ void coalesceSingle(uv_work_t* req) {
             cover.relev = cover.relev * subq.weight;
             if (!cover.matches_language) cover.relev *= .9;
             cover.distance = proximity ? tileDist(cx, cy, cover.x, cover.y) : 0;
-            cover.scoredist = proximity ? scoredist(cz, cover.distance, cover.score) : cover.score;
+            cover.scoredist = proximity ? scoredist(cz, cover.distance, cover.score, baton->radius) : cover.score;
 
             // only add cover id if it's got a higer scoredist
             if (lastId == cover.id && cover.scoredist <= lastScoredist) continue;
@@ -1536,7 +1541,7 @@ void coalesceMulti(uv_work_t* req) {
                 if (proximity) {
                     ZXY dxy = pxy2zxy(z, cover.x, cover.y, cz);
                     cover.distance = tileDist(cx, cy, dxy.x, dxy.y);
-                    cover.scoredist = scoredist(cz, cover.distance, cover.score);
+                    cover.scoredist = scoredist(cz, cover.distance, cover.score, baton->radius);
                 } else {
                     cover.distance = 0;
                     cover.scoredist = cover.score;
@@ -1872,6 +1877,20 @@ NAN_METHOD(coalesce) {
                     );
                 }
             }
+        }
+
+        if (options->Has(Nan::New("radius").ToLocalChecked())) {
+            Local<Value> prop_val = options->Get(Nan::New("radius").ToLocalChecked());
+            if (!prop_val->IsNumber()) {
+                return Nan::ThrowTypeError("radius must be a number");
+            }
+            int64_t _radius = prop_val->IntegerValue();
+            if (_radius < 0 || _radius > std::numeric_limits<unsigned>::max()) {
+                return Nan::ThrowTypeError("encountered radius too large to fit in unsigned");
+            }
+            baton->radius = static_cast<double>(_radius);
+        } else {
+            baton->radius = 40.0;
         }
 
         if (options->Has(Nan::New("centerzxy").ToLocalChecked())) {
