@@ -2014,7 +2014,7 @@ NAN_METHOD(RocksDBCache::_getmatching) {
 
 void NormalizationCache::Initialize(Handle<Object> target) {
     Nan::HandleScope scope;
-    Local<FunctionTemplate> t = Nan::New<FunctionTemplate>(RocksDBCache::New);
+    Local<FunctionTemplate> t = Nan::New<FunctionTemplate>(NormalizationCache::New);
     t->InstanceTemplate()->SetInternalFieldCount(1);
     t->SetClassName(Nan::New("NormalizationCache").ToLocalChecked());
     Nan::SetPrototypeMethod(t, "get", get);
@@ -2034,11 +2034,11 @@ NormalizationCache::~NormalizationCache() { }
 
 class UInt32Comparator : public rocksdb::Comparator {
     public:
-        // Three-way comparison function:
-        // if a < b: negative result
-        // if a > b: positive result
-        // else: zero result
-        int Compare(const rocksdb::Slice& a, const rocksdb::Slice& b) const {
+        UInt32Comparator(const UInt32Comparator &) = delete;
+        UInt32Comparator &operator=(const UInt32Comparator &) = delete;
+        UInt32Comparator() = default;
+
+        int Compare(const rocksdb::Slice& a, const rocksdb::Slice& b) const override {
             uint32_t ia = a.size() >= sizeof(uint32_t) ? *reinterpret_cast<const uint32_t*>(a.data()) : 0;
             uint32_t ib = b.size() >= sizeof(uint32_t) ? *reinterpret_cast<const uint32_t*>(b.data()) : 0;
 
@@ -2047,11 +2047,11 @@ class UInt32Comparator : public rocksdb::Comparator {
             return 0;
         }
 
-    // Ignore the following methods for now:
-    const char* Name() const { return "UInt32Comparator"; }
-    void FindShortestSeparator(std::string*, const rocksdb::Slice&) const { }
-    void FindShortSuccessor(std::string*) const { }
+    const char* Name() const override { return "UInt32Comparator"; }
+    void FindShortestSeparator(std::string *start, const rocksdb::Slice &limit) const override {}
+    void FindShortSuccessor(std::string *key) const override {}
 };
+UInt32Comparator UInt32ComparatorInstance;
 
 NAN_METHOD(NormalizationCache::New) {
     if (!info.IsConstructCall()) {
@@ -2078,8 +2078,7 @@ NAN_METHOD(NormalizationCache::New) {
         std::unique_ptr<rocksdb::DB> db;
         rocksdb::Options options;
         options.create_if_missing = true;
-        UInt32Comparator cmp;
-        options.comparator = &cmp;
+        options.comparator = &UInt32ComparatorInstance;
 
         rocksdb::Status status;
         if (read_only) {
@@ -2123,7 +2122,7 @@ NAN_METHOD(NormalizationCache::get) {
     rocksdb::Status s = db->Get(rocksdb::ReadOptions(), sid, &message);
     found = s.ok();
 
-    if (found && message.size() > sizeof (uint32_t)) {
+    if (found && message.size() >= sizeof (uint32_t)) {
         uint32_t out = *reinterpret_cast<const uint32_t*>(message.data());
         info.GetReturnValue().Set(Nan::New(out));
         return;
@@ -2243,8 +2242,8 @@ NAN_METHOD(NormalizationCache::writebatch) {
         uint32_t key = static_cast<uint32_t>(row->Get(0)->IntegerValue());
         uint32_t value = static_cast<uint32_t>(row->Get(1)->IntegerValue());
 
-        std::string skey(reinterpret_cast<const char*>(&key));
-        std::string svalue(reinterpret_cast<const char*>(&value));
+        std::string skey(reinterpret_cast<const char*>(&key), sizeof(uint32_t));
+        std::string svalue(reinterpret_cast<const char*>(&value), sizeof(uint32_t));
 
         batch.Put(skey, svalue);
     }
