@@ -2200,7 +2200,7 @@ NAN_METHOD(NormalizationCache::getprefixrange) {
         if (key >= ceiling) break;
 
         uint32_t val = *reinterpret_cast<const uint32_t*>(rit->value().ToString().data());
-        if (val < start_id || start_id >= ceiling) {
+        if (val < start_id || val >= ceiling) {
             out->Set(out_idx++,Nan::New(val));
 
             return_count++;
