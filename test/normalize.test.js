@@ -55,7 +55,7 @@ tape('read', function(assert) {
 
     // find the indexes of all the keys that start with f
     var f = [];
-    for (let i = 0; i < words.length; i++) if (words[i].charAt(0) == 'f') f.push(i);
+    for (var i = 0; i < words.length; i++) if (words[i].charAt(0) == 'f') f.push(i);
     assert.deepEqual(cache.getPrefixRange(f[0], f.length), [words.indexOf('1st st')], 'found normalization for 1st st but not frank boulevard');
 
     assert.deepEqual(cache.getPrefixRange(words.indexOf('frank boulevard'), 1), [words.indexOf('frank blvd')], 'found frank boulevard because no prefixes are shared');
