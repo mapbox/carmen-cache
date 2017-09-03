@@ -45,6 +45,10 @@ tape('write/dump', function(assert) {
 
     assert.deepEqual(map, cache.getAll(), "dumped contents match input");
 
+    // test some invalid input
+    assert.throws(function() { cache.writeBatch(); });
+    assert.throws(function() { cache.writeBatch(7); });
+
     return assert.end();
 });
 
@@ -52,6 +56,7 @@ tape('read', function(assert) {
     var cache = new carmenCache.NormalizationCache(file, true);
 
     assert.equal(cache.get(words.indexOf('first street')), words.indexOf('1st st'));
+    assert.equal(cache.get(8888), undefined);
 
     // find the indexes of all the keys that start with f
     var f = [];
@@ -59,6 +64,24 @@ tape('read', function(assert) {
     assert.deepEqual(cache.getPrefixRange(f[0], f.length), [words.indexOf('1st st')], 'found normalization for 1st st but not frank boulevard');
 
     assert.deepEqual(cache.getPrefixRange(words.indexOf('frank boulevard'), 1), [words.indexOf('frank blvd')], 'found frank boulevard because no prefixes are shared');
+
+    // test some invalid input
+    assert.throws(function() { new carmenCache.NormalizationCache() });
+    assert.throws(function() { new carmenCache.NormalizationCache(7) });
+    assert.throws(function() { new carmenCache.NormalizationCache('asdf', 7) });
+
+    assert.throws(function() { new carmenCache.NormalizationCache('/proc', true) });
+
+
+    assert.throws(function() { cache.get() });
+    assert.throws(function() { cache.getPrefixRange('asdf') });
+
+    assert.throws(function() { cache.getPrefixRange() });
+    assert.throws(function() { cache.getPrefixRange('asdf') });
+    assert.throws(function() { cache.getPrefixRange('asdf', 'asdf') });
+    assert.throws(function() { cache.getPrefixRange(1, 'asdf') });
+    assert.throws(function() { cache.getPrefixRange(1, 1, 'asdf') });
+    assert.throws(function() { cache.getPrefixRange(1, 1, 1, 'asdf') });
 
     assert.end();
 });
