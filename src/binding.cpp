@@ -2058,8 +2058,9 @@ class UInt32Comparator : public rocksdb::Comparator {
         UInt32Comparator() = default;
 
         int Compare(const rocksdb::Slice& a, const rocksdb::Slice& b) const override {
-            uint32_t ia = a.size() >= sizeof(uint32_t) ? *reinterpret_cast<const uint32_t*>(a.data()) : 0;
-            uint32_t ib = b.size() >= sizeof(uint32_t) ? *reinterpret_cast<const uint32_t*>(b.data()) : 0;
+            uint32_t ia = 0, ib = 0;
+            if (a.size() >= sizeof(uint32_t)) memcpy(&ia, a.data(), sizeof(uint32_t));
+            if (b.size() >= sizeof(uint32_t)) memcpy(&ib, b.data(), sizeof(uint32_t));
 
             if (ia < ib) return -1;
             if (ia > ib) return +1;
@@ -2142,7 +2143,8 @@ NAN_METHOD(NormalizationCache::get) {
     found = s.ok();
 
     if (found && message.size() >= sizeof (uint32_t)) {
-        uint32_t out = *reinterpret_cast<const uint32_t*>(message.data());
+        uint32_t out;
+        memcpy(&out, message.data(), sizeof(uint32_t));
         info.GetReturnValue().Set(Nan::New(out));
         return;
     } else {
@@ -2195,11 +2197,13 @@ NAN_METHOD(NormalizationCache::getprefixrange) {
     std::unique_ptr<rocksdb::Iterator> rit(db->NewIterator(rocksdb::ReadOptions()));
     for (rit->Seek(sid); rit->Valid(); rit->Next()) {
         std::string skey = rit->key().ToString();
-        uint32_t key = *reinterpret_cast<const uint32_t*>(skey.data());
+        uint32_t key;
+        memcpy(&key, skey.data(), sizeof(uint32_t));
 
         if (key >= ceiling) break;
 
-        uint32_t val = *reinterpret_cast<const uint32_t*>(rit->value().ToString().data());
+        uint32_t val;
+        memcpy(&val, rit->value().ToString().data(), sizeof(uint32_t));
         if (val < start_id || val >= ceiling) {
             out->Set(out_idx++,Nan::New(val));
 
