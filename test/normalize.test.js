@@ -41,6 +41,24 @@ tape('write/dump', function(assert) {
     for (var key in norm) {
         map.push([words.indexOf(key), words.indexOf(norm[key])])
     }
+
+    // These tests just illustrate what the mapping actually is storing.
+    // Note the mapping is based on index position of sorted text based
+    // on how dawg-cache stores.
+    assert.deepEqual(words, [
+        "1st st",
+        "apple lane",
+        "first street",
+        "frank blvd",
+        "frank boulevard",
+        "fred road",
+        "pear ave",
+        "pear avenue"
+    ], "confirm map sorted order simulating dawg text order");
+    assert.deepEqual(map[0], [ 2, 0 ], 'first street => 1st st');
+    assert.deepEqual(map[1], [ 4, 3 ], 'frank boulevard => frank blvd');
+    assert.deepEqual(map[2], [ 7, 6 ], 'pear avenue => pear ave');
+
     cache.writeBatch(map);
 
     assert.deepEqual(map, cache.getAll(), "dumped contents match input");
