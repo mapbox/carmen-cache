@@ -5,6 +5,9 @@ var test = require('tape');
 var mp36 = Math.pow(2,36);
 
 (function() {
+    // asan makes everything slow, so skip benching
+    if (process.env.ASAN_OPTIONS) return;
+
     var runs = 50;
     var b = new Cache('b');
     b._set('3848571113', require('./fixtures/coalesce-bench-single-3848571113.json'));
@@ -77,6 +80,9 @@ var mp36 = Math.pow(2,36);
 })();
 
 (function() {
+    // asan makes everything slow, so skip benching
+    if (process.env.ASAN_OPTIONS) return;
+
     var runs = 50;
     var a = new Cache('a', 0);
     var b = new Cache('b', 0);
