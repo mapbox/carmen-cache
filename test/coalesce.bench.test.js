@@ -5,6 +5,9 @@ var test = require('tape');
 var mp36 = Math.pow(2,36);
 
 (function() {
+    // asan makes everything slow, so skip benching
+    if (process.env.ASAN_OPTIONS) return;
+
     var runs = 50;
     var b = new Cache('b');
     b._set('3848571113', require('./fixtures/coalesce-bench-single-3848571113.json'));
@@ -60,7 +63,7 @@ var mp36 = Math.pow(2,36);
             }
             coalesce(stacks, { centerzxy: [14,4893,6001] }, function(err, res) {
                 var checks = true;
-                checks = checks && res.length === 40;
+                checks = checks && res.length === 38;
                 checks = checks && res[0][0].x === 4893;
                 checks = checks && res[0][0].y === 6001;
                 checks = checks && res[0][0].tmpid === 446213;
@@ -77,6 +80,9 @@ var mp36 = Math.pow(2,36);
 })();
 
 (function() {
+    // asan makes everything slow, so skip benching
+    if (process.env.ASAN_OPTIONS) return;
+
     var runs = 50;
     var a = new Cache('a', 0);
     var b = new Cache('b', 0);
