@@ -115,6 +115,8 @@ public:
 
 constexpr langfield_type ALL_LANGUAGES = ~(langfield_type)(0);
 #define LANGFIELD_SEPARATOR '|'
+#define ZXYFIELD_SEPARATOR '|'
+#define ZXYVALUE_SEPARATOR ','
 
 #define TYPE_MEMORY 1
 #define TYPE_ROCKSDB 2

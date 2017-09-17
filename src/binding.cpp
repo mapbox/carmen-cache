@@ -7,6 +7,7 @@
 #include <cstring>
 #include <algorithm>
 #include <memory>
+#include <inttypes.h>
 
 #include <protozero/pbf_writer.hpp>
 #include <protozero/pbf_reader.hpp>
@@ -38,6 +39,118 @@ rocksdb::Status OpenForReadOnlyDB(const rocksdb::Options& options, const std::st
 
 constexpr uint64_t LANGUAGE_MATCH_BOOST = (const uint64_t)(1) << 63;
 
+//relev = 5 bits
+//count = 3 bits
+//reason = 12 bits
+//* 1 bit gap
+//id = 32 bits
+constexpr double _pow(double x, int y)
+{
+    return y == 0 ? 1.0 : x * _pow(x, y-1);
+}
+
+constexpr uint64_t POW2_51 = static_cast<uint64_t>(_pow(2.0,51));
+constexpr uint64_t POW2_48 = static_cast<uint64_t>(_pow(2.0,48));
+constexpr uint64_t POW2_34 = static_cast<uint64_t>(_pow(2.0,34));
+constexpr uint64_t POW2_28 = static_cast<uint64_t>(_pow(2.0,28));
+constexpr uint64_t POW2_25 = static_cast<uint64_t>(_pow(2.0,25));
+constexpr uint64_t POW2_20 = static_cast<uint64_t>(_pow(2.0,20));
+constexpr uint64_t POW2_14 = static_cast<uint64_t>(_pow(2.0,14));
+constexpr uint64_t POW2_3 = static_cast<uint64_t>(_pow(2.0,3));
+constexpr uint64_t POW2_2 = static_cast<uint64_t>(_pow(2.0,2));
+
+struct Cover {
+    double relev;
+    uint32_t id;
+    uint32_t tmpid;
+    unsigned short x;
+    unsigned short y;
+    unsigned short score;
+    unsigned short idx;
+    uint32_t mask;
+    double distance;
+    double scoredist;
+    bool matches_language;
+};
+
+struct ZXY {
+    unsigned z;
+    unsigned x;
+    unsigned y;
+};
+
+Cover numToCover(uint64_t num) {
+    Cover cover;
+    assert(((num >> 34) % POW2_14) <= static_cast<double>(std::numeric_limits<unsigned short>::max()));
+    assert(((num >> 34) % POW2_14) >= static_cast<double>(std::numeric_limits<unsigned short>::min()));
+    unsigned short y = static_cast<unsigned short>((num >> 34) % POW2_14);
+    assert(((num >> 20) % POW2_14) <= static_cast<double>(std::numeric_limits<unsigned short>::max()));
+    assert(((num >> 20) % POW2_14) >= static_cast<double>(std::numeric_limits<unsigned short>::min()));
+    unsigned short x = static_cast<unsigned short>((num >> 20) % POW2_14);
+    assert(((num >> 48) % POW2_3) <= static_cast<double>(std::numeric_limits<unsigned short>::max()));
+    assert(((num >> 48) % POW2_3) >= static_cast<double>(std::numeric_limits<unsigned short>::min()));
+    unsigned short score = static_cast<unsigned short>((num >> 48) % POW2_3);
+    uint32_t id = static_cast<uint32_t>(num % POW2_20);
+    bool matches_language = static_cast<bool>(num & LANGUAGE_MATCH_BOOST);
+    cover.x = x;
+    cover.y = y;
+    double relev = 0.4 + (0.2 * static_cast<double>((num >> 51) % POW2_2));
+    cover.relev = relev;
+    cover.score = score;
+    cover.id = id;
+    cover.matches_language = matches_language;
+
+    // These are not derived from decoding the input num but by
+    // external values after initialization.
+    cover.idx = 0;
+    cover.mask = 0;
+    cover.tmpid = 0;
+    cover.distance = 0;
+
+    return cover;
+};
+
+ZXY bxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z, bool max=false) {
+    ZXY zxy;
+    zxy.z = target_z;
+
+    // Interval between parent and target zoom level
+    signed zDist = target_z - z;
+    if (zDist == 0) {
+        zxy.x = x;
+        zxy.y = y;
+        return zxy;
+    }
+
+    // zoom conversion multiplier
+    float mult = static_cast<float>(std::pow(2,zDist));
+
+    // zoom in min
+    if (zDist > 0 && !max) {
+        zxy.x = static_cast<unsigned>(static_cast<float>(x) * mult);
+        zxy.y = static_cast<unsigned>(static_cast<float>(y) * mult);
+        return zxy;
+    }
+    // zoom in max
+    else if (zDist > 0 && max) {
+        zxy.x = static_cast<unsigned>(static_cast<float>(x) * mult + (mult - 1));
+        zxy.y = static_cast<unsigned>(static_cast<float>(y) * mult + (mult - 1));
+        return zxy;
+    }
+    // zoom out
+    else {
+        unsigned mod = static_cast<unsigned>(std::pow(2,target_z));
+        unsigned xDiff = x % mod;
+        unsigned yDiff = y % mod;
+        unsigned newX = x - xDiff;
+        unsigned newY = y - yDiff;
+
+        zxy.x = static_cast<unsigned>(static_cast<float>(newX) * mult);
+        zxy.y = static_cast<unsigned>(static_cast<float>(newY) * mult);
+        return zxy;
+    }
+}
+
 // in general, the key format including language field is <key_text><separator character><8-byte langfield>
 // but as a size optimization for language-less indexes, we omit the langfield
 // if it would otherwise have been ALL_LANGUAGES (all 1's), so if the first occurence
@@ -48,8 +161,7 @@ constexpr uint64_t LANGUAGE_MATCH_BOOST = (const uint64_t)(1) << 63;
 // to handle that optimization everywhere
 inline langfield_type extract_langfield(std::string const& s) {
     size_t length = s.length();
-    size_t zxyfield_start = s.find(LANGFIELD_SEPARATOR) + 1;
-    size_t langfield_start = s.find(LANGFIELD_SEPARATOR, zxyfield_start) + 1;
+    size_t langfield_start = s.find(LANGFIELD_SEPARATOR) + 1;
     size_t distance_from_end = length - langfield_start;
 
     if (distance_from_end == 0) {
@@ -61,8 +173,28 @@ inline langfield_type extract_langfield(std::string const& s) {
     }
 }
 
-inline void add_zxyfield(std::string & s) {
-    s.push_back(LANGFIELD_SEPARATOR);
+inline ZXY extract_zxyfield(std::string const& s) {
+    size_t length = s.length();
+    size_t zxyfield_start = s.find(LANGFIELD_SEPARATOR, (s.find(LANGFIELD_SEPARATOR) + 1)) + 1;
+    size_t distance_from_end = length - zxyfield_start;
+
+    if (zxyfield_start == std::string::npos || distance_from_end == 0) {
+        ZXY zxy { 0, 0, 0 };
+        return zxy;
+    } else {
+        ZXY zxy { 0, 0, 0 };
+        //memcpy(&result, s.data() + zxyfield_start, distance_from_end);
+        return zxy;
+    }
+}
+
+inline void add_zxyfield(std::string & s, ZXY zxyfield) {
+    if (zxyfield.z > 0) {
+        s.push_back(LANGFIELD_SEPARATOR);
+        s.append(std::to_string(zxyfield.x));
+        s.push_back(ZXYVALUE_SEPARATOR);
+        s.append(std::to_string(zxyfield.y));
+    }
 }
 
 inline void add_langfield(std::string & s, langfield_type langfield) {
@@ -91,7 +223,6 @@ intarray __get(MemoryCache const* c, std::string phrase, langfield_type langfiel
     arraycache const& cache = c->cache_;
     intarray array;
 
-    add_zxyfield(phrase);
     add_langfield(phrase, langfield);
     arraycache::const_iterator aitr = cache.find(phrase);
     if (aitr != cache.end()) {
@@ -139,7 +270,6 @@ intarray __get(RocksDBCache const* c, std::string phrase, langfield_type langfie
     std::shared_ptr<rocksdb::DB> db = c->db;
     intarray array;
 
-    add_zxyfield(phrase);
     add_langfield(phrase, langfield);
     std::string message;
     rocksdb::Status s = db->Get(rocksdb::ReadOptions(), phrase, &message);
@@ -341,6 +471,8 @@ RocksDBCache::RocksDBCache()
 RocksDBCache::~RocksDBCache() { }
 
 inline void packVec(intarray const& varr, std::unique_ptr<rocksdb::DB> const& db, std::string const& key) {
+    std::cout << key << "\n";
+
     std::string message;
 
     protozero::pbf_writer item_writer(message);
@@ -361,6 +493,55 @@ inline void packVec(intarray const& varr, std::unique_ptr<rocksdb::DB> const& db
     }
 
     db->Put(rocksdb::WriteOptions(), key, message);
+}
+
+// For a given cover cache, shard any entries by zxy if they exceed the cover_limit
+void shardCache(arraycache & cache, unsigned cover_limit) {
+    arraycache sharded;
+    for (auto const& item : cache) {
+        std::size_t array_size = item.second.size();
+        // skip any keys below the cover limit
+        if (array_size < cover_limit) {
+            std::cout << "Skip: " << item.first << "\n";
+            continue;
+        }
+        // skip any keys that are already zxy sharded
+        if ((extract_zxyfield(item.first)).z != 0) {
+            std::cout << "Skip: " << item.first << "\n";
+            continue;
+        }
+
+        std::cout << "Shard: " << item.first << "\n";
+        printf("Size: %u\n", array_size);
+
+        auto phrase_length = item.first.find(LANGFIELD_SEPARATOR);
+        langfield_type langfield = extract_langfield(item.first);
+
+        for (auto const encoded : item.second) {
+            Cover cover = numToCover(encoded);
+            ZXY shard_zxy = bxy2zxy(8, cover.x, cover.y, 4, false);
+
+            // create shard key
+            std::string shard_key = item.first.substr(0, phrase_length);
+            add_langfield(shard_key, langfield);
+            add_zxyfield(shard_key, shard_zxy);
+
+            // initialize vector at key if it does not exist
+            arraycache::iterator itr = sharded.find(shard_key);
+            if (itr == sharded.end()) {
+                sharded.emplace(shard_key,intarray());
+            }
+            intarray & vv = sharded[shard_key];
+
+            // add encoded value to vector at shard key
+            vv.emplace_back(encoded);
+
+            printf("id: %u, x: %u, y: %u => sx: %u, sy: %u\n", cover.id, cover.x, cover.y, shard_zxy.x, shard_zxy.y);
+        }
+    }
+    for (auto const& item : sharded) {
+        std::cout << "Sharded: " << item.first << "\n";
+    }
 }
 
 NAN_METHOD(MemoryCache::pack)
@@ -391,8 +572,11 @@ NAN_METHOD(MemoryCache::pack)
 
         std::map<key_type, std::deque<value_type>> memoized_prefixes;
 
+        shardCache(c->cache_, 10);
+
         for (auto const& item : c->cache_) {
             std::size_t array_size = item.second.size();
+
             if (array_size > 0) {
                 // make copy of intarray so we can sort without
                 // modifying the original array
@@ -415,17 +599,18 @@ NAN_METHOD(MemoryCache::pack)
                 } else {
                     // get the prefix, then append the langfield back onto it again
                     langfield_type langfield = extract_langfield(item.first);
+                    ZXY zxyfield = extract_zxyfield(item.first);
 
                     prefix_t1 = "=1" + item.first.substr(0, MEMO_PREFIX_LENGTH_T1);
-                    add_zxyfield(prefix_t1);
                     add_langfield(prefix_t1, langfield);
+                    add_zxyfield(prefix_t1, zxyfield);
 
                     if (phrase_length < MEMO_PREFIX_LENGTH_T2) {
                         prefix_t2 = "=2" + item.first;
                     } else {
                         prefix_t2 = "=2" + item.first.substr(0, MEMO_PREFIX_LENGTH_T2);
-                        add_zxyfield(prefix_t2);
                         add_langfield(prefix_t2, langfield);
+                        add_zxyfield(prefix_t2, zxyfield);
                     }
                 }
 
@@ -884,7 +1069,6 @@ NAN_METHOD(MemoryCache::_set)
         MemoryCache* c = node::ObjectWrap::Unwrap<MemoryCache>(info.This());
         arraycache & arrc = c->cache_;
         key_type key_id = static_cast<key_type>(id);
-        add_zxyfield(key_id);
         add_langfield(key_id, langfield);
 
         arraycache::iterator itr2 = arrc.find(key_id);
@@ -1032,26 +1216,6 @@ NAN_METHOD(RocksDBCache::New)
     return;
 }
 
-//relev = 5 bits
-//count = 3 bits
-//reason = 12 bits
-//* 1 bit gap
-//id = 32 bits
-constexpr double _pow(double x, int y)
-{
-    return y == 0 ? 1.0 : x * _pow(x, y-1);
-}
-
-constexpr uint64_t POW2_51 = static_cast<uint64_t>(_pow(2.0,51));
-constexpr uint64_t POW2_48 = static_cast<uint64_t>(_pow(2.0,48));
-constexpr uint64_t POW2_34 = static_cast<uint64_t>(_pow(2.0,34));
-constexpr uint64_t POW2_28 = static_cast<uint64_t>(_pow(2.0,28));
-constexpr uint64_t POW2_25 = static_cast<uint64_t>(_pow(2.0,25));
-constexpr uint64_t POW2_20 = static_cast<uint64_t>(_pow(2.0,20));
-constexpr uint64_t POW2_14 = static_cast<uint64_t>(_pow(2.0,14));
-constexpr uint64_t POW2_3 = static_cast<uint64_t>(_pow(2.0,3));
-constexpr uint64_t POW2_2 = static_cast<uint64_t>(_pow(2.0,2));
-
 struct PhrasematchSubq {
     PhrasematchSubq(void *c,
                     char t,
@@ -1082,20 +1246,6 @@ struct PhrasematchSubq {
     langfield_type langfield;
     PhrasematchSubq& operator=(PhrasematchSubq && c) = default;
     PhrasematchSubq(PhrasematchSubq && c) = default;
-};
-
-struct Cover {
-    double relev;
-    uint32_t id;
-    uint32_t tmpid;
-    unsigned short x;
-    unsigned short y;
-    unsigned short score;
-    unsigned short idx;
-    uint32_t mask;
-    double distance;
-    double scoredist;
-    bool matches_language;
 };
 
 struct Context {
@@ -1131,107 +1281,6 @@ struct Context {
        relev(std::move(c.relev)) {}
 
 };
-
-Cover numToCover(uint64_t num) {
-    Cover cover;
-    assert(((num >> 34) % POW2_14) <= static_cast<double>(std::numeric_limits<unsigned short>::max()));
-    assert(((num >> 34) % POW2_14) >= static_cast<double>(std::numeric_limits<unsigned short>::min()));
-    unsigned short y = static_cast<unsigned short>((num >> 34) % POW2_14);
-    assert(((num >> 20) % POW2_14) <= static_cast<double>(std::numeric_limits<unsigned short>::max()));
-    assert(((num >> 20) % POW2_14) >= static_cast<double>(std::numeric_limits<unsigned short>::min()));
-    unsigned short x = static_cast<unsigned short>((num >> 20) % POW2_14);
-    assert(((num >> 48) % POW2_3) <= static_cast<double>(std::numeric_limits<unsigned short>::max()));
-    assert(((num >> 48) % POW2_3) >= static_cast<double>(std::numeric_limits<unsigned short>::min()));
-    unsigned short score = static_cast<unsigned short>((num >> 48) % POW2_3);
-    uint32_t id = static_cast<uint32_t>(num % POW2_20);
-    bool matches_language = static_cast<bool>(num & LANGUAGE_MATCH_BOOST);
-    cover.x = x;
-    cover.y = y;
-    double relev = 0.4 + (0.2 * static_cast<double>((num >> 51) % POW2_2));
-    cover.relev = relev;
-    cover.score = score;
-    cover.id = id;
-    cover.matches_language = matches_language;
-
-    // These are not derived from decoding the input num but by
-    // external values after initialization.
-    cover.idx = 0;
-    cover.mask = 0;
-    cover.tmpid = 0;
-    cover.distance = 0;
-
-    return cover;
-};
-
-struct ZXY {
-    unsigned z;
-    unsigned x;
-    unsigned y;
-};
-
-ZXY pxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z) {
-    ZXY zxy;
-    zxy.z = target_z;
-
-    // Interval between parent and target zoom level
-    unsigned zDist = target_z - z;
-    unsigned zMult = zDist - 1;
-    if (zDist == 0) {
-        zxy.x = x;
-        zxy.y = y;
-        return zxy;
-    }
-
-    // Midpoint length @ z for a tile at parent zoom level
-    unsigned pMid_d = static_cast<unsigned>(std::pow(2,zDist) / 2);
-    assert(pMid_d <= static_cast<double>(std::numeric_limits<unsigned>::max()));
-    assert(pMid_d >= static_cast<double>(std::numeric_limits<unsigned>::min()));
-    unsigned pMid = static_cast<unsigned>(pMid_d);
-    zxy.x = (x * zMult) + pMid;
-    zxy.y = (y * zMult) + pMid;
-    return zxy;
-}
-
-ZXY bxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z, bool max=false) {
-    ZXY zxy;
-    zxy.z = target_z;
-
-    // Interval between parent and target zoom level
-    signed zDist = target_z - z;
-    if (zDist == 0) {
-        zxy.x = x;
-        zxy.y = y;
-        return zxy;
-    }
-
-    // zoom conversion multiplier
-    float mult = static_cast<float>(std::pow(2,zDist));
-
-    // zoom in min
-    if (zDist > 0 && !max) {
-        zxy.x = static_cast<unsigned>(static_cast<float>(x) * mult);
-        zxy.y = static_cast<unsigned>(static_cast<float>(y) * mult);
-        return zxy;
-    }
-    // zoom in max
-    else if (zDist > 0 && max) {
-        zxy.x = static_cast<unsigned>(static_cast<float>(x) * mult + (mult - 1));
-        zxy.y = static_cast<unsigned>(static_cast<float>(y) * mult + (mult - 1));
-        return zxy;
-    }
-    // zoom out
-    else {
-        unsigned mod = static_cast<unsigned>(std::pow(2,target_z));
-        unsigned xDiff = x % mod;
-        unsigned yDiff = y % mod;
-        unsigned newX = x - xDiff;
-        unsigned newY = y - yDiff;
-
-        zxy.x = static_cast<unsigned>(static_cast<float>(newX) * mult);
-        zxy.y = static_cast<unsigned>(static_cast<float>(newY) * mult);
-        return zxy;
-    }
-}
 
 inline bool coverSortByRelev(Cover const& a, Cover const& b) noexcept {
     if (b.relev > a.relev) return false;
@@ -1549,7 +1598,7 @@ void coalesceMulti(uv_work_t* req) {
                 cover.relev = cover.relev * subq.weight;
                 if (!cover.matches_language) cover.relev *= .9;
                 if (proximity) {
-                    ZXY dxy = pxy2zxy(z, cover.x, cover.y, cz);
+                    ZXY dxy = bxy2zxy(z, cover.x, cover.y, cz, false);
                     cover.distance = tileDist(cx, cy, dxy.x, dxy.y);
                     cover.scoredist = scoredist(cz, cover.distance, cover.score, baton->radius);
                 } else {
