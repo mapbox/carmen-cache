@@ -158,5 +158,7 @@ tape('pack', function(assert) {
     assert.deepEqual(loader._get('new york'), sortedDescending(ny));
     assert.deepEqual(loader._get('washington'), sortedDescending(dc));
 
+    console.warn(loader.list().map(JSON.stringify));
+
     assert.end();
 });

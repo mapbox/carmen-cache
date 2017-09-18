@@ -162,7 +162,16 @@ ZXY bxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z, bool max=fals
 inline langfield_type extract_langfield(std::string const& s) {
     size_t length = s.length();
     size_t langfield_start = s.find(LANGFIELD_SEPARATOR) + 1;
-    size_t distance_from_end = length - langfield_start;
+    size_t zxyfield_start = s.find(LANGFIELD_SEPARATOR, langfield_start);
+    size_t distance_from_end;
+
+    // There is no zxyfield, assume langfield is last
+    if (zxyfield_start == std::string::npos) {
+        distance_from_end = length - langfield_start;
+    // There is a zxyfield, slice from start of zxyfield
+    } else {
+        distance_from_end = zxyfield_start - langfield_start;
+    }
 
     if (distance_from_end == 0) {
         return ALL_LANGUAGES;
@@ -175,15 +184,28 @@ inline langfield_type extract_langfield(std::string const& s) {
 
 inline ZXY extract_zxyfield(std::string const& s) {
     size_t length = s.length();
-    size_t zxyfield_start = s.find(LANGFIELD_SEPARATOR, (s.find(LANGFIELD_SEPARATOR) + 1)) + 1;
-    size_t distance_from_end = length - zxyfield_start;
+    size_t langfield_start = s.find(LANGFIELD_SEPARATOR) + 1;
+    size_t zxyfield_start = s.find(LANGFIELD_SEPARATOR, langfield_start);
 
-    if (zxyfield_start == std::string::npos || distance_from_end == 0) {
+    // The zxyfield is optional and may not be found.
+    // Check first - if it's not found return 0/0/0 as the global shard.
+    if (zxyfield_start == std::string::npos) {
         ZXY zxy { 0, 0, 0 };
         return zxy;
     } else {
+        zxyfield_start++;
+    }
+
+    size_t distance_from_end = length - zxyfield_start;
+    if (distance_from_end == 0) {
         ZXY zxy { 0, 0, 0 };
-        //memcpy(&result, s.data() + zxyfield_start, distance_from_end);
+        return zxy;
+    } else {
+        uint16_t x(0);
+        uint16_t y(0);
+        memcpy(&x, s.data() + zxyfield_start, 2);
+        memcpy(&y, s.data() + zxyfield_start + 2, 2);
+        ZXY zxy { 1, static_cast<unsigned>(x), static_cast<unsigned>(y) };
         return zxy;
     }
 }
@@ -191,9 +213,12 @@ inline ZXY extract_zxyfield(std::string const& s) {
 inline void add_zxyfield(std::string & s, ZXY zxyfield) {
     if (zxyfield.z > 0) {
         s.push_back(LANGFIELD_SEPARATOR);
-        s.append(std::to_string(zxyfield.x));
-        s.push_back(ZXYVALUE_SEPARATOR);
-        s.append(std::to_string(zxyfield.y));
+        uint16_t x = static_cast<uint16_t>(zxyfield.x);
+        uint16_t y = static_cast<uint16_t>(zxyfield.y);
+        char* x_as_char = reinterpret_cast<char*>(&x);
+        char* y_as_char = reinterpret_cast<char*>(&y);
+        s.append(x_as_char, 2);
+        s.append(y_as_char, 2);
     }
 }
 
@@ -430,6 +455,13 @@ inline Local<v8::Array> langfieldToLangarray(langfield_type langfield) {
     return langs;
 }
 
+inline Local<v8::Array> zxyfieldToArray(ZXY zxyfield) {
+    Local<Array> xy = Nan::New<Array>();
+    xy->Set(0,Nan::New(zxyfield.x));
+    xy->Set(1,Nan::New(zxyfield.y));
+    return xy;
+}
+
 void MemoryCache::Initialize(Handle<Object> target) {
     Nan::HandleScope scope;
     Local<FunctionTemplate> t = Nan::New<FunctionTemplate>(MemoryCache::New);
@@ -471,8 +503,6 @@ RocksDBCache::RocksDBCache()
 RocksDBCache::~RocksDBCache() { }
 
 inline void packVec(intarray const& varr, std::unique_ptr<rocksdb::DB> const& db, std::string const& key) {
-    std::cout << key << "\n";
-
     std::string message;
 
     protozero::pbf_writer item_writer(message);
@@ -496,51 +526,43 @@ inline void packVec(intarray const& varr, std::unique_ptr<rocksdb::DB> const& db
 }
 
 // For a given cover cache, shard any entries by zxy if they exceed the cover_limit
-void shardCache(arraycache & cache, unsigned cover_limit) {
+void packShardedVec(intarray const& covers, std::unique_ptr<rocksdb::DB> const& db, std::string const& key) {
     arraycache sharded;
-    for (auto const& item : cache) {
-        std::size_t array_size = item.second.size();
-        // skip any keys below the cover limit
-        if (array_size < cover_limit) {
-            std::cout << "Skip: " << item.first << "\n";
-            continue;
-        }
-        // skip any keys that are already zxy sharded
-        if ((extract_zxyfield(item.first)).z != 0) {
-            std::cout << "Skip: " << item.first << "\n";
-            continue;
-        }
 
-        std::cout << "Shard: " << item.first << "\n";
-        printf("Size: %u\n", array_size);
+    std::size_t array_size = covers.size();
 
-        auto phrase_length = item.first.find(LANGFIELD_SEPARATOR);
-        langfield_type langfield = extract_langfield(item.first);
-
-        for (auto const encoded : item.second) {
-            Cover cover = numToCover(encoded);
-            ZXY shard_zxy = bxy2zxy(8, cover.x, cover.y, 4, false);
-
-            // create shard key
-            std::string shard_key = item.first.substr(0, phrase_length);
-            add_langfield(shard_key, langfield);
-            add_zxyfield(shard_key, shard_zxy);
-
-            // initialize vector at key if it does not exist
-            arraycache::iterator itr = sharded.find(shard_key);
-            if (itr == sharded.end()) {
-                sharded.emplace(shard_key,intarray());
-            }
-            intarray & vv = sharded[shard_key];
-
-            // add encoded value to vector at shard key
-            vv.emplace_back(encoded);
-
-            printf("id: %u, x: %u, y: %u => sx: %u, sy: %u\n", cover.id, cover.x, cover.y, shard_zxy.x, shard_zxy.y);
-        }
+    // skip any keys that are already zxy sharded
+    if ((extract_zxyfield(key)).z != 0) {
+        return;
     }
+
+    auto phrase_length = key.find(LANGFIELD_SEPARATOR);
+    langfield_type langfield = extract_langfield(key);
+
+    // iterate through all covers for this key and group by parent zxy
+    for (auto const encoded : covers) {
+        Cover cover = numToCover(encoded);
+        ZXY shard_zxy = bxy2zxy(8, cover.x, cover.y, 4, false); // Uses -4 as parent interval
+
+        // create shard key
+        std::string shard_key = key.substr(0, phrase_length);
+        add_langfield(shard_key, langfield);
+        add_zxyfield(shard_key, shard_zxy);
+
+        // initialize vector at key if it does not exist
+        arraycache::iterator itr = sharded.find(shard_key);
+        if (itr == sharded.end()) {
+            sharded.emplace(shard_key,intarray());
+        }
+        intarray & vv = sharded[shard_key];
+
+        // add encoded value to vector at shard key
+        vv.emplace_back(encoded);
+    }
+
+    // store sharded cover lists
     for (auto const& item : sharded) {
-        std::cout << "Sharded: " << item.first << "\n";
+        packVec(item.second, db, item.first);
     }
 }
 
@@ -572,8 +594,6 @@ NAN_METHOD(MemoryCache::pack)
 
         std::map<key_type, std::deque<value_type>> memoized_prefixes;
 
-        shardCache(c->cache_, 10);
-
         for (auto const& item : c->cache_) {
             std::size_t array_size = item.second.size();
 
@@ -585,6 +605,10 @@ NAN_METHOD(MemoryCache::pack)
                 // delta-encode values, sorted in descending order.
                 std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
 
+                // store sharded
+                packShardedVec(varr, db, item.first);
+
+                // store global
                 packVec(varr, db, item.first);
 
                 std::string prefix_t1 = "";
@@ -635,6 +659,7 @@ NAN_METHOD(MemoryCache::pack)
             }
         }
 
+        // Store prefixes
         for (auto const& item : memoized_prefixes) {
             // copy the deque into a vector so we can sort without
             // modifying the original array
@@ -643,11 +668,15 @@ NAN_METHOD(MemoryCache::pack)
             // delta-encode values, sorted in descending order.
             std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
 
+            // store sharded
+            packShardedVec(varr, db, item.first);
+
             if (varr.size() > PREFIX_MAX_GRID_LENGTH) {
                 // for the prefix memos we're only going to ever use 500k max anyway
                 varr.resize(PREFIX_MAX_GRID_LENGTH);
             }
 
+            // store global
             packVec(varr, db, item.first);
         }
     } catch (std::exception const& ex) {
@@ -948,6 +977,7 @@ NAN_METHOD(MemoryCache::list)
         unsigned idx = 0;
         for (auto const& item : c->cache_) {
             Local<Array> out = Nan::New<Array>();
+
             out->Set(0, Nan::New(item.first.substr(0, item.first.find(LANGFIELD_SEPARATOR))).ToLocalChecked());
 
             langfield_type langfield = extract_langfield(item.first);
@@ -955,6 +985,13 @@ NAN_METHOD(MemoryCache::list)
                 out->Set(1, Nan::Null());
             } else {
                 out->Set(1, langfieldToLangarray(langfield));
+            }
+
+            ZXY zxyfield = extract_zxyfield(item.first);
+            if (zxyfield.z == 0) {
+                out->Set(2, Nan::Null());
+            } else {
+                out->Set(2, zxyfieldToArray(zxyfield));
             }
 
             ids->Set(idx++, out);
@@ -991,6 +1028,13 @@ NAN_METHOD(RocksDBCache::list)
                 out->Set(1, Nan::Null());
             } else {
                 out->Set(1, langfieldToLangarray(langfield));
+            }
+
+            ZXY zxyfield = extract_zxyfield(key_id);
+            if (zxyfield.z == 0) {
+                out->Set(2, Nan::Null());
+            } else {
+                out->Set(2, zxyfieldToArray(zxyfield));
             }
 
             ids->Set(idx++, out);
