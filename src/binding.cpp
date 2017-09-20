@@ -2142,10 +2142,15 @@ NAN_METHOD(NormalizationCache::get) {
     rocksdb::Status s = db->Get(rocksdb::ReadOptions(), sid, &message);
     found = s.ok();
 
-    if (found && message.size() >= sizeof (uint32_t)) {
-        uint32_t out;
-        memcpy(&out, message.data(), sizeof(uint32_t));
-        info.GetReturnValue().Set(Nan::New(out));
+    size_t message_length = message.size();
+    if (found && message_length >= sizeof (uint32_t)) {
+        Local<Array> out = Nan::New<Array>();
+        uint32_t entry;
+        for (uint32_t i = 0; i * sizeof(uint32_t) < message_length; i++) {
+            memcpy(&entry, message.data() + (i * sizeof(uint32_t)), sizeof(uint32_t));
+            out->Set(i, Nan::New(entry));
+        }
+        info.GetReturnValue().Set(out);
         return;
     } else {
         info.GetReturnValue().Set(Nan::Undefined());
@@ -2203,12 +2208,15 @@ NAN_METHOD(NormalizationCache::getprefixrange) {
         if (key >= ceiling) break;
 
         uint32_t val;
-        memcpy(&val, rit->value().ToString().data(), sizeof(uint32_t));
-        if (val < start_id || val >= ceiling) {
-            out->Set(out_idx++,Nan::New(val));
+        std::string svalue = rit->value().ToString();
+        for (uint32_t offset = 0; offset < svalue.length(); offset += sizeof(uint32_t)) {
+            memcpy(&val, svalue.data() + offset, sizeof(uint32_t));
+            if (val < start_id || val >= ceiling) {
+                out->Set(out_idx++, Nan::New(val));
 
-            return_count++;
-            if (return_count >= return_max) break;
+                return_count++;
+                if (return_count >= return_max) break;
+            }
         }
 
         scan_count++;
@@ -2231,11 +2239,19 @@ NAN_METHOD(NormalizationCache::getall) {
         std::string skey = rit->key().ToString();
         uint32_t key = *reinterpret_cast<const uint32_t*>(skey.data());
 
-        uint32_t val = *reinterpret_cast<const uint32_t*>(rit->value().ToString().data());
+        std::string svalue = rit->value().ToString();
 
         Local<Array> row = Nan::New<Array>();
         row->Set(0, Nan::New(key));
-        row->Set(1, Nan::New(val));
+
+        Local<Array> vals = Nan::New<Array>();
+        uint32_t entry;
+        for (uint32_t i = 0; i * sizeof(uint32_t) < svalue.length(); i++) {
+            memcpy(&entry, svalue.data() + (i * sizeof(uint32_t)), sizeof(uint32_t));
+            vals->Set(i, Nan::New(entry));
+        }
+
+        row->Set(1, vals);
 
         out->Set(out_idx++, row);
     }
@@ -2261,12 +2277,34 @@ NAN_METHOD(NormalizationCache::writebatch) {
 
     rocksdb::WriteBatch batch;
     for (uint32_t i = 0; i < data->Length(); i++) {
+        if (!data->Get(i)->IsArray()) return Nan::ThrowTypeError("second argument must be an array of arrays");
         Local<Array> row = Local<Array>::Cast(data->Get(i));
-        uint32_t key = static_cast<uint32_t>(row->Get(0)->IntegerValue());
-        uint32_t value = static_cast<uint32_t>(row->Get(1)->IntegerValue());
 
+        if (row->Length() != 2) return Nan::ThrowTypeError("each element must have two values");
+
+        uint32_t key = static_cast<uint32_t>(row->Get(0)->IntegerValue());
         std::string skey(reinterpret_cast<const char*>(&key), sizeof(uint32_t));
-        std::string svalue(reinterpret_cast<const char*>(&value), sizeof(uint32_t));
+
+        std::string svalue("");
+
+        Local<Value> nvalue = row->Get(1);
+        uint32_t ivalue;
+        if (nvalue->IsNumber()) {
+            ivalue = static_cast<uint32_t>(nvalue->IntegerValue());
+            svalue.append(reinterpret_cast<const char*>(&ivalue), sizeof(uint32_t));
+        } else if (nvalue->IsArray()) {
+            Local<Array> nvalue_arr = Local<Array>::Cast(nvalue);
+            if (!nvalue_arr->IsNull() && !nvalue_arr->IsUndefined()) {
+                for (uint32_t j = 0; j < nvalue_arr->Length(); j++) {
+                    ivalue = static_cast<uint32_t>(nvalue_arr->Get(j)->IntegerValue());
+                    svalue.append(reinterpret_cast<const char*>(&ivalue), sizeof(uint32_t));
+                }
+            } else {
+                return Nan::ThrowTypeError("values should be either numbers or arrays of numbers");
+            }
+        } else {
+            return Nan::ThrowTypeError("values should be either numbers or arrays of numbers");
+        }
 
         batch.Put(skey, svalue);
     }
