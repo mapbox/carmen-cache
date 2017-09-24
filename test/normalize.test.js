@@ -24,12 +24,16 @@ var words = [
     "apple lane",
     "pear avenue",
     "pear ave",
+    "burbarg",
+    "buerbarg"
 ].sort();
 
 var norm = {
     'first street': '1st st',
     'frank boulevard': 'frank blvd',
-    'pear avenue': 'pear ave'
+    'pear avenue': 'pear ave',
+    // for inconsistently normalized text, allow storing more than one possible normalization
+    'burbarg': ['burbarg', 'buerbarg']
 }
 
 var file = tmpfile();
@@ -38,8 +42,9 @@ tape('write/dump', function(assert) {
     var cache = new carmenCache.NormalizationCache(file, false);
 
     var map = [];
-    for (var key in norm) {
-        map.push([words.indexOf(key), words.indexOf(norm[key])])
+    for (var key of Object.keys(norm).sort()) {
+        var val = (Array.isArray(norm[key]) ? norm[key] : [norm[key]]).map(function(x) { return words.indexOf(x); }).sort();
+        map.push([words.indexOf(key), val]);
     }
 
     // These tests just illustrate what the mapping actually is storing.
@@ -48,6 +53,8 @@ tape('write/dump', function(assert) {
     assert.deepEqual(words, [
         "1st st",
         "apple lane",
+        "buerbarg",
+        "burbarg",
         "first street",
         "frank blvd",
         "frank boulevard",
@@ -55,9 +62,10 @@ tape('write/dump', function(assert) {
         "pear ave",
         "pear avenue"
     ], "confirm map sorted order simulating dawg text order");
-    assert.deepEqual(map[0], [ 2, 0 ], 'first street => 1st st');
-    assert.deepEqual(map[1], [ 4, 3 ], 'frank boulevard => frank blvd');
-    assert.deepEqual(map[2], [ 7, 6 ], 'pear avenue => pear ave');
+    assert.deepEqual(map[0], [ 3, [ 2, 3 ] ], 'burbarg => [buerbarg, burbarg]');
+    assert.deepEqual(map[1], [ 4, [ 0 ] ], 'first street => 1st st');
+    assert.deepEqual(map[2], [ 6, [ 5 ] ], 'frank boulevard => frank blvd');
+    assert.deepEqual(map[3], [ 9, [ 8 ] ], 'pear avenue => pear ave');
 
     cache.writeBatch(map);
 
@@ -66,6 +74,9 @@ tape('write/dump', function(assert) {
     // test some invalid input
     assert.throws(function() { cache.writeBatch(); });
     assert.throws(function() { cache.writeBatch(7); });
+    assert.throws(function() { cache.writeBatch([7]); });
+    assert.throws(function() { cache.writeBatch([[7]]); });
+    assert.throws(function() { cache.writeBatch([[7, "asdf"]]); });
 
     return assert.end();
 });
@@ -73,15 +84,28 @@ tape('write/dump', function(assert) {
 tape('read', function(assert) {
     var cache = new carmenCache.NormalizationCache(file, true);
 
-    assert.equal(cache.get(words.indexOf('first street')), words.indexOf('1st st'));
+    assert.deepEqual(cache.get(words.indexOf('first street')), [ words.indexOf('1st st') ]);
     assert.equal(cache.get(8888), undefined);
 
-    // find the indexes of all the keys that start with f
-    var f = [];
-    for (var i = 0; i < words.length; i++) if (words[i].charAt(0) == 'f') f.push(i);
-    assert.deepEqual(cache.getPrefixRange(f[0], f.length), [words.indexOf('1st st')], 'found normalization for 1st st but not frank boulevard');
+    var firstWithPrefix = function(p) {
+        var f = [];
+        for (var i = 0; i < words.length; i++) if (words[i].startsWith(p)) return i;
+    }
 
-    assert.deepEqual(cache.getPrefixRange(words.indexOf('frank boulevard'), 1), [words.indexOf('frank blvd')], 'found frank boulevard because no prefixes are shared');
+    var countWithPrefix = function(p) {
+        var c = 0;;
+        for (var i = 0; i < words.length; i++) if (words[i].startsWith(p)) c++;
+        return c;
+    }
+
+    assert.deepEqual(cache.getPrefixRange(firstWithPrefix("f"), countWithPrefix("f")), [words.indexOf('1st st')], 'found normalization for 1st st but not frank boulevard');
+    assert.deepEqual(cache.getPrefixRange(firstWithPrefix("frank"), countWithPrefix("frank")), [], 'found nothing because all normalizations share the searched prefix');
+    assert.deepEqual(cache.getPrefixRange(firstWithPrefix("frank bo"), countWithPrefix("frank bo")), [words.indexOf('frank blvd')], 'found frank boulevard because no prefixes are shared');
+
+    assert.deepEqual(cache.getPrefixRange(firstWithPrefix("bu"), countWithPrefix("bu")), [], 'found nothing because all normalizations share the searched prefix');
+    assert.deepEqual(cache.getPrefixRange(firstWithPrefix("bue"), countWithPrefix("bue")), [], 'found nothing because bue... doesn\'t normalize to anything');
+    assert.deepEqual(cache.getPrefixRange(firstWithPrefix("bur"), countWithPrefix("bur")), [words.indexOf('buerbarg')], 'found buerbarg but not burbarg because burbarg shares a prefix with itself');
+    assert.deepEqual(cache.get(firstWithPrefix("bur")), [words.indexOf('buerbarg'), words.indexOf('burbarg')], 'found buerbarg and burbarg with regular get because nothing gets filtered');
 
     // test some invalid input
     assert.throws(function() { new carmenCache.NormalizationCache() });
