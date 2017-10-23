@@ -1309,3 +1309,50 @@ test('coalesce args', function(assert) {
     });
 })();
 
+//tests for checking adding penalty to the relev
+(function() {
+    var memA = new MemoryCache('a', 0);
+    memA._set('1', [
+        Grid.encode({
+            id: 1,
+            x: 0,
+            y: 0,
+            relev: 0.8,
+            score: 1,
+            relevPenalty: 10
+        }),
+        Grid.encode({
+            id: 2,
+            x: 1,
+            y: 1,
+            relev: 1,
+            score: 1,
+            relevPenalty: 90
+        })
+    ]);
+
+    var rocksA = toRocksCache(memA);
+
+    [[memA, rocksA]].forEach(function(caches) {
+        var a = caches[0];
+
+        test('coalesce: ' + a.id + ', ', function(assert) {
+            coalesce([{
+                cache: a,
+                mask: 1 << 1,
+                idx: 0,
+                zoom: 1,
+                weight: 0.5,
+                phrase: '1',
+                prefix: false,
+            }], {
+                bboxzxy: [1, 0, 0, 1, 0]
+            }, function(err, res) {
+                console.log('res', res);
+                assert.ifError(err);
+                assert.deepEqual(res.length, 2, '2 results: 1/0/0, 2/3/0');
+                assert.end();
+            });
+        });
+    });
+})();

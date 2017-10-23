@@ -163,10 +163,12 @@ intarray __getmatching(MemoryCache const* c, std::string phrase, bool match_pref
         size_t item_length = item.first.length();
 
         if (item_length < phrase_length) continue;
-
+        
+        //memcpy -- similar libraries
         if (memcmp(phrase_data, item_data, phrase_length) == 0) {
             langfield_type message_langfield = extract_langfield(item.first);
-
+            
+            //TO DO: check &
             if (message_langfield & langfield) {
                 array.reserve(array.size() + item.second.size());
                 for (auto const& grid : item.second) {
@@ -1292,6 +1294,7 @@ double scoredist(unsigned zoom, double distance, double score) {
 }
 
 void coalesceFinalize(CoalesceBaton* baton, std::vector<Context> && contexts) {
+    //assign penalty for lower relevance
     if (!contexts.empty()) {
         // Coalesce stack, generate relevs.
         double relevMax = contexts[0].relev;
@@ -1301,12 +1304,13 @@ void coalesceFinalize(CoalesceBaton* baton, std::vector<Context> && contexts) {
         std::size_t max_contexts = 40;
         baton->features.reserve(max_contexts);
         for (auto && context : contexts) {
+            if (relev < 0.2) relevancePenalty = 90;
             // Maximum allowance of coalesced features: 40.
             if (total >= max_contexts) break;
 
             // Since `coalesced` is sorted by relev desc at first
             // threshold miss we can break the loop.
-            if (relevMax - context.relev >= 0.25) break;
+            if (relevMax - context.relev >= 0.25 && context.relevancePenalty >= 90) break;
 
             // Only collect each feature once.
             uint32_t id = context.coverList[0].tmpid;
