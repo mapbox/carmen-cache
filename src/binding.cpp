@@ -1053,7 +1053,8 @@ struct PhrasematchSubq {
                     unsigned short i,
                     unsigned short z,
                     uint32_t m,
-                    langfield_type l) :
+                    langfield_type l,
+                    bool em) :
         cache(c),
         type(t),
         weight(w),
@@ -1062,7 +1063,8 @@ struct PhrasematchSubq {
         idx(i),
         zoom(z),
         mask(m),
-        langfield(l) {}
+        langfield(l),
+        exact_match(em) {}
     void *cache;
     char type;
     double weight;
@@ -1072,6 +1074,7 @@ struct PhrasematchSubq {
     unsigned short zoom;
     uint32_t mask;
     langfield_type langfield;
+    bool exact_match;
     PhrasematchSubq& operator=(PhrasematchSubq && c) = default;
     PhrasematchSubq(PhrasematchSubq && c) = default;
 };
@@ -1742,6 +1745,7 @@ NAN_METHOD(coalesce) {
             unsigned short zoom;
             uint32_t mask;
             langfield_type langfield;
+            bool exact_match;
 
             // TODO: this is verbose: we could write some generic functions to do this robust conversion per type
             if (!jsStack->Has(Nan::New("idx").ToLocalChecked())) {
@@ -1860,7 +1864,8 @@ NAN_METHOD(coalesce) {
                         idx,
                         zoom,
                         mask,
-                        langfield
+                        langfield,
+                        exact_match
                     );
                 } else {
                     baton->stack.emplace_back(
@@ -1872,7 +1877,8 @@ NAN_METHOD(coalesce) {
                         idx,
                         zoom,
                         mask,
-                        langfield
+                        langfield,
+                        exact_match
                     );
                 }
             }
