@@ -1307,13 +1307,12 @@ void coalesceFinalize(CoalesceBaton* baton, std::vector<Context> && contexts) {
         std::size_t max_contexts = 40;
         baton->features.reserve(max_contexts);
         for (auto && context : contexts) {
-            if (relev < 0.2) relevancePenalty = 90;
             // Maximum allowance of coalesced features: 40.
             if (total >= max_contexts) break;
 
             // Since `coalesced` is sorted by relev desc at first
             // threshold miss we can break the loop.
-            if (relevMax - context.relev >= 0.25 && context.relevancePenalty >= 90) break;
+            if (relevMax - context.relev >= 0.25) break;
 
             // Only collect each feature once.
             uint32_t id = context.coverList[0].tmpid;
