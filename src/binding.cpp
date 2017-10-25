@@ -1091,6 +1091,7 @@ struct Cover {
     double distance;
     double scoredist;
     bool matches_language;
+    bool relevancePenalty;
 };
 
 struct Context {
@@ -1649,6 +1650,7 @@ Local<Object> coverToObject(Cover const& cover) {
     object->Set(Nan::New("distance").ToLocalChecked(), Nan::New<Number>(cover.distance));
     object->Set(Nan::New("scoredist").ToLocalChecked(), Nan::New<Number>(cover.scoredist));
     object->Set(Nan::New("matches_language").ToLocalChecked(), Nan::New<Boolean>(cover.matches_language));
+    object->Set(Nan::New("relevancePenalty").ToLocalChecked(), Nan::New<Boolean>(cover.relevancePenalty));
     return object;
 }
 Local<Array> contextToArray(Context const& context) {
