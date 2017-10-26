@@ -163,11 +163,11 @@ intarray __getmatching(MemoryCache const* c, std::string phrase, bool match_pref
         size_t item_length = item.first.length();
 
         if (item_length < phrase_length) continue;
-        
+
         //memcpy -- similar libraries
         if (memcmp(phrase_data, item_data, phrase_length) == 0) {
             langfield_type message_langfield = extract_langfield(item.first);
-            
+
             //TO DO: check &
             if (message_langfield & langfield) {
                 array.reserve(array.size() + item.second.size());
@@ -1389,6 +1389,8 @@ void coalesceSingle(uv_work_t* req) {
             cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
             cover.relev = cover.relev * subq.weight;
             if (!cover.matches_language) cover.relev *= .8;
+            // if (!cover.exact_match) cover.relev *= .5;
+            // std::cout << "**** value is: " << cover << std::endl;
             cover.distance = proximity ? tileDist(cx, cy, cover.x, cover.y) : 0;
             cover.scoredist = proximity ? scoredist(cz, cover.distance, cover.score) : cover.score;
 
