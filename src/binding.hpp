@@ -31,6 +31,8 @@
 #include <cstring>
 
 #include "rocksdb/db.h"
+#include "rocksdb/comparator.h"
+#include "rocksdb/write_batch.h"
 
 namespace carmen {
 
@@ -83,6 +85,22 @@ public:
     static NAN_METHOD(_set);
     static NAN_METHOD(coalesce);
     explicit RocksDBCache();
+    void _ref() { Ref(); }
+    void _unref() { Unref(); }
+    std::shared_ptr<rocksdb::DB> db;
+};
+
+class NormalizationCache: public node::ObjectWrap {
+public:
+    ~NormalizationCache();
+    static Nan::Persistent<v8::FunctionTemplate> constructor;
+    static void Initialize(v8::Handle<v8::Object> target);
+    static NAN_METHOD(New);
+    static NAN_METHOD(get);
+    static NAN_METHOD(getprefixrange);
+    static NAN_METHOD(getall);
+    static NAN_METHOD(writebatch);
+    explicit NormalizationCache();
     void _ref() { Ref(); }
     void _unref() { Unref(); }
     std::shared_ptr<rocksdb::DB> db;

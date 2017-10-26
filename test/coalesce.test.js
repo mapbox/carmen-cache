@@ -152,6 +152,14 @@ test('coalesce args', function(assert) {
     }
 
     assert.throws(function() {
+        coalesce([valid_subq], { radius:null },function(){} );
+    }, /radius must be a number/, 'throws');
+
+    assert.throws(function() {
+        coalesce([valid_subq], { radius:5e9 },function(){} );
+    }, /encountered radius too large to fit in unsigned/, 'throws');
+
+    assert.throws(function() {
         coalesce([valid_subq], { bboxzxy:null },function(){} );
     }, /bboxzxy must be an array/, 'throws');
 
@@ -308,11 +316,11 @@ test('coalesce args', function(assert) {
             }, function(err, res) {
                 assert.ifError(err);
                 assert.deepEqual(res[0].relev, 1, '0.relev');
-                assert.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 3, idx: 0, relev: 1.0, score: 1, scoredist: 112.5, tmpid: 3, x: 3, y: 3 }, '0.0');
+                assert.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 3, idx: 0, relev: 1.0, score: 1, scoredist: 124.85901539399482, tmpid: 3, x: 3, y: 3 }, '0.0');
                 assert.deepEqual(res[1].relev, 1, '1.relev');
-                assert.deepEqual(res[1][0], { matches_language: true, distance: 8, id: 1, idx: 0, relev: 1.0, score: 7, scoredist: 7, tmpid: 1, x: 1, y: 1 }, '1.0');
+                assert.deepEqual(res[1][0], { matches_language: true, distance: 2.8284271247461903, id: 1, idx: 0, relev: 1.0, score: 7, scoredist: 7, tmpid: 1, x: 1, y: 1 }, '1.0');
                 assert.deepEqual(res[2].relev, 0.8, '2.relev');
-                assert.deepEqual(res[2][0], { matches_language: true, distance: 2, id: 2, idx: 0, relev: 0.8, score: 3, scoredist: 3, tmpid: 2, x: 2, y: 2 }, '2.0');
+                assert.deepEqual(res[2][0], { matches_language: true, distance: 1.4142135623730951, id: 2, idx: 0, relev: 0.8, score: 3, scoredist: 3, tmpid: 2, x: 2, y: 2 }, '2.0');
                 assert.end();
             });
         });
@@ -456,10 +464,10 @@ test('coalesce args', function(assert) {
                 assert.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 1, idx: 0, relev: 1.0, score: 0, scoredist: 0, tmpid: 1, x: 1, y: 1 }, '0.0');
                 assert.deepEqual(res[1].relev, 1, '1.relev');
                 assert.deepEqual(res[1][0], { matches_language: true, distance: 0, id: 3, idx: 0, relev: 1.0, score: 0, scoredist: 0, tmpid: 3, x: 1, y: 1 }, '0.0');
-                assert.deepEqual(res[2].relev, 0.8, '2.relev');
-                assert.deepEqual(res[2][0], { matches_language: false, distance: 0, id: 2, idx: 0, relev: 0.8, score: 0, scoredist: 0, tmpid: 2, x: 1, y: 1 }, '0.0');
-                assert.deepEqual(res[3].relev, 0.8, '3.relev');
-                assert.deepEqual(res[3][0], { matches_language: false, distance: 0, id: 4, idx: 0, relev: 0.8, score: 0, scoredist: 0, tmpid: 4, x: 1, y: 1 }, '0.0');
+                assert.deepEqual(res[2].relev, 0.9, '2.relev');
+                assert.deepEqual(res[2][0], { matches_language: false, distance: 0, id: 2, idx: 0, relev: 0.9, score: 0, scoredist: 0, tmpid: 2, x: 1, y: 1 }, '0.0');
+                assert.deepEqual(res[3].relev, 0.9, '3.relev');
+                assert.deepEqual(res[3][0], { matches_language: false, distance: 0, id: 4, idx: 0, relev: 0.9, score: 0, scoredist: 0, tmpid: 4, x: 1, y: 1 }, '0.0');
                 assert.end();
             });
         });
@@ -476,14 +484,14 @@ test('coalesce args', function(assert) {
             }], {}, function(err, res) {
                 assert.ifError(err);
                 assert.equal(res.length, 4);
-                assert.deepEqual(res[0].relev, 0.8, '0.relev');
-                assert.deepEqual(res[0][0], { matches_language: false, distance: 0, id: 1, idx: 0, relev: 0.8, score: 0, scoredist: 0, tmpid: 1, x: 1, y: 1 }, '0.0');
-                assert.deepEqual(res[1].relev, 0.8, '1.relev');
-                assert.deepEqual(res[1][0], { matches_language: false, distance: 0, id: 2, idx: 0, relev: 0.8, score: 0, scoredist: 0, tmpid: 2, x: 1, y: 1 }, '0.0');
-                assert.deepEqual(res[2].relev, 0.8, '2.relev');
-                assert.deepEqual(res[2][0], { matches_language: false, distance: 0, id: 3, idx: 0, relev: 0.8, score: 0, scoredist: 0, tmpid: 3, x: 1, y: 1 }, '0.0');
-                assert.deepEqual(res[3].relev, 0.8, '3.relev');
-                assert.deepEqual(res[3][0], { matches_language: false, distance: 0, id: 4, idx: 0, relev: 0.8, score: 0, scoredist: 0, tmpid: 4, x: 1, y: 1 }, '0.0');
+                assert.deepEqual(res[0].relev, 0.9, '0.relev');
+                assert.deepEqual(res[0][0], { matches_language: false, distance: 0, id: 1, idx: 0, relev: 0.9, score: 0, scoredist: 0, tmpid: 1, x: 1, y: 1 }, '0.0');
+                assert.deepEqual(res[1].relev, 0.9, '1.relev');
+                assert.deepEqual(res[1][0], { matches_language: false, distance: 0, id: 2, idx: 0, relev: 0.9, score: 0, scoredist: 0, tmpid: 2, x: 1, y: 1 }, '0.0');
+                assert.deepEqual(res[2].relev, 0.9, '2.relev');
+                assert.deepEqual(res[2][0], { matches_language: false, distance: 0, id: 3, idx: 0, relev: 0.9, score: 0, scoredist: 0, tmpid: 3, x: 1, y: 1 }, '0.0');
+                assert.deepEqual(res[3].relev, 0.9, '3.relev');
+                assert.deepEqual(res[3][0], { matches_language: false, distance: 0, id: 4, idx: 0, relev: 0.9, score: 0, scoredist: 0, tmpid: 4, x: 1, y: 1 }, '0.0');
                 assert.end();
             });
         });
@@ -591,11 +599,11 @@ test('coalesce args', function(assert) {
                 assert.ifError(err);
                 // sorts by relev, score
                 assert.deepEqual(res[0].relev, 1, '0.relev');
-                assert.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 3, idx: 1, relev: 0.5, score: 1, scoredist: 112.5, tmpid: 33554435, x: 3, y: 3 }, '0.0');
-                assert.deepEqual(res[0][1], { matches_language: true, distance: 8, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 1, x: 1, y: 1 }, '0.1');
+                assert.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 3, idx: 1, relev: 0.5, score: 1, scoredist: 124.85901539399482, tmpid: 33554435, x: 3, y: 3 }, '0.0');
+                assert.deepEqual(res[0][1], { matches_language: true, distance: 2.8284271247461903, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 1, x: 1, y: 1 }, '0.1');
                 assert.deepEqual(res[1].relev, 1, '1.relev');
-                assert.deepEqual(res[1][0], { matches_language: true, distance: 2, id: 2, idx: 1, relev: 0.5, score: 7, scoredist: 7, tmpid: 33554434, x: 2, y: 2 }, '1.0');
-                assert.deepEqual(res[1][1], { matches_language: true, distance: 8, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 1, x: 1, y: 1 }, '1.1');
+                assert.deepEqual(res[1][0], { matches_language: true, distance: 1.4142135623730951, id: 2, idx: 1, relev: 0.5, score: 7, scoredist: 7, tmpid: 33554434, x: 2, y: 2 }, '1.0');
+                assert.deepEqual(res[1][1], { matches_language: true, distance: 2.8284271247461903, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 1, x: 1, y: 1 }, '1.1');
                 assert.end();
             });
         });
@@ -692,9 +700,9 @@ test('coalesce args', function(assert) {
                 assert.deepEqual(res[0].relev, 1, '0.relev');
                 assert.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 2, idx: 1, relev: 0.5, score: 1, scoredist: 1, tmpid: 33554434, x: 1, y: 1 }, '0.0');
                 assert.deepEqual(res[0][1], { matches_language: true, distance: 0, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 1, x: 1, y: 1 }, '0.1');
-                // one of our indexes has languages and the other does not, so relev will be 0.9 because it's (.5 + .8*.5)
-                assert.deepEqual(res[1].relev, 0.9, '1.relev');
-                assert.deepEqual(res[1][0], { matches_language: false, distance: 0, id: 3, idx: 1, relev: 0.4, score: 1, scoredist: 1, tmpid: 33554435, x: 1, y: 1 }, '1.0');
+                // one of our indexes has languages and the other does not, so relev will be 0.95 because it's (.5 + .9*.5)
+                assert.deepEqual(res[1].relev, 0.95, '1.relev');
+                assert.deepEqual(res[1][0], { matches_language: false, distance: 0, id: 3, idx: 1, relev: 0.45, score: 1, scoredist: 1, tmpid: 33554435, x: 1, y: 1 }, '1.0');
                 assert.deepEqual(res[1][1], { matches_language: true, distance: 0, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 1, x: 1, y: 1 }, '1.1');
                 assert.end();
             });
@@ -720,12 +728,12 @@ test('coalesce args', function(assert) {
             }], {}, function(err, res) {
                 assert.ifError(err);
                 // sorts by relev, score
-                assert.deepEqual(res[0].relev, 0.9, '0.relev');
-                assert.deepEqual(res[0][0], { matches_language: false, distance: 0, id: 2, idx: 1, relev: 0.4, score: 1, scoredist: 1, tmpid: 33554434, x: 1, y: 1 }, '0.0');
+                assert.deepEqual(res[0].relev, 0.95, '0.relev');
+                assert.deepEqual(res[0][0], { matches_language: false, distance: 0, id: 2, idx: 1, relev: 0.45, score: 1, scoredist: 1, tmpid: 33554434, x: 1, y: 1 }, '0.0');
                 assert.deepEqual(res[0][1], { matches_language: true, distance: 0, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 1, x: 1, y: 1 }, '0.1');
                 // one of our indexes has languages and the other does not, so relev will be 0.9 because it's (.5 + .8*.5)
-                assert.deepEqual(res[1].relev, 0.9, '1.relev');
-                assert.deepEqual(res[1][0], { matches_language: false, distance: 0, id: 3, idx: 1, relev: 0.4, score: 1, scoredist: 1, tmpid: 33554435, x: 1, y: 1 }, '1.0');
+                assert.deepEqual(res[1].relev, 0.95, '1.relev');
+                assert.deepEqual(res[1][0], { matches_language: false, distance: 0, id: 3, idx: 1, relev: 0.45, score: 1, scoredist: 1, tmpid: 33554435, x: 1, y: 1 }, '1.0');
                 assert.deepEqual(res[1][1], { matches_language: true, distance: 0, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 1, x: 1, y: 1 }, '1.1');
                 assert.end();
             });
@@ -813,7 +821,7 @@ test('coalesce args', function(assert) {
                 phrase: '1',
                 prefix: false,
             }], {
-                centerzxy: [14,4605,6200]
+                centerzxy: [14,4610,6200]
             }, function(err, res) {
                 assert.ifError(err);
                 assert.deepEqual(res[0][0].id, 2, 'matches feat 2 (higher score)');
