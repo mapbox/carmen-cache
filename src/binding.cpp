@@ -1395,9 +1395,7 @@ void coalesceSingle(uv_work_t* req) {
             cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
             cover.relev = cover.relev * subq.weight;
             if (!cover.matches_language) cover.relev *= .8;
-
-            // std::cout << "**** phrasematch is: " << PhrasematchSubq << std::endl;
-            // if (!PhrasematchSubq.exact_match) cover.relev *= .5;
+            if (!subq.exact_match) cover.relev *= .5;
 
             cover.distance = proximity ? tileDist(cx, cy, cover.x, cover.y) : 0;
             cover.scoredist = proximity ? scoredist(cz, cover.distance, cover.score, baton->radius) : cover.score;
