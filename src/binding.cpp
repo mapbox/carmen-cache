@@ -1846,6 +1846,16 @@ NAN_METHOD(coalesce) {
                 langfield = langarrayToLangfield(carray);
             }
 
+            if (!jsStack->Has(Nan::New("exact_match").ToLocalChecked())) {
+                return Nan::ThrowTypeError("missing exact_match property");
+            } else {
+                Local<Value> prop_val = jsStack->Get(Nan::New("exact_match").ToLocalChecked());
+                if (!prop_val->IsBoolean()) {
+                    return Nan::ThrowTypeError("exact_match value must be a boolean value");
+                }
+                exact_match = prop_val->BooleanValue();
+            }
+
             if (!jsStack->Has(Nan::New("cache").ToLocalChecked())) {
                 return Nan::ThrowTypeError("missing cache property");
             } else {
