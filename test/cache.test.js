@@ -106,6 +106,31 @@ tape('get / set / list / pack / load (with lang codes)', function(assert) {
     assert.end();
 });
 
+tape('iteration (with lang codes)', function(assert) {
+    var cache = new carmenCache.MemoryCache('a');
+
+    var ids = [];
+    var expected = [];
+    for (var i = 0; i < 1000; i++) {
+        var id = Math.random().toString(36).replace(/[^a-z]+/g, '').substr(0, Math.floor(Math.random() * 20) + 1);
+        ids.push(id);
+
+        cache._set(id, [0,1,2], [0]);
+        cache._set(id, [7,8,9], [1]);
+        cache._set(id, [12,13,14], [0,1]);
+    }
+
+    var pack = tmpfile();
+    cache.pack(pack);
+    var loader = new carmenCache.RocksDBCache('b', pack);
+
+    var sortedIds = Array.prototype.slice.call(ids).sort();
+    var dumpedIds = Array.from(loader.keys());
+    assert.deepEqual(sortedIds, dumpedIds, "iterator produces all keys, in sorted order");
+
+    assert.end();
+});
+
 tape('pack', function(assert) {
     var cache = new carmenCache.MemoryCache('a');
     cache._set('5', [0,1,2]);

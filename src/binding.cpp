@@ -322,6 +322,7 @@ void RocksDBCache::Initialize(Handle<Object> target) {
     Nan::SetPrototypeMethod(t, "list", RocksDBCache::list);
     Nan::SetPrototypeMethod(t, "_get", _get);
     Nan::SetPrototypeMethod(t, "_getMatching", _getmatching);
+    Nan::SetPrototypeMethod(t, "keys", keys);
     Nan::SetMethod(t, "merge", merge);
     target->Set(Nan::New("RocksDBCache").ToLocalChecked(), t->GetFunction());
     constructor.Reset(t);
@@ -2031,6 +2032,14 @@ NAN_METHOD(RocksDBCache::_getmatching) {
     return _genericgetmatching<RocksDBCache>(info);
 }
 
+NAN_METHOD(RocksDBCache::keys) {
+    v8::Local<v8::Function> cons = Nan::New(RocksDBCacheKeyIterator::constructor());
+    const size_t argc = 1;
+    Local<Value> argv[argc] = { info.This() };
+    info.GetReturnValue().Set(Nan::NewInstance(cons, argc, argv).ToLocalChecked());
+    return;
+}
+
 void NormalizationCache::Initialize(Handle<Object> target) {
     Nan::HandleScope scope;
     Local<FunctionTemplate> t = Nan::New<FunctionTemplate>(NormalizationCache::New);
@@ -2314,11 +2323,97 @@ NAN_METHOD(NormalizationCache::writebatch) {
     return;
 }
 
+NAN_METHOD(RocksDBCacheKeyIterator::New) {
+    auto* const self = new RocksDBCacheKeyIterator(node::ObjectWrap::Unwrap<RocksDBCache>(info[0]->ToObject()));
+    self->Wrap(info.This());
+}
+
+NAN_METHOD(RocksDBCacheKeyIterator::Next) {
+    RocksDBCacheKeyIterator* kit = Nan::ObjectWrap::Unwrap<RocksDBCacheKeyIterator>(info.This());
+
+    // this is an infinite loop but we're guaranteed to exit it by returning
+    // unless we hit an explicit `continue`
+    while (1) {
+        std::string skey;
+        Local<Object> out = Nan::New<Object>();
+        if (kit->rit->Valid()) {
+            skey = kit->rit->key().ToString();
+            // skip over prefix-cache keys
+            if (skey[0] == '=') {
+                kit->rit->Next();
+                continue;
+            }
+
+            // shave off the lang separator and everything after it
+            skey.resize(skey.find(LANGFIELD_SEPARATOR));
+            // skip repeat entries that differ only by langfield
+            if (kit->last == skey) {
+                kit->rit->Next();
+                continue;
+            }
+
+            out->Set(Nan::New("value").ToLocalChecked(), Nan::New(skey).ToLocalChecked());
+            out->Set(Nan::New("done").ToLocalChecked(), Nan::New<Boolean>(false));
+            kit->last = skey;
+
+            kit->rit->Next();
+        } else {
+            out->Set(Nan::New("done").ToLocalChecked(), Nan::New<Boolean>(true));
+        }
+
+        info.GetReturnValue().Set(out);
+        return;
+    }
+}
+
+NAN_METHOD(RocksDBCacheKeyIterator::_iterator) {
+    info.GetReturnValue().Set(info.This());
+    return;
+}
+
+void RocksDBCacheKeyIterator::Initialize(v8::Local<v8::Object> target) {
+    v8::Local<v8::FunctionTemplate> tpl = Nan::New<v8::FunctionTemplate>(New);
+    tpl->SetClassName(Nan::New("RocksDBCacheKeyIterator").ToLocalChecked());
+    tpl->InstanceTemplate()->SetInternalFieldCount(1);
+
+    SetPrototypeMethod(tpl, "next", Next);
+
+    // NAN lacks a way to call SetPrototypeMethod with Symbol.iterator as the function name
+    // instead of a string, so copy and hack that macro here:
+    v8::Local<v8::FunctionTemplate> t = Nan::New<v8::FunctionTemplate>(
+        _iterator,
+        v8::Local<v8::Value>(),
+        Nan::New<v8::Signature>(tpl)
+    );
+    auto si = v8::Symbol::GetIterator(v8::Isolate::GetCurrent());
+    tpl->PrototypeTemplate()->Set(si, t);
+    t->SetClassName(Nan::New("Symbol(Symbol.iterator)").ToLocalChecked());
+
+    constructor().Reset(Nan::GetFunction(tpl).ToLocalChecked());
+    target->Set(Nan::New("RocksDBCacheKeyIterator").ToLocalChecked(), tpl->GetFunction());
+}
+
+RocksDBCacheKeyIterator::RocksDBCacheKeyIterator(RocksDBCache* cache_) {
+    cache = cache_;
+    persistentRef.Reset(cache_->handle());
+
+    db = cache->db;
+
+    last = "";
+
+    rit.reset(db->NewIterator(rocksdb::ReadOptions()));
+    rit->SeekToFirst();
+}
+RocksDBCacheKeyIterator::~RocksDBCacheKeyIterator() {
+    persistentRef.Reset();
+}
+
 extern "C" {
     static void start(Handle<Object> target) {
         MemoryCache::Initialize(target);
         RocksDBCache::Initialize(target);
         NormalizationCache::Initialize(target);
+        RocksDBCacheKeyIterator::Initialize(target);
         Nan::SetMethod(target, "coalesce", coalesce);
     }
 }

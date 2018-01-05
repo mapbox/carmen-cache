@@ -84,6 +84,7 @@ public:
     static NAN_METHOD(_getmatching);
     static NAN_METHOD(_set);
     static NAN_METHOD(coalesce);
+    static NAN_METHOD(keys);
     explicit RocksDBCache();
     void _ref() { Ref(); }
     void _unref() { Unref(); }
@@ -104,6 +105,38 @@ public:
     void _ref() { Ref(); }
     void _unref() { Unref(); }
     std::shared_ptr<rocksdb::DB> db;
+};
+
+class RocksDBCacheKeyIterator : public Nan::ObjectWrap {
+  public:
+    static void Initialize(v8::Local<v8::Object> target);
+
+    static NAN_METHOD(New);
+    static NAN_METHOD(Next);
+    static NAN_METHOD(_iterator);
+
+    static inline Nan::Persistent<v8::Function>& constructor() {
+        static Nan::Persistent<v8::Function> my_constructor;
+        return my_constructor;
+    }
+
+    RocksDBCacheKeyIterator(RocksDBCache* cache_);
+
+    // non copyable/movable
+    RocksDBCacheKeyIterator(RocksDBCacheKeyIterator const&) = delete;
+    RocksDBCacheKeyIterator& operator=(RocksDBCacheKeyIterator const&) = delete;
+    RocksDBCacheKeyIterator(RocksDBCacheKeyIterator&&) = delete;
+    RocksDBCacheKeyIterator& operator=(RocksDBCacheKeyIterator&&) = delete;
+
+  private:
+    ~RocksDBCacheKeyIterator();
+    RocksDBCache* cache;
+
+    std::shared_ptr<rocksdb::DB> db;
+    std::unique_ptr<rocksdb::Iterator> rit;
+    std::string last;
+
+    Nan::Persistent<v8::Object> persistentRef;
 };
 
 #define CACHE_MESSAGE 1
