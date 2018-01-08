@@ -134,9 +134,18 @@ class RocksDBCacheKeyIterator : public Nan::ObjectWrap {
 
     std::shared_ptr<rocksdb::DB> db;
     std::unique_ptr<rocksdb::Iterator> rit;
-    std::string last;
+
+    std::vector<std::string> final_prefixes;
+    std::vector<std::string>::iterator prefix_position;
+
+    std::vector<std::string> bucket;
+    std::vector<std::string>::iterator bucket_position;
+
+    std::string current_key;
 
     Nan::Persistent<v8::Object> persistentRef;
+
+    bool AdvanceBucket();
 };
 
 #define CACHE_MESSAGE 1

@@ -111,7 +111,7 @@ tape('iteration (with lang codes)', function(assert) {
 
     var ids = [];
     var expected = [];
-    for (var i = 0; i < 1000; i++) {
+    for (var i = 0; i < 10000; i++) {
         var id = Math.random().toString(36).replace(/[^a-z]+/g, '').substr(0, Math.floor(Math.random() * 20) + 1);
         ids.push(id);
 
@@ -124,9 +124,10 @@ tape('iteration (with lang codes)', function(assert) {
     cache.pack(pack);
     var loader = new carmenCache.RocksDBCache('b', pack);
 
-    var sortedIds = Array.prototype.slice.call(ids).sort();
+    var sortedUniqueIds = Array.prototype.slice.call(ids).sort().filter((x, i, a) => !i || x != a[i-1]);
     var dumpedIds = Array.from(loader.keys());
-    assert.deepEqual(sortedIds, dumpedIds, "iterator produces all keys, in sorted order");
+
+    assert.deepEqual(sortedUniqueIds, dumpedIds, "iterator produces all keys, in sorted order");
 
     assert.end();
 });

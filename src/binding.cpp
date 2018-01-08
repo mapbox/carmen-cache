@@ -2330,40 +2330,24 @@ NAN_METHOD(RocksDBCacheKeyIterator::New) {
 
 NAN_METHOD(RocksDBCacheKeyIterator::Next) {
     RocksDBCacheKeyIterator* kit = Nan::ObjectWrap::Unwrap<RocksDBCacheKeyIterator>(info.This());
+    Local<Object> out = Nan::New<Object>();
 
-    // this is an infinite loop but we're guaranteed to exit it by returning
-    // unless we hit an explicit `continue`
-    while (1) {
-        std::string skey;
-        Local<Object> out = Nan::New<Object>();
-        if (kit->rit->Valid()) {
-            skey = kit->rit->key().ToString();
-            // skip over prefix-cache keys
-            if (skey[0] == '=') {
-                kit->rit->Next();
-                continue;
-            }
-
-            // shave off the lang separator and everything after it
-            skey.resize(skey.find(LANGFIELD_SEPARATOR));
-            // skip repeat entries that differ only by langfield
-            if (kit->last == skey) {
-                kit->rit->Next();
-                continue;
-            }
-
-            out->Set(Nan::New("value").ToLocalChecked(), Nan::New(skey).ToLocalChecked());
-            out->Set(Nan::New("done").ToLocalChecked(), Nan::New<Boolean>(false));
-            kit->last = skey;
-
-            kit->rit->Next();
-        } else {
+    if (kit->bucket.empty() || kit->bucket_position >= kit->bucket.end()) {
+        bool advanced = kit->AdvanceBucket();
+        if (!advanced) {
             out->Set(Nan::New("done").ToLocalChecked(), Nan::New<Boolean>(true));
+            info.GetReturnValue().Set(out);
+            return;
         }
-
-        info.GetReturnValue().Set(out);
-        return;
     }
+
+    out->Set(Nan::New("value").ToLocalChecked(), Nan::New(*(kit->bucket_position)).ToLocalChecked());
+    out->Set(Nan::New("done").ToLocalChecked(), Nan::New<Boolean>(false));
+
+    kit->bucket_position++;
+
+    info.GetReturnValue().Set(out);
+    return;
 }
 
 NAN_METHOD(RocksDBCacheKeyIterator::_iterator) {
@@ -2393,16 +2377,135 @@ void RocksDBCacheKeyIterator::Initialize(v8::Local<v8::Object> target) {
     target->Set(Nan::New("RocksDBCacheKeyIterator").ToLocalChecked(), tpl->GetFunction());
 }
 
+bool RocksDBCacheKeyIterator::AdvanceBucket() {
+    if (prefix_position == final_prefixes.end()) return false;
+    std::string prefix = *prefix_position;
+
+    bucket.clear();
+    if (current_key.empty() || !(current_key.compare(0, prefix.size(), prefix) == 0)) {
+        rit->Seek(prefix);
+        current_key.clear();
+    }
+
+    while (true) {
+        if (!current_key.empty()) {
+            if (current_key.compare(0, prefix.size(), prefix) == 0) {
+                std::string key_text = current_key.substr(0, current_key.find(LANGFIELD_SEPARATOR));
+                if (bucket.empty() || key_text != bucket.back()) {
+                    bucket.emplace_back(key_text);
+                }
+            } else {
+                break;
+            }
+        }
+
+        if (rit->Valid()) {
+            current_key = rit->key().ToString();
+            rit->Next();
+        } else {
+            break;
+        }
+    }
+
+    std::sort(bucket.begin(), bucket.end());
+    bucket_position = bucket.begin();
+
+    prefix_position++;
+    return true;
+}
+
 RocksDBCacheKeyIterator::RocksDBCacheKeyIterator(RocksDBCache* cache_) {
     cache = cache_;
     persistentRef.Reset(cache_->handle());
 
     db = cache->db;
 
-    last = "";
+    // okay get ready for some hacky bullshit
+    // we want to output keys in sorted order
+    // but they're close to, but not quite, sorted in the database
+    // all keys that share a prefix are together, but might not be ordered
+    // correctly, so we need to resort partial chunks on the fly by reading
+    // a chunk into memory, sorting it, dribbling out its contents, then
+    // reading/sorting another chunk
+
+    // first, in the constructor before we emit anything, we need to do a full
+    // pass through the data to figure out how big each chunk should be, since
+    // not all prefixes are equally common
+
+    // do one pass through to gather all the 6-byte prefixes
+    auto stats_it = db->NewIterator(rocksdb::ReadOptions());
+
+    std::unordered_map<std::string, uint32_t> pfx;
+
+    std::string last;
+    for (stats_it->SeekToFirst(); stats_it->Valid(); stats_it->Next()) {
+        std::string skey = stats_it->key().ToString();
+        // skip over prefix-cache keys
+        if (skey[0] == '=') continue;
+
+        // shave off the lang separator and everything after it
+        skey.resize(skey.find(LANGFIELD_SEPARATOR));
+        // skip repeat entries that differ only by langfield
+        if (last == skey) continue;
+        last = skey;
+
+        // set this prefix to 0 if not already present, then increment
+        auto emplace_pair = pfx.emplace(skey.substr(0, 6), 0);
+        emplace_pair.first->second += 1;
+    }
+
+    // now accumulate together some of the 6-byte prefixes to get, say, 4- or 5- byte prefixes
+    // with a max size of 100k items per chunk
+    std::vector<std::string> all_prefixes;
+    for (auto const& imap: pfx) {
+        all_prefixes.push_back(imap.first);
+    }
+    std::sort(all_prefixes.begin(), all_prefixes.end());
+
+    std::unordered_map<std::string, uint32_t> condensed;
+    std::unordered_map<std::string, uint32_t> per_pfx_counts;
+
+    for (uint32_t pfx_length = 1; pfx_length < 6; pfx_length++) {
+        per_pfx_counts.clear();
+        for (auto const& imap: pfx) {
+            auto p_emplace_pair = per_pfx_counts.emplace(imap.first.substr(0, pfx_length), 0);
+            p_emplace_pair.first->second += 1;
+        }
+
+        for (auto const& pcount: per_pfx_counts) {
+            std::string subprefix = pcount.first;
+            uint32_t count = pcount.second;
+
+            if (count > 100000) continue;
+            condensed[subprefix] = count;
+
+            // okay we have a prefix we want to collapse
+            // find the first 6-prefix that starts with this shorter prefix
+
+            auto idx = std::lower_bound(all_prefixes.begin(), all_prefixes.end(), subprefix) - all_prefixes.begin();
+            while (idx < all_prefixes.size() && all_prefixes[idx].compare(0, subprefix.size(), subprefix) == 0) {
+                pfx.erase(all_prefixes[idx]);
+                idx += 1;
+            }
+        }
+    }
+
+    for (auto const& pcount: pfx) {
+        std::string prefix = pcount.first;
+        uint32_t count = pcount.second;
+
+        condensed[prefix] = count;
+    }
+
+    for (auto const& cmap: condensed) {
+        final_prefixes.push_back(cmap.first);
+    }
+    std::sort(final_prefixes.begin(), final_prefixes.end());
+
+    prefix_position = final_prefixes.begin();
+    bucket_position = bucket.begin();
 
     rit.reset(db->NewIterator(rocksdb::ReadOptions()));
-    rit->SeekToFirst();
 }
 RocksDBCacheKeyIterator::~RocksDBCacheKeyIterator() {
     persistentRef.Reset();
