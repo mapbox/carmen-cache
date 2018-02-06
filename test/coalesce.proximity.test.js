@@ -3,35 +3,35 @@
 // calculated correctly when the proximity point is set slightly more toward
 // each different quadrant.
 
-var MemoryCache = require('../index.js').MemoryCache;
-var Grid = require('./grid.js');
-var coalesce = require('../index.js').coalesce;
-var test = require('tape');
+const MemoryCache = require('../index.js').MemoryCache;
+const Grid = require('./grid.js');
+const coalesce = require('../index.js').coalesce;
+const test = require('tape');
 
 (function() {
-    var cache = new MemoryCache('a', 0);
-    var ne = {
+    const cache = new MemoryCache('a', 0);
+    const ne = {
         id: 1,
         x: 200,
         y: 200,
         relev: 1,
         score: 1
     };
-    var se = {
+    const se = {
         id: 2,
         x: 200,
         y: 0,
         relev: 1,
         score: 1
     };
-    var sw = {
+    const sw = {
         id: 3,
         x: 0,
         y: 0,
         relev: 1,
         score: 1
     };
-    var nw = {
+    const nw = {
         id: 4,
         x: 0,
         y: 200,
@@ -42,12 +42,12 @@ var test = require('tape');
         Grid.encode(ne),
         Grid.encode(se),
         Grid.encode(sw),
-        Grid.encode(nw),
+        Grid.encode(nw)
     ]);
 
     // This centerpoint favors the N/S direction over E/W slightly to make
     // expected output order obvious
-    test('proximity ne', function(assert) {
+    test('proximity ne', (assert) => {
         coalesce([{
             cache: cache,
             mask: 1 << 0,
@@ -59,15 +59,15 @@ var test = require('tape');
         }], {
             radius: 200,
             centerzxy: [14, 100 + 10, 100 + 15]
-        }, function(err, res) {
+        }, (err, res) => {
             assert.ifError(err);
             assert.deepEqual(res.map((cover) => cover[0].id), [ne.id, nw.id, se.id, sw.id], 'right order');
-            assert.deepEqual(res.map((cover) => Math.floor(cover[0].distance)), [ 123, 139, 146, 159 ], 'distances check out');
+            assert.deepEqual(res.map((cover) => Math.floor(cover[0].distance)), [123, 139, 146, 159], 'distances check out');
             assert.end();
         });
     });
 
-    test('proximity se', function(assert) {
+    test('proximity se', (assert) => {
         coalesce([{
             cache: cache,
             mask: 1 << 0,
@@ -79,15 +79,15 @@ var test = require('tape');
         }], {
             radius: 200,
             centerzxy: [14, 100 + 10, 100 - 15]
-        }, function(err, res) {
+        }, (err, res) => {
             assert.ifError(err);
             assert.deepEqual(res.map((cover) => cover[0].id), [se.id, sw.id, ne.id, nw.id], 'right order');
-            assert.deepEqual(res.map((cover) => Math.floor(cover[0].distance)), [ 123, 139, 146, 159 ], 'distances check out');
+            assert.deepEqual(res.map((cover) => Math.floor(cover[0].distance)), [123, 139, 146, 159], 'distances check out');
             assert.end();
         });
     });
 
-    test('proximity sw', function(assert) {
+    test('proximity sw', (assert) => {
         coalesce([{
             cache: cache,
             mask: 1 << 0,
@@ -99,15 +99,15 @@ var test = require('tape');
         }], {
             radius: 200,
             centerzxy: [14, 100 - 10, 100 - 15]
-        }, function(err, res) {
+        }, (err, res) => {
             assert.ifError(err);
             assert.deepEqual(res.map((cover) => cover[0].id), [sw.id, se.id, nw.id, ne.id], 'right order');
-            assert.deepEqual(res.map((cover) => Math.floor(cover[0].distance)), [ 123, 139, 146, 159 ], 'distances check out');
+            assert.deepEqual(res.map((cover) => Math.floor(cover[0].distance)), [123, 139, 146, 159], 'distances check out');
             assert.end();
         });
     });
 
-    test('proximity nw', function(assert) {
+    test('proximity nw', (assert) => {
         coalesce([{
             cache: cache,
             mask: 1 << 0,
@@ -119,10 +119,10 @@ var test = require('tape');
         }], {
             radius: 200,
             centerzxy: [14, 100 - 10, 100 + 15]
-        }, function(err, res) {
+        }, (err, res) => {
             assert.ifError(err);
             assert.deepEqual(res.map((cover) => cover[0].id), [nw.id, ne.id, sw.id, se.id], 'right order');
-            assert.deepEqual(res.map((cover) => Math.floor(cover[0].distance)), [ 123, 139, 146, 159 ], 'distances check out');
+            assert.deepEqual(res.map((cover) => Math.floor(cover[0].distance)), [123, 139, 146, 159], 'distances check out');
             assert.end();
         });
     });

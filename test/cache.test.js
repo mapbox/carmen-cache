@@ -1,32 +1,33 @@
-var carmenCache = require('../index.js');
-var tape = require('tape');
-var fs = require('fs');
-var mp53 = Math.pow(2,53);
+'use strict';
+const carmenCache = require('../index.js');
+const tape = require('tape');
+const fs = require('fs');
+const mp53 = Math.pow(2,53);
 
-var tmpdir = "/tmp/temp." + Math.random().toString(36).substr(2, 5);
+const tmpdir = '/tmp/temp.' + Math.random().toString(36).substr(2, 5);
 fs.mkdirSync(tmpdir);
-var tmpidx = 0;
-var tmpfile = function() { return tmpdir + "/" + (tmpidx++) + ".dat"; };
+let tmpidx = 0;
+const tmpfile = function() { return tmpdir + '/' + (tmpidx++) + '.dat'; };
 
-var sorted = function(arr) {
+const sorted = function(arr) {
     return [].concat(arr).sort();
-}
+};
 
-var sortedDescending = function(arr) {
-    return [].concat(arr).sort(function (a, b) { return b - a; });
-}
+const sortedDescending = function(arr) {
+    return [].concat(arr).sort((a, b) => { return b - a; });
+};
 
-tape('list', function(assert) {
-    var cache = new carmenCache.MemoryCache('a');
+tape('list', (assert) => {
+    const cache = new carmenCache.MemoryCache('a');
     cache._set('5', [0,1,2]);
-    assert.deepEqual(cache.list().map(function(x) { return x[0]; }), ['5']);
+    assert.deepEqual(cache.list().map((x) => { return x[0]; }), ['5']);
     assert.end();
 });
 
-tape('get / set / list / pack / load (simple)', function(assert) {
-    var cache = new carmenCache.MemoryCache('a');
+tape('get / set / list / pack / load (simple)', (assert) => {
+    const cache = new carmenCache.MemoryCache('a');
 
-    var ids = [];
+    const ids = [];
     for (var i = 0; i < 5; i++) {
         var id = Math.random().toString(36).replace(/[^a-z]+/g, '').substr(0, 5);
         ids.push(id);
@@ -40,11 +41,11 @@ tape('get / set / list / pack / load (simple)', function(assert) {
         assert.deepEqual(cache._get(id), sortedDescending([3, 4, 5, 6, 7, 8]), id + ' set to 3,4,5,6,7,8');
     }
 
-    assert.deepEqual(sorted(cache.list().map(function(x) { return x[0]; })), sorted(ids), "mem ids match");
+    assert.deepEqual(sorted(cache.list().map((x) => { return x[0]; })), sorted(ids), 'mem ids match');
 
-    var pack = tmpfile();
+    const pack = tmpfile();
     cache.pack(pack);
-    var loader = new carmenCache.RocksDBCache('b', pack);
+    const loader = new carmenCache.RocksDBCache('b', pack);
 
     for (var i = 0; i < 5; i++) {
         var id = ids[i];
@@ -52,15 +53,15 @@ tape('get / set / list / pack / load (simple)', function(assert) {
         assert.deepEqual(cache._get(id), sortedDescending([3, 4, 5, 6, 7, 8]), id + ' set to 3,4,5,6,7,8');
     }
 
-    assert.deepEqual(sorted(loader.list().map(function(x) { return x[0]; })), sorted(ids), "rocks ids match");
+    assert.deepEqual(sorted(loader.list().map((x) => { return x[0]; })), sorted(ids), 'rocks ids match');
     assert.end();
 });
 
-tape('get / set / list / pack / load (with lang codes)', function(assert) {
-    var cache = new carmenCache.MemoryCache('a');
+tape('get / set / list / pack / load (with lang codes)', (assert) => {
+    const cache = new carmenCache.MemoryCache('a');
 
-    var ids = [];
-    var expected = [];
+    const ids = [];
+    const expected = [];
     for (var i = 0; i < 5; i++) {
         var id = Math.random().toString(36).replace(/[^a-z]+/g, '').substr(0, 5);
         ids.push(id);
@@ -86,11 +87,11 @@ tape('get / set / list / pack / load (with lang codes)', function(assert) {
         expected.push([id, [0,1]]);
     }
 
-    assert.deepEqual(sorted(cache.list().map(JSON.stringify)), sorted(expected.map(JSON.stringify)), "mem ids and langs match");
+    assert.deepEqual(sorted(cache.list().map(JSON.stringify)), sorted(expected.map(JSON.stringify)), 'mem ids and langs match');
 
-    var pack = tmpfile();
+    const pack = tmpfile();
     cache.pack(pack);
-    var loader = new carmenCache.RocksDBCache('b', pack);
+    const loader = new carmenCache.RocksDBCache('b', pack);
 
     for (var i = 0; i < 5; i++) {
         var id = ids[i];
@@ -102,38 +103,38 @@ tape('get / set / list / pack / load (with lang codes)', function(assert) {
         assert.deepEqual(cache._get(id, [0,1]), sortedDescending([12, 13, 14]), id + ' for lang [0,1] still set to 12,13,14');
     }
 
-    assert.deepEqual(sorted(cache.list().map(JSON.stringify)), sorted(expected.map(JSON.stringify)), "rocks ids and langs match");
+    assert.deepEqual(sorted(cache.list().map(JSON.stringify)), sorted(expected.map(JSON.stringify)), 'rocks ids and langs match');
     assert.end();
 });
 
-tape('pack', function(assert) {
-    var cache = new carmenCache.MemoryCache('a');
+tape('pack', (assert) => {
+    const cache = new carmenCache.MemoryCache('a');
     cache._set('5', [0,1,2]);
     // set should replace data
     cache._set('5', [0,1,2,4]);
     assert.throws(cache._set.bind(null, '5', []), 'can\'t set empty term');
 
     // fake data
-    var array = [];
-    for (var i=0;i<10000;++i) array.push(i);
+    const array = [];
+    for (let i = 0; i < 10000; ++i) array.push(i);
 
     // now test packing data created via load
-    var packer = new carmenCache.MemoryCache('a');
+    const packer = new carmenCache.MemoryCache('a');
     packer._set('5', array);
     packer._set('6', array);
 
     // invalid args
-    assert.throws(function() { var loader = new carmenCache.RocksDBCache('a'); });
-    assert.throws(function() { var loader = new carmenCache.MemoryCache('a'); loader.pack(1); });
-    assert.throws(function() { var loader = new carmenCache.RocksDBCache('a', 1); });
-    assert.throws(function() { var loader = new carmenCache.RocksDBCache('a', null); });
-    assert.throws(function() { var loader = new carmenCache.RocksDBCache('a', {}); });
-    assert.throws(function() { var loader = new carmenCache.RocksDBCache('a', new Buffer('a')); });
+    assert.throws(() => { const loader = new carmenCache.RocksDBCache('a'); });
+    assert.throws(() => { const loader = new carmenCache.MemoryCache('a'); loader.pack(1); });
+    assert.throws(() => { const loader = new carmenCache.RocksDBCache('a', 1); });
+    assert.throws(() => { const loader = new carmenCache.RocksDBCache('a', null); });
+    assert.throws(() => { const loader = new carmenCache.RocksDBCache('a', {}); });
+    assert.throws(() => { const loader = new carmenCache.RocksDBCache('a', new Buffer('a')); });
 
     // grab data right back out
-    var directLoad = tmpfile();
-    packer.pack(directLoad)
-    var loader = new carmenCache.RocksDBCache('a', directLoad);
+    const directLoad = tmpfile();
+    packer.pack(directLoad);
+    const loader = new carmenCache.RocksDBCache('a', directLoad);
     assert.deepEqual(loader._get('5'), sortedDescending(array));
     assert.deepEqual(loader._get('6'), sortedDescending(array));
 
