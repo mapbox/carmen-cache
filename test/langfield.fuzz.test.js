@@ -1,7 +1,7 @@
+'use strict';
 const carmenCache = require('../index.js');
 const tape = require('tape');
 const fs = require('fs');
-const mp53 = Math.pow(2,53);
 
 const tmpdir = '/tmp/temp.' + Math.random().toString(36).substr(2, 5);
 fs.mkdirSync(tmpdir);
@@ -15,8 +15,8 @@ tape('language fuzzing', (assert) => {
     for (let j = 0; j < 1000; j++) {
         const phrase = Math.random().toString(36).substr(2, 3 + Math.floor(Math.random() * 6));
         const numLanguages = Math.floor(Math.random() * 4);
-        var languages;
-        if (numLanguages == 0) {
+        let languages;
+        if (numLanguages === 0) {
             languages = null;
         } else {
             languages = new Set();
@@ -25,7 +25,7 @@ tape('language fuzzing', (assert) => {
             }
             languages = Array.from(languages).sort((a, b) => { return a - b; });
         }
-        var recordId = phrase + '-' + (languages == null ? 'null' : languages.join('-'));
+        const recordId = phrase + '-' + (languages == null ? 'null' : languages.join('-'));
         records.set(recordId, { phrase: phrase, languages: languages });
 
         cache._set(phrase, [1], languages);
@@ -33,9 +33,9 @@ tape('language fuzzing', (assert) => {
 
     let list = cache.list();
     assert.equal(list.length, records.size, 'got the same number of items out as went in');
-    var hasAll = true;
-    for (var item of list) {
-        var recordId = item[0] + '-' + (item[1] == null ? 'null' : item[1].join('-'));
+    let hasAll = true;
+    for (const item of list) {
+        const recordId = item[0] + '-' + (item[1] == null ? 'null' : item[1].join('-'));
         hasAll = hasAll && records.has(recordId);
     }
     assert.ok(hasAll, 'all records and languages came out that went in');
@@ -46,9 +46,9 @@ tape('language fuzzing', (assert) => {
 
     list = loader.list();
     assert.equal(list.length, records.size, 'got the same number of items out as went in');
-    var hasAll = true;
-    for (var item of list) {
-        var recordId = item[0] + '-' + (item[1] == null ? 'null' : item[1].join('-'));
+    hasAll = true;
+    for (const item of list) {
+        const recordId = item[0] + '-' + (item[1] == null ? 'null' : item[1].join('-'));
         hasAll = hasAll && records.has(recordId);
     }
     assert.ok(hasAll, 'all records and languages came out that went in');

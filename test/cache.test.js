@@ -2,7 +2,6 @@
 const carmenCache = require('../index.js');
 const tape = require('tape');
 const fs = require('fs');
-const mp53 = Math.pow(2,53);
 
 const tmpdir = '/tmp/temp.' + Math.random().toString(36).substr(2, 5);
 fs.mkdirSync(tmpdir);
@@ -28,8 +27,8 @@ tape('get / set / list / pack / load (simple)', (assert) => {
     const cache = new carmenCache.MemoryCache('a');
 
     const ids = [];
-    for (var i = 0; i < 5; i++) {
-        var id = Math.random().toString(36).replace(/[^a-z]+/g, '').substr(0, 5);
+    for (let i = 0; i < 5; i++) {
+        const id = Math.random().toString(36).replace(/[^a-z]+/g, '').substr(0, 5);
         ids.push(id);
 
         assert.deepEqual(cache._get(id), undefined, id + ' not set');
@@ -47,8 +46,8 @@ tape('get / set / list / pack / load (simple)', (assert) => {
     cache.pack(pack);
     const loader = new carmenCache.RocksDBCache('b', pack);
 
-    for (var i = 0; i < 5; i++) {
-        var id = ids[i];
+    for (let i = 0; i < 5; i++) {
+        const id = ids[i];
 
         assert.deepEqual(cache._get(id), sortedDescending([3, 4, 5, 6, 7, 8]), id + ' set to 3,4,5,6,7,8');
     }
@@ -62,8 +61,8 @@ tape('get / set / list / pack / load (with lang codes)', (assert) => {
 
     const ids = [];
     const expected = [];
-    for (var i = 0; i < 5; i++) {
-        var id = Math.random().toString(36).replace(/[^a-z]+/g, '').substr(0, 5);
+    for (let i = 0; i < 5; i++) {
+        const id = Math.random().toString(36).replace(/[^a-z]+/g, '').substr(0, 5);
         ids.push(id);
 
         assert.deepEqual(cache._get(id), undefined, id + ' not set');
@@ -91,10 +90,9 @@ tape('get / set / list / pack / load (with lang codes)', (assert) => {
 
     const pack = tmpfile();
     cache.pack(pack);
-    const loader = new carmenCache.RocksDBCache('b', pack);
 
-    for (var i = 0; i < 5; i++) {
-        var id = ids[i];
+    for (let i = 0; i < 5; i++) {
+        const id = ids[i];
 
         assert.deepEqual(cache._get(id, [1]), sortedDescending([7, 8, 9]), id + ' for lang [1] set to 7,8,9');
         assert.deepEqual(cache._get(id, [0,1]), sortedDescending([12, 13, 14]), id + ' for lang [0,1] set to 12,13,14');
@@ -124,12 +122,12 @@ tape('pack', (assert) => {
     packer._set('6', array);
 
     // invalid args
-    assert.throws(() => { const loader = new carmenCache.RocksDBCache('a'); });
+    assert.throws(() => { new carmenCache.RocksDBCache('a'); });
     assert.throws(() => { const loader = new carmenCache.MemoryCache('a'); loader.pack(1); });
-    assert.throws(() => { const loader = new carmenCache.RocksDBCache('a', 1); });
-    assert.throws(() => { const loader = new carmenCache.RocksDBCache('a', null); });
-    assert.throws(() => { const loader = new carmenCache.RocksDBCache('a', {}); });
-    assert.throws(() => { const loader = new carmenCache.RocksDBCache('a', new Buffer('a')); });
+    assert.throws(() => { new carmenCache.RocksDBCache('a', 1); });
+    assert.throws(() => { new carmenCache.RocksDBCache('a', null); });
+    assert.throws(() => { new carmenCache.RocksDBCache('a', {}); });
+    assert.throws(() => { new carmenCache.RocksDBCache('a', new Buffer('a')); });
 
     // grab data right back out
     const directLoad = tmpfile();

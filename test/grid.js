@@ -1,14 +1,10 @@
+'use strict';
 // Caching shows a 6% perf bump
 const mp51 = Math.pow(2,51);
 const mp48 = Math.pow(2,48);
-const mp39 = Math.pow(2,39);
 const mp34 = Math.pow(2,34);
-const mp25 = Math.pow(2,25);
-const mp23 = Math.pow(2,23);
 const mp20 = Math.pow(2,20);
 const mp14 = Math.pow(2,14);
-const mp3 = Math.pow(2,3);
-const mp2 = Math.pow(2,2);
 
 module.exports.encode = encode;
 module.exports.decode = decode;
@@ -35,4 +31,3 @@ function decode(num) {
         id: Math.floor(num % mp20)
     };
 }
-

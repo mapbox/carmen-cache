@@ -1,9 +1,9 @@
+'use strict';
 const carmenCache = require('../index.js');
-let Cache = carmenCache.MemoryCache,
-    RocksDBCache = carmenCache.RocksDBCache;
+const Cache = carmenCache.MemoryCache;
+const RocksDBCache = carmenCache.RocksDBCache;
 const tape = require('tape');
 const fs = require('fs');
-const mp53 = Math.pow(2,53);
 
 const tmpdir = '/tmp/temp.' + Math.random().toString(36).substr(2, 5);
 fs.mkdirSync(tmpdir);

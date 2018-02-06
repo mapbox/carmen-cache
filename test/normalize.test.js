@@ -1,3 +1,4 @@
+'use strict';
 const carmenCache = require('../index.js');
 const tape = require('tape');
 const fs = require('fs');
@@ -6,14 +7,6 @@ const tmpdir = '/tmp/temp.' + Math.random().toString(36).substr(2, 5);
 fs.mkdirSync(tmpdir);
 let tmpidx = 0;
 const tmpfile = function() { return tmpdir + '/' + (tmpidx++) + '.dat'; };
-
-const sorted = function(arr) {
-    return [].concat(arr).sort();
-};
-
-const sortedDescending = function(arr) {
-    return [].concat(arr).sort((a, b) => { return b - a; });
-};
 
 const words = [
     'first street',
@@ -88,7 +81,6 @@ tape('read', (assert) => {
     assert.equal(cache.get(8888), undefined);
 
     const firstWithPrefix = function(p) {
-        const f = [];
         for (let i = 0; i < words.length; i++) if (words[i].startsWith(p)) return i;
     };
 

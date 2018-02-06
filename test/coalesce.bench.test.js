@@ -1,8 +1,7 @@
+'use strict';
 const Cache = require('../index.js').MemoryCache;
-const Grid = require('./grid.js');
 const coalesce = require('../index.js').coalesce;
 const test = require('tape');
-const mp36 = Math.pow(2,36);
 
 (function() {
     // asan makes everything slow, so skip benching
@@ -27,7 +26,7 @@ const mp36 = Math.pow(2,36);
             if (!remaining) {
                 const ops = (+new Date - time) / runs;
                 let expected_ops = 30;
-                if (process.env.BUILDTYPE == 'debug') {
+                if (process.env.BUILDTYPE === 'debug') {
                     expected_ops = 500;
                 }
                 assert.equal(ops < expected_ops, true, 'coalesceSingle @ ' + ops + 'ms < ' + expected_ops + 'ms');
@@ -54,7 +53,7 @@ const mp36 = Math.pow(2,36);
             if (!remaining) {
                 const ops = (+new Date - time) / runs;
                 let expected_ops = 30;
-                if (process.env.BUILDTYPE == 'debug') {
+                if (process.env.BUILDTYPE === 'debug') {
                     expected_ops = 500;
                 }
                 assert.equal(ops < expected_ops, true, 'coalesceSingle + proximity @ ' + ops + 'ms < ' + expected_ops + 'ms');
@@ -111,7 +110,7 @@ const mp36 = Math.pow(2,36);
             if (!remaining) {
                 const ops = (+new Date - time) / runs;
                 let expected_ops = 60;
-                if (process.env.BUILDTYPE == 'debug') {
+                if (process.env.BUILDTYPE === 'debug') {
                     expected_ops = 1000;
                 }
                 assert.equal(ops < expected_ops, true, 'coalesceMulti @ ' + ops + 'ms < ' + expected_ops + 'ms');
@@ -139,7 +138,7 @@ const mp36 = Math.pow(2,36);
             if (!remaining) {
                 const ops = (+new Date - time) / runs;
                 let expected_ops = 60;
-                if (process.env.BUILDTYPE == 'debug') {
+                if (process.env.BUILDTYPE === 'debug') {
                     expected_ops = 1000;
                 }
                 assert.equal(ops < expected_ops, true, 'coalesceMulti + proximity @' + ops + 'ms < ' + expected_ops + 'ms');

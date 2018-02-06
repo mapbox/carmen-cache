@@ -1,7 +1,7 @@
+'use strict';
 const carmenCache = require('../index.js');
 const tape = require('tape');
 const fs = require('fs');
-const mp53 = Math.pow(2,53);
 const Grid = require('./grid.js');
 
 const tmpdir = '/tmp/temp.' + Math.random().toString(36).substr(2, 5);
@@ -14,7 +14,7 @@ const getIds = function(grids) {
 };
 
 const getByLanguageMatch = function(grids, match) {
-    return grids.filter((x) => { return x.matches_language == match; });
+    return grids.filter((x) => { return x.matches_language === match; });
 };
 
 tape('getMatching', (assert) => {
@@ -69,7 +69,7 @@ tape('getMatching', (assert) => {
     const loader = new carmenCache.RocksDBCache('packed', pack);
 
     [cache, loader].forEach((c) => {
-        const test_all_langs_no_prefix = cache._getMatching('test', false);
+        const test_all_langs_no_prefix = c._getMatching('test', false);
         assert.deepEqual(
             getIds(test_all_langs_no_prefix),
             [1, 2, 3, 11, 12, 13, 21, 22, 23, 31, 32, 33, 41, 42, 43],
@@ -81,7 +81,7 @@ tape('getMatching', (assert) => {
             "getMatching for 'test' with no prefix match and no language includes only match_language: true"
         );
 
-        const test_all_langs_with_prefix = cache._getMatching('test', true);
+        const test_all_langs_with_prefix = c._getMatching('test', true);
         assert.deepEqual(
             getIds(test_all_langs_with_prefix),
             [1, 2, 3, 11, 12, 13, 21, 22, 23, 31, 32, 33, 41, 42, 43, 51, 52, 53],
@@ -93,9 +93,9 @@ tape('getMatching', (assert) => {
             "getMatching for 'test' with prefix match and no language includes only match_language: true"
         );
 
-        assert.false(cache._getMatching('te', false), "getMatching for 'te' with no prefix match returns nothing");
+        assert.false(c._getMatching('te', false), "getMatching for 'te' with no prefix match returns nothing");
 
-        const te_all_langs_with_prefix = cache._getMatching('te', true);
+        const te_all_langs_with_prefix = c._getMatching('te', true);
         assert.deepEqual(
             getIds(te_all_langs_with_prefix),
             [1, 2, 3, 11, 12, 13, 21, 22, 23, 31, 32, 33, 41, 42, 43, 51, 52, 53, 61, 62, 63],
@@ -107,7 +107,7 @@ tape('getMatching', (assert) => {
             "getMatching for 'te' with prefix match and no language includes only match_language: true"
         );
 
-        const test_all_langs_with_prefix_0 = cache._getMatching('test', true, [0]);
+        const test_all_langs_with_prefix_0 = c._getMatching('test', true, [0]);
         const test_all_langs_with_prefix_0_matched = getByLanguageMatch(test_all_langs_with_prefix_0, true);
         const test_all_langs_with_prefix_0_unmatched = getByLanguageMatch(test_all_langs_with_prefix_0, false);
         assert.deepEqual(
@@ -131,7 +131,7 @@ tape('getMatching', (assert) => {
             'all the language-matching results come first'
         );
 
-        const te_all_langs_with_prefix_0 = cache._getMatching('te', true, [0]);
+        const te_all_langs_with_prefix_0 = c._getMatching('te', true, [0]);
         const te_all_langs_with_prefix_0_matched = getByLanguageMatch(te_all_langs_with_prefix_0, true);
         const te_all_langs_with_prefix_0_unmatched = getByLanguageMatch(te_all_langs_with_prefix_0, false);
         assert.deepEqual(
@@ -155,7 +155,7 @@ tape('getMatching', (assert) => {
             'all the language-matching results come first'
         );
 
-        const test_all_langs_with_prefix_1 = cache._getMatching('test', true, [1]);
+        const test_all_langs_with_prefix_1 = c._getMatching('test', true, [1]);
         const test_all_langs_with_prefix_1_matched = getByLanguageMatch(test_all_langs_with_prefix_1, true);
         const test_all_langs_with_prefix_1_unmatched = getByLanguageMatch(test_all_langs_with_prefix_1, false);
         assert.deepEqual(
@@ -179,7 +179,7 @@ tape('getMatching', (assert) => {
             'all the language-matching results come first'
         );
 
-        const test_all_langs_with_prefix_7 = cache._getMatching('test', true, [7]);
+        const test_all_langs_with_prefix_7 = c._getMatching('test', true, [7]);
         const test_all_langs_with_prefix_7_matched = getByLanguageMatch(test_all_langs_with_prefix_7, true);
         const test_all_langs_with_prefix_7_unmatched = getByLanguageMatch(test_all_langs_with_prefix_7, false);
         assert.deepEqual(

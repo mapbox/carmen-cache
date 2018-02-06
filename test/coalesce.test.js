@@ -1,3 +1,4 @@
+'use strict';
 const MemoryCache = require('../index.js').MemoryCache;
 const RocksDBCache = require('../index.js').RocksDBCache;
 const Grid = require('./grid.js');
@@ -71,7 +72,7 @@ test('coalesce args', (assert) => {
         coalesce([valid_subq],undefined,() => {});
     }, /Arg 2 must be an options object/, 'throws');
 
-    if (process.versions.node[0] != '0') {
+    if (process.versions.node[0] !== '0') {
         assert.throws(() => {
             coalesce([Object.assign({},valid_subq,{ idx:-1 })],{},() => {});
         }, /encountered idx value too large to fit/, 'throws');
@@ -392,7 +393,6 @@ test('coalesce args', (assert) => {
 
 (function() {
     const memcache = new MemoryCache('a', 0);
-    const grids = [];
 
     memcache._set('1', [Grid.encode({
         id: 1,
@@ -544,7 +544,7 @@ test('coalesce args', (assert) => {
     const rocksB = toRocksCache(memB);
 
     [[memA, memB], [rocksA, rocksB], [memA, rocksB]].forEach((caches) => {
-        let a = caches[0],
+        const a = caches[0],
             b = caches[1];
 
         test('coalesceUV: ' + a.id + ', ' + b.id, (assert) => {
@@ -644,7 +644,7 @@ test('coalesce args', (assert) => {
     const rocksB = toRocksCache(memB);
 
     [[memA, memB], [rocksA, rocksB], [memA, rocksB]].forEach((caches) => {
-        let a = caches[0],
+        const a = caches[0],
             b = caches[1];
 
         test('coalesceMulti, ALL_LANGUAGES: ' + a.id + ', ' + b.id, (assert) => {
@@ -773,7 +773,7 @@ test('coalesce args', (assert) => {
     const rocksB = toRocksCache(memB);
 
     [[memA, memB], [rocksA, rocksB], [memA, rocksB]].forEach((caches) => {
-        let a = caches[0],
+        const a = caches[0],
             b = caches[1];
 
         test('coalesce scoredist (close proximity): ' + a.id + ', ' + b.id, (assert) => {
@@ -866,7 +866,7 @@ test('coalesce args', (assert) => {
     const rocksB = toRocksCache(memB);
 
     [[memA, memB], [rocksA, rocksB], [memA, rocksB]].forEach((caches) => {
-        let a = caches[0],
+        const a = caches[0],
             b = caches[1];
 
         test('coalesceMulti (higher relev wins): ' + a.id + ', ' + b.id, (assert) => {
@@ -960,7 +960,7 @@ test('coalesce args', (assert) => {
     const rocksC = toRocksCache(memC);
 
     [[memA, memB, memC], [rocksA, rocksB, rocksC], [memA, rocksB, memC]].forEach((caches) => {
-        let a = caches[0],
+        const a = caches[0],
             b = caches[1],
             c = caches[2];
 
@@ -1107,7 +1107,7 @@ test('coalesce args', (assert) => {
     const rocksB = toRocksCache(memB);
 
     [[memA, memB], [rocksA, rocksB], [memA, rocksB]].forEach((caches) => {
-        let a = caches[0],
+        const a = caches[0],
             b = caches[1];
 
         test('coalesceMulti sandwich: ' + a.id + ', ' + b.id, (assert) => {
@@ -1173,7 +1173,7 @@ test('coalesce args', (assert) => {
     const rocksB = toRocksCache(memB);
 
     [[memA, memB], [rocksA, rocksB], [memA, rocksB]].forEach((caches) => {
-        let a = caches[0],
+        const a = caches[0],
             b = caches[1];
 
         test('coalesceMulti sandwich: ' + a.id + ', ' + b.id, (assert) => {
@@ -1243,7 +1243,7 @@ test('coalesce args', (assert) => {
     const rocksC = toRocksCache(memC);
 
     [[memA, memB, memC], [rocksA, rocksB, rocksC], [memA, rocksB, memC]].forEach((caches) => {
-        let a = caches[0],
+        const a = caches[0],
             b = caches[1],
             c = caches[2];
 
@@ -1316,4 +1316,3 @@ test('coalesce args', (assert) => {
         });
     });
 })();
-

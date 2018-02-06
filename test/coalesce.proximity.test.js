@@ -1,3 +1,4 @@
+'use strict';
 // This test positions grids in four quadrant directions (ne, se, sw, nw)
 // and then confirms that proximity results,  scoredist and distance are
 // calculated correctly when the proximity point is set slightly more toward
@@ -127,5 +128,3 @@ const test = require('tape');
         });
     });
 })();
-
-
