@@ -4,6 +4,10 @@
 
 carmen-cache
 ------------
+
+// Introduction to project
+// CI status badge
+
 Protobuf-based cache. Written originally for use in [carmen](https://github.com/mapbox/carmen) geocoder.
 
 ### Install
@@ -30,7 +34,7 @@ This will automatically:
 
   - Install [mason](https://github.com/mapbox/mason/) locally
   - Install several C/C++ dependencies locally (in `mason_packages`) via mason: bzip, rocksdb, protozero, and the clang++ compiler
-  
+
 To do a full rebuild run: `make clean`
 
 ### Publishing
