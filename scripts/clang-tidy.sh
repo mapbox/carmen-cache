@@ -51,7 +51,7 @@ fi
 # change into the build directory so that clang-tidy can find the files
 # at the right paths (since this is where the actual build happens)
 cd build
-${PATH_TO_CLANG_TIDY_SCRIPT} -fix
+python3 ${PATH_TO_CLANG_TIDY_SCRIPT} -fix
 cd ../
 
 # Print list of modified files
