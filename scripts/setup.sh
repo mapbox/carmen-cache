@@ -3,8 +3,8 @@
 set -eu
 set -o pipefail
 
-export MASON_RELEASE="${MASON_RELEASE:-0.9.0}"
-export MASON_LLVM_RELEASE="${MASON_LLVM_RELEASE:-4.0.0}"
+export MASON_RELEASE="${MASON_RELEASE:-eeba3b5}"
+export MASON_LLVM_RELEASE="${MASON_LLVM_RELEASE:-5.0.0}"
 
 PLATFORM=$(uname | tr A-Z a-z)
 if [[ ${PLATFORM} == 'darwin' ]]; then
@@ -59,7 +59,7 @@ function run() {
       local install_dir=${1}
       local mason_release=${2}
       mkdir -p ${install_dir}
-      curl -sSfL https://github.com/mapbox/mason/archive/v${mason_release}.tar.gz | tar --gunzip --extract --strip-components=1 --directory=${install_dir}
+      curl -sSfL https://github.com/mapbox/mason/archive/${mason_release}.tar.gz | tar --gunzip --extract --strip-components=1 --directory=${install_dir}
     }
 
     setup_mason $(pwd)/.mason ${MASON_RELEASE}
@@ -69,7 +69,7 @@ function run() {
     #
 
     echo "export PATH=${llvm_toolchain_dir}/bin:$(pwd)/.mason:$(pwd)/mason_packages/.link/bin:"'${PATH}' > ${config}
-    echo "export CXX=${llvm_toolchain_dir}/bin/clang++" >> ${config}
+    echo "export CXX=${CXX:-${llvm_toolchain_dir}/bin/clang++}" >> ${config}
     echo "export MASON_RELEASE=${MASON_RELEASE}" >> ${config}
     echo "export MASON_LLVM_RELEASE=${MASON_LLVM_RELEASE}" >> ${config}
     # https://github.com/google/sanitizers/wiki/AddressSanitizerAsDso
@@ -85,11 +85,12 @@ function run() {
     echo "leak:v8::internal" >> ${SUPPRESSION_FILE}
     echo "leak:node::CreateEnvironment" >> ${SUPPRESSION_FILE}
     echo "leak:node::Init" >> ${SUPPRESSION_FILE}
-    echo "export ASAN_SYMBOLIZER_PATH=$(which llvm-symbolizer)" >> ${config}
+    echo "export ASAN_SYMBOLIZER_PATH=${llvm_toolchain_dir}/bin/llvm-symbolizer" >> ${config}
+    echo "export MSAN_SYMBOLIZER_PATH=${llvm_toolchain_dir}/bin/llvm-symbolizer" >> ${config}
     echo "export UBSAN_OPTIONS=print_stacktrace=1" >> ${config}
     echo "export LSAN_OPTIONS=suppressions=${SUPPRESSION_FILE}" >> ${config}
-    echo "export ASAN_OPTIONS=symbolize=1:abort_on_error=1:detect_container_overflow=1:check_initialization_order=1:detect_stack_use_after_return=1" >> ${config}
-    echo 'export MASON_SANITIZE="-fsanitize=address,undefined -fno-sanitize=vptr,function"' >> ${config}
+    echo "export ASAN_OPTIONS=detect_leaks=1:symbolize=1:abort_on_error=1:detect_container_overflow=1:check_initialization_order=1:detect_stack_use_after_return=1" >> ${config}
+    echo 'export MASON_SANITIZE="-fsanitize=address,undefined,integer,leak -fno-sanitize=vptr,function"' >> ${config}
     echo 'export MASON_SANITIZE_CXXFLAGS="${MASON_SANITIZE} -fno-sanitize=vptr,function -fsanitize-address-use-after-scope -fno-omit-frame-pointer -fno-common"' >> ${config}
     echo 'export MASON_SANITIZE_LDFLAGS="${MASON_SANITIZE}"' >> ${config}
 
