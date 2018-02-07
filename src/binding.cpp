@@ -1,15 +1,15 @@
 
 #include "binding.hpp"
 
-#include <sstream>
-#include <cmath>
-#include <cassert>
-#include <cstring>
 #include <algorithm>
+#include <cassert>
+#include <cmath>
+#include <cstring>
 #include <memory>
+#include <sstream>
 
-#include <protozero/pbf_writer.hpp>
 #include <protozero/pbf_reader.hpp>
+#include <protozero/pbf_writer.hpp>
 
 #include <chrono>
 typedef std::chrono::high_resolution_clock Clock;
@@ -60,7 +60,7 @@ inline langfield_type extract_langfield(std::string const& s) {
     }
 }
 
-inline void add_langfield(std::string & s, langfield_type langfield) {
+inline void add_langfield(std::string& s, langfield_type langfield) {
     if (langfield != ALL_LANGUAGES) {
         char* lf_as_char = reinterpret_cast<char*>(&langfield);
 
@@ -95,7 +95,7 @@ intarray __get(MemoryCache const* c, std::string phrase, langfield_type langfiel
     return array;
 }
 
-inline void decodeMessage(std::string const & message, intarray & array) {
+inline void decodeMessage(std::string const& message, intarray& array) {
     protozero::pbf_reader item(message);
     item.next(CACHE_ITEM);
     auto vals = item.get_packed_uint64();
@@ -112,7 +112,7 @@ inline void decodeMessage(std::string const & message, intarray & array) {
     }
 }
 
-inline void decodeAndBoostMessage(std::string const & message, intarray & array) {
+inline void decodeAndBoostMessage(std::string const& message, intarray& array) {
     protozero::pbf_reader item(message);
     item.next(CACHE_ITEM);
     auto vals = item.get_packed_uint64();
@@ -240,8 +240,7 @@ intarray __getmatching(RocksDBCache const* c, std::string phrase, bool match_pre
                 vals.first,
                 vals.second,
                 unadjusted_lastval,
-                matches_language
-            });
+                matches_language});
             rh.push(matches_language ? unadjusted_lastval | LANGUAGE_MATCH_BOOST : unadjusted_lastval, grids.size() - 1);
         }
     }
@@ -258,8 +257,7 @@ intarray __getmatching(RocksDBCache const* c, std::string phrase, bool match_pre
             sg->unadjusted_lastval -= *(grids[gridIdx].it);
             rh.push(
                 sg->matches_language ? sg->unadjusted_lastval | LANGUAGE_MATCH_BOOST : sg->unadjusted_lastval,
-                gridIdx
-            );
+                gridIdx);
         }
     }
 
@@ -287,7 +285,7 @@ inline Local<v8::Array> langfieldToLangarray(langfield_type langfield) {
     unsigned idx = 0;
     for (unsigned i = 0; i <= MAX_LANG; i++) {
         if (langfield & (static_cast<langfield_type>(1) << i)) {
-            langs->Set(idx++,Nan::New(i));
+            langs->Set(idx++, Nan::New(i));
         }
     }
     return langs;
@@ -308,10 +306,10 @@ void MemoryCache::Initialize(Handle<Object> target) {
 }
 
 MemoryCache::MemoryCache()
-  : ObjectWrap(),
-    cache_() {}
+    : ObjectWrap(),
+      cache_() {}
 
-MemoryCache::~MemoryCache() { }
+MemoryCache::~MemoryCache() {}
 
 void RocksDBCache::Initialize(Handle<Object> target) {
     Nan::HandleScope scope;
@@ -328,10 +326,10 @@ void RocksDBCache::Initialize(Handle<Object> target) {
 }
 
 RocksDBCache::RocksDBCache()
-  : ObjectWrap(),
-    db() {}
+    : ObjectWrap(),
+      db() {}
 
-RocksDBCache::~RocksDBCache() { }
+RocksDBCache::~RocksDBCache() {}
 
 inline void packVec(intarray const& varr, std::unique_ptr<rocksdb::DB> const& db, std::string const& key) {
     std::string message;
@@ -356,8 +354,7 @@ inline void packVec(intarray const& varr, std::unique_ptr<rocksdb::DB> const& db
     db->Put(rocksdb::WriteOptions(), key, message);
 }
 
-NAN_METHOD(MemoryCache::pack)
-{
+NAN_METHOD(MemoryCache::pack) {
     if (info.Length() < 1) {
         return Nan::ThrowTypeError("expected one info: 'filename'");
     }
@@ -425,7 +422,7 @@ NAN_METHOD(MemoryCache::pack)
                     if (mitr == memoized_prefixes.end()) {
                         memoized_prefixes.emplace(prefix_t1, std::deque<value_type>());
                     }
-                    std::deque<value_type> & buf = memoized_prefixes[prefix_t1];
+                    std::deque<value_type>& buf = memoized_prefixes[prefix_t1];
 
                     buf.insert(buf.end(), varr.begin(), varr.end());
                 }
@@ -434,7 +431,7 @@ NAN_METHOD(MemoryCache::pack)
                     if (mitr == memoized_prefixes.end()) {
                         memoized_prefixes.emplace(prefix_t2, std::deque<value_type>());
                     }
-                    std::deque<value_type> & buf = memoized_prefixes[prefix_t2];
+                    std::deque<value_type>& buf = memoized_prefixes[prefix_t2];
 
                     buf.insert(buf.end(), varr.begin(), varr.end());
                 }
@@ -463,8 +460,7 @@ NAN_METHOD(MemoryCache::pack)
     return;
 }
 
-NAN_METHOD(RocksDBCache::pack)
-{
+NAN_METHOD(RocksDBCache::pack) {
     if (info.Length() < 1) {
         return Nan::ThrowTypeError("expected one info: 'filename'");
     }
@@ -521,7 +517,7 @@ struct MergeBaton : carmen::noncopyable {
 };
 
 void mergeQueue(uv_work_t* req) {
-    MergeBaton *baton = static_cast<MergeBaton *>(req->data);
+    MergeBaton* baton = static_cast<MergeBaton*>(req->data);
     std::string const& filename1 = baton->filename1;
     std::string const& filename2 = baton->filename2;
     std::string const& filename3 = baton->filename3;
@@ -555,8 +551,8 @@ void mergeQueue(uv_work_t* req) {
     }
 
     // Ids that have been seen
-    std::map<key_type,bool> ids1;
-    std::map<key_type,bool> ids2;
+    std::map<key_type, bool> ids1;
+    std::map<key_type, bool> ids2;
 
     try {
         // Store ids from 1
@@ -604,7 +600,6 @@ void mergeQueue(uv_work_t* req) {
         it2 = std::unique_ptr<rocksdb::Iterator>(db2->NewIterator(rocksdb::ReadOptions()));
         for (it2->SeekToFirst(); it2->Valid(); it2->Next()) {
             std::string key_id = it2->key().ToString();
-
 
             // Skip this id if also in message 1
             if (ids1.find(key_id) != ids1.end()) continue;
@@ -729,20 +724,19 @@ void mergeQueue(uv_work_t* req) {
 
 void mergeAfter(uv_work_t* req) {
     Nan::HandleScope scope;
-    MergeBaton *baton = static_cast<MergeBaton *>(req->data);
+    MergeBaton* baton = static_cast<MergeBaton*>(req->data);
     if (!baton->error.empty()) {
-        v8::Local<v8::Value> argv[1] = { Nan::Error(baton->error.c_str()) };
+        v8::Local<v8::Value> argv[1] = {Nan::Error(baton->error.c_str())};
         Nan::MakeCallback(Nan::GetCurrentContext()->Global(), Nan::New(baton->callback), 1, argv);
     } else {
-        Local<Value> argv[2] = { Nan::Null() };
+        Local<Value> argv[2] = {Nan::Null()};
         Nan::MakeCallback(Nan::GetCurrentContext()->Global(), Nan::New(baton->callback), 1, argv);
     }
     baton->callback.Reset();
     delete baton;
 }
 
-NAN_METHOD(MemoryCache::list)
-{
+NAN_METHOD(MemoryCache::list) {
     try {
         Nan::Utf8String utf8_value(info[0]);
         if (utf8_value.length() < 1) {
@@ -775,8 +769,7 @@ NAN_METHOD(MemoryCache::list)
     return;
 }
 
-NAN_METHOD(RocksDBCache::list)
-{
+NAN_METHOD(RocksDBCache::list) {
     try {
         RocksDBCache* c = node::ObjectWrap::Unwrap<RocksDBCache>(info.This());
         Local<Array> ids = Nan::New<Array>();
@@ -811,8 +804,7 @@ NAN_METHOD(RocksDBCache::list)
     return;
 }
 
-NAN_METHOD(RocksDBCache::merge)
-{
+NAN_METHOD(RocksDBCache::merge) {
     if (!info[0]->IsString()) return Nan::ThrowTypeError("argument 1 must be a String (infile 1)");
     if (!info[1]->IsString()) return Nan::ThrowTypeError("argument 2 must be a String (infile 2)");
     if (!info[2]->IsString()) return Nan::ThrowTypeError("argument 3 must be a String (outfile)");
@@ -825,7 +817,7 @@ NAN_METHOD(RocksDBCache::merge)
     Local<Value> callback = info[4];
     std::string method = *String::Utf8Value(info[3]->ToString());
 
-    MergeBaton *baton = new MergeBaton();
+    MergeBaton* baton = new MergeBaton();
     baton->filename1 = in1;
     baton->filename2 = in2;
     baton->filename3 = out;
@@ -837,8 +829,7 @@ NAN_METHOD(RocksDBCache::merge)
     return;
 }
 
-NAN_METHOD(MemoryCache::_set)
-{
+NAN_METHOD(MemoryCache::_set) {
     if (info.Length() < 2) {
         return Nan::ThrowTypeError("expected at least two info: id, data, [languages], [append]");
     }
@@ -873,15 +864,15 @@ NAN_METHOD(MemoryCache::_set)
         bool append = info.Length() > 3 && info[3]->IsBoolean() && info[3]->BooleanValue();
 
         MemoryCache* c = node::ObjectWrap::Unwrap<MemoryCache>(info.This());
-        arraycache & arrc = c->cache_;
+        arraycache& arrc = c->cache_;
         key_type key_id = static_cast<key_type>(id);
         add_langfield(key_id, langfield);
 
         arraycache::iterator itr2 = arrc.find(key_id);
         if (itr2 == arrc.end()) {
-            arrc.emplace(key_id,intarray());
+            arrc.emplace(key_id, intarray());
         }
-        intarray & vv = arrc[key_id];
+        intarray& vv = arrc[key_id];
 
         unsigned array_size = data->Length();
         if (append) {
@@ -891,7 +882,7 @@ NAN_METHOD(MemoryCache::_set)
             vv.reserve(array_size);
         }
 
-        for (unsigned i=0;i<array_size;++i) {
+        for (unsigned i = 0; i < array_size; ++i) {
             vv.emplace_back(static_cast<uint64_t>(data->Get(i)->NumberValue()));
         }
     } catch (std::exception const& ex) {
@@ -902,8 +893,7 @@ NAN_METHOD(MemoryCache::_set)
 }
 
 template <typename T>
-inline NAN_METHOD(_genericget)
-{
+inline NAN_METHOD(_genericget) {
     if (info.Length() < 1) {
         return Nan::ThrowTypeError("expected at least one info: id, [languages]");
     }
@@ -954,8 +944,7 @@ NAN_METHOD(RocksDBCache::_get) {
     return _genericget<RocksDBCache>(info);
 }
 
-NAN_METHOD(MemoryCache::New)
-{
+NAN_METHOD(MemoryCache::New) {
     if (!info.IsConstructCall()) {
         return Nan::ThrowTypeError("Cannot call constructor as function, you need to use 'new' keyword");
     }
@@ -979,8 +968,7 @@ NAN_METHOD(MemoryCache::New)
     return;
 }
 
-NAN_METHOD(RocksDBCache::New)
-{
+NAN_METHOD(RocksDBCache::New) {
     if (!info.IsConstructCall()) {
         return Nan::ThrowTypeError("Cannot call constructor as function, you need to use 'new' keyword");
     }
@@ -1027,23 +1015,22 @@ NAN_METHOD(RocksDBCache::New)
 //reason = 12 bits
 //* 1 bit gap
 //id = 32 bits
-constexpr double _pow(double x, int y)
-{
-    return y == 0 ? 1.0 : x * _pow(x, y-1);
+constexpr double _pow(double x, int y) {
+    return y == 0 ? 1.0 : x * _pow(x, y - 1);
 }
 
-constexpr uint64_t POW2_51 = static_cast<uint64_t>(_pow(2.0,51));
-constexpr uint64_t POW2_48 = static_cast<uint64_t>(_pow(2.0,48));
-constexpr uint64_t POW2_34 = static_cast<uint64_t>(_pow(2.0,34));
-constexpr uint64_t POW2_28 = static_cast<uint64_t>(_pow(2.0,28));
-constexpr uint64_t POW2_25 = static_cast<uint64_t>(_pow(2.0,25));
-constexpr uint64_t POW2_20 = static_cast<uint64_t>(_pow(2.0,20));
-constexpr uint64_t POW2_14 = static_cast<uint64_t>(_pow(2.0,14));
-constexpr uint64_t POW2_3 = static_cast<uint64_t>(_pow(2.0,3));
-constexpr uint64_t POW2_2 = static_cast<uint64_t>(_pow(2.0,2));
+constexpr uint64_t POW2_51 = static_cast<uint64_t>(_pow(2.0, 51));
+constexpr uint64_t POW2_48 = static_cast<uint64_t>(_pow(2.0, 48));
+constexpr uint64_t POW2_34 = static_cast<uint64_t>(_pow(2.0, 34));
+constexpr uint64_t POW2_28 = static_cast<uint64_t>(_pow(2.0, 28));
+constexpr uint64_t POW2_25 = static_cast<uint64_t>(_pow(2.0, 25));
+constexpr uint64_t POW2_20 = static_cast<uint64_t>(_pow(2.0, 20));
+constexpr uint64_t POW2_14 = static_cast<uint64_t>(_pow(2.0, 14));
+constexpr uint64_t POW2_3 = static_cast<uint64_t>(_pow(2.0, 3));
+constexpr uint64_t POW2_2 = static_cast<uint64_t>(_pow(2.0, 2));
 
 struct PhrasematchSubq {
-    PhrasematchSubq(void *c,
+    PhrasematchSubq(void* c,
                     char t,
                     double w,
                     std::string p,
@@ -1051,17 +1038,16 @@ struct PhrasematchSubq {
                     unsigned short i,
                     unsigned short z,
                     uint32_t m,
-                    langfield_type l) :
-        cache(c),
-        type(t),
-        weight(w),
-        phrase(p),
-        prefix(pf),
-        idx(i),
-        zoom(z),
-        mask(m),
-        langfield(l) {}
-    void *cache;
+                    langfield_type l) : cache(c),
+                                        type(t),
+                                        weight(w),
+                                        phrase(p),
+                                        prefix(pf),
+                                        idx(i),
+                                        zoom(z),
+                                        mask(m),
+                                        langfield(l) {}
+    void* cache;
     char type;
     double weight;
     std::string phrase;
@@ -1070,8 +1056,8 @@ struct PhrasematchSubq {
     unsigned short zoom;
     uint32_t mask;
     langfield_type langfield;
-    PhrasematchSubq& operator=(PhrasematchSubq && c) = default;
-    PhrasematchSubq(PhrasematchSubq && c) = default;
+    PhrasematchSubq& operator=(PhrasematchSubq&& c) = default;
+    PhrasematchSubq(PhrasematchSubq&& c) = default;
 };
 
 struct Cover {
@@ -1094,32 +1080,31 @@ struct Context {
     double relev;
 
     Context(Context const& c) = default;
-    Context(Cover && cov,
+    Context(Cover&& cov,
             uint32_t mask,
             double relev)
-     : coverList(),
-       mask(mask),
-       relev(relev) {
-          coverList.emplace_back(std::move(cov));
-       }
-    Context& operator=(Context && c) {
+        : coverList(),
+          mask(mask),
+          relev(relev) {
+        coverList.emplace_back(std::move(cov));
+    }
+    Context& operator=(Context&& c) {
         coverList = std::move(c.coverList);
         mask = std::move(c.mask);
         relev = std::move(c.relev);
         return *this;
     }
-    Context(std::vector<Cover> && cl,
+    Context(std::vector<Cover>&& cl,
             uint32_t mask,
             double relev)
-     : coverList(std::move(cl)),
-       mask(mask),
-       relev(relev) {}
+        : coverList(std::move(cl)),
+          mask(mask),
+          relev(relev) {}
 
-    Context(Context && c)
-     : coverList(std::move(c.coverList)),
-       mask(std::move(c.mask)),
-       relev(std::move(c.relev)) {}
-
+    Context(Context&& c)
+        : coverList(std::move(c.coverList)),
+          mask(std::move(c.mask)),
+          relev(std::move(c.relev)) {}
 };
 
 Cover numToCover(uint64_t num) {
@@ -1173,7 +1158,7 @@ ZXY pxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z) {
     }
 
     // Midpoint length @ z for a tile at parent zoom level
-    double pMid_d = static_cast<double>(std::pow(2,zDist) / 2);
+    double pMid_d = static_cast<double>(std::pow(2, zDist) / 2);
     assert(pMid_d <= static_cast<double>(std::numeric_limits<unsigned>::max()));
     assert(pMid_d >= static_cast<double>(std::numeric_limits<unsigned>::min()));
     signed pMid = static_cast<signed>(pMid_d);
@@ -1182,7 +1167,7 @@ ZXY pxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z) {
     return zxy;
 }
 
-ZXY bxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z, bool max=false) {
+ZXY bxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z, bool max = false) {
     ZXY zxy;
     zxy.z = target_z;
 
@@ -1195,7 +1180,7 @@ ZXY bxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z, bool max=fals
     }
 
     // zoom conversion multiplier
-    float mult = static_cast<float>(std::pow(2,zDist));
+    float mult = static_cast<float>(std::pow(2, zDist));
 
     // zoom in min
     if (zDist > 0 && !max) {
@@ -1211,7 +1196,7 @@ ZXY bxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z, bool max=fals
     }
     // zoom out
     else {
-        unsigned mod = static_cast<unsigned>(std::pow(2,target_z));
+        unsigned mod = static_cast<unsigned>(std::pow(2, target_z));
         unsigned xDiff = x % mod;
         unsigned yDiff = y % mod;
         unsigned newX = x - xDiff;
@@ -1224,18 +1209,29 @@ ZXY bxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z, bool max=fals
 }
 
 inline bool coverSortByRelev(Cover const& a, Cover const& b) noexcept {
-    if (b.relev > a.relev) return false;
-    else if (b.relev < a.relev) return true;
-    else if (b.scoredist > a.scoredist) return false;
-    else if (b.scoredist < a.scoredist) return true;
-    else if (b.idx < a.idx) return false;
-    else if (b.idx > a.idx) return true;
-    else if (b.id < a.id) return false;
-    else if (b.id > a.id) return true;
+    if (b.relev > a.relev)
+        return false;
+    else if (b.relev < a.relev)
+        return true;
+    else if (b.scoredist > a.scoredist)
+        return false;
+    else if (b.scoredist < a.scoredist)
+        return true;
+    else if (b.idx < a.idx)
+        return false;
+    else if (b.idx > a.idx)
+        return true;
+    else if (b.id < a.id)
+        return false;
+    else if (b.id > a.id)
+        return true;
     // sorting by x and y is arbitrary but provides a more deterministic output order
-    else if (b.x < a.x) return false;
-    else if (b.x > a.x) return true;
-    else return (b.y > a.y);
+    else if (b.x < a.x)
+        return false;
+    else if (b.x > a.x)
+        return true;
+    else
+        return (b.y > a.y);
 }
 
 inline bool subqSortByZoom(PhrasematchSubq const& a, PhrasematchSubq const& b) noexcept {
@@ -1245,12 +1241,18 @@ inline bool subqSortByZoom(PhrasematchSubq const& a, PhrasematchSubq const& b) n
 }
 
 inline bool contextSortByRelev(Context const& a, Context const& b) noexcept {
-    if (b.relev > a.relev) return false;
-    else if (b.relev < a.relev) return true;
-    else if (b.coverList[0].scoredist > a.coverList[0].scoredist) return false;
-    else if (b.coverList[0].scoredist < a.coverList[0].scoredist) return true;
-    else if (b.coverList[0].idx < a.coverList[0].idx) return false;
-    else if (b.coverList[0].idx > a.coverList[0].idx) return true;
+    if (b.relev > a.relev)
+        return false;
+    else if (b.relev < a.relev)
+        return true;
+    else if (b.coverList[0].scoredist > a.coverList[0].scoredist)
+        return false;
+    else if (b.coverList[0].scoredist < a.coverList[0].scoredist)
+        return true;
+    else if (b.coverList[0].idx < a.coverList[0].idx)
+        return false;
+    else if (b.coverList[0].idx > a.coverList[0].idx)
+        return true;
     return (b.coverList[0].id > a.coverList[0].id);
 }
 
@@ -1291,21 +1293,21 @@ double scoredist(unsigned zoom, double distance, double score, double radius) {
     // a tile unit value at the appropriate zoom first.
     //
     // 32 tiles is about 40 miles at z14, use this as our mile <=> tile conversion.
-    scoredist = ((radius*(32.0/40.0)) / _pow(1.5, 14 - static_cast<int>(zoom))) / distance;
+    scoredist = ((radius * (32.0 / 40.0)) / _pow(1.5, 14 - static_cast<int>(zoom))) / distance;
 
     return score > scoredist ? score : scoredist;
 }
 
-void coalesceFinalize(CoalesceBaton* baton, std::vector<Context> && contexts) {
+void coalesceFinalize(CoalesceBaton* baton, std::vector<Context>&& contexts) {
     if (!contexts.empty()) {
         // Coalesce stack, generate relevs.
         double relevMax = contexts[0].relev;
         std::size_t total = 0;
-        std::map<uint64_t,bool> sets;
-        std::map<uint64_t,bool>::iterator sit;
+        std::map<uint64_t, bool> sets;
+        std::map<uint64_t, bool>::iterator sit;
         std::size_t max_contexts = 40;
         baton->features.reserve(max_contexts);
-        for (auto && context : contexts) {
+        for (auto&& context : contexts) {
             // Maximum allowance of coalesced features: 40.
             if (total >= max_contexts) break;
 
@@ -1325,7 +1327,7 @@ void coalesceFinalize(CoalesceBaton* baton, std::vector<Context> && contexts) {
     }
 }
 void coalesceSingle(uv_work_t* req) {
-    CoalesceBaton *baton = static_cast<CoalesceBaton *>(req->data);
+    CoalesceBaton* baton = static_cast<CoalesceBaton*>(req->data);
 
     try {
         std::vector<PhrasematchSubq> const& stack = baton->stack;
@@ -1366,9 +1368,7 @@ void coalesceSingle(uv_work_t* req) {
 
         // Load and concatenate grids for all ids in `phrases`
         intarray grids;
-        grids = subq.type == TYPE_MEMORY ?
-            __getmatching(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, subq.prefix, subq.langfield) :
-            __getmatching(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, subq.prefix, subq.langfield);
+        grids = subq.type == TYPE_MEMORY ? __getmatching(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, subq.prefix, subq.langfield) : __getmatching(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, subq.prefix, subq.langfield);
 
         unsigned long m = grids.size();
         double relevMax = 0;
@@ -1424,7 +1424,7 @@ void coalesceSingle(uv_work_t* req) {
         std::vector<Context> contexts;
         std::size_t max_contexts = 40;
         contexts.reserve(max_contexts);
-        for (auto && cover : covers) {
+        for (auto&& cover : covers) {
             // Stop at 40 contexts
             if (added == max_contexts) break;
 
@@ -1436,7 +1436,7 @@ void coalesceSingle(uv_work_t* req) {
 
             double relev = cover.relev;
             uint32_t mask = 0;
-            contexts.emplace_back(std::move(cover),mask,relev);
+            contexts.emplace_back(std::move(cover), mask, relev);
         }
 
         coalesceFinalize(baton, std::move(contexts));
@@ -1446,10 +1446,10 @@ void coalesceSingle(uv_work_t* req) {
 }
 
 void coalesceMulti(uv_work_t* req) {
-    CoalesceBaton *baton = static_cast<CoalesceBaton *>(req->data);
+    CoalesceBaton* baton = static_cast<CoalesceBaton*>(req->data);
 
     try {
-        std::vector<PhrasematchSubq> &stack = baton->stack;
+        std::vector<PhrasematchSubq>& stack = baton->stack;
         std::sort(stack.begin(), stack.end(), subqSortByZoom);
         std::size_t stackSize = stack.size();
 
@@ -1472,11 +1472,11 @@ void coalesceMulti(uv_work_t* req) {
         // Coalesce relevs into higher zooms, e.g.
         // z5 inherits relev of overlapping tiles at z4.
         // @TODO assumes sources are in zoom ascending order.
-        std::map<uint64_t,std::vector<Context>> coalesced;
-        std::map<uint64_t,std::vector<Context>>::iterator cit;
-        std::map<uint64_t,std::vector<Context>>::iterator pit;
-        std::map<uint64_t,bool> done;
-        std::map<uint64_t,bool>::iterator dit;
+        std::map<uint64_t, std::vector<Context>> coalesced;
+        std::map<uint64_t, std::vector<Context>>::iterator cit;
+        std::map<uint64_t, std::vector<Context>>::iterator pit;
+        std::map<uint64_t, bool> done;
+        std::map<uint64_t, bool>::iterator dit;
 
         // proximity (optional)
         bool proximity = baton->centerzxy.size() > 0;
@@ -1519,9 +1519,7 @@ void coalesceMulti(uv_work_t* req) {
         for (auto const& subq : stack) {
             // Load and concatenate grids for all ids in `phrases`
             intarray grids;
-            grids = subq.type == TYPE_MEMORY ?
-                __getmatching(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, subq.prefix, subq.langfield) :
-                __getmatching(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, subq.prefix, subq.langfield);
+            grids = subq.type == TYPE_MEMORY ? __getmatching(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, subq.prefix, subq.langfield) : __getmatching(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, subq.prefix, subq.langfield);
 
             bool first = i == 0;
             bool last = i == (stack.size() - 1);
@@ -1566,10 +1564,10 @@ void coalesceMulti(uv_work_t* req) {
 
                 for (unsigned a = 0; a < zCacheSize; a++) {
                     uint64_t p = zCache[a];
-                    double s = static_cast<double>(1 << (z-p));
+                    double s = static_cast<double>(1 << (z - p));
                     uint64_t pxy = static_cast<uint64_t>(p * POW2_28) +
-                        static_cast<uint64_t>(std::floor(cover.x/s) * POW2_14) +
-                        static_cast<uint64_t>(std::floor(cover.y/s));
+                                   static_cast<uint64_t>(std::floor(cover.x / s) * POW2_14) +
+                                   static_cast<uint64_t>(std::floor(cover.y / s));
                     pit = coalesced.find(pxy);
                     if (pit != coalesced.end()) {
                         uint32_t lastMask = 0;
@@ -1585,7 +1583,7 @@ void coalesceMulti(uv_work_t* req) {
                                     context_relev += parent.relev;
                                     lastMask = parent.mask;
                                     lastRelev = parent.relev;
-                                // this cover doesn't overlap with used mask.
+                                    // this cover doesn't overlap with used mask.
                                 } else if (!(context_mask & parent.mask)) {
                                     covers.emplace_back(parent);
                                     context_relev += parent.relev;
@@ -1602,19 +1600,19 @@ void coalesceMulti(uv_work_t* req) {
                     // Slightly penalize contexts that have no stacking
                     if (covers.size() == 1) {
                         context_relev -= 0.01;
-                    // Slightly penalize contexts in ascending order
+                        // Slightly penalize contexts in ascending order
                     } else if (covers[0].mask > covers[1].mask) {
                         context_relev -= 0.01;
                     }
-                    contexts.emplace_back(std::move(covers),context_mask,context_relev);
+                    contexts.emplace_back(std::move(covers), context_mask, context_relev);
                 } else if (first || covers.size() > 1) {
                     cit = coalesced.find(zxy);
                     if (cit == coalesced.end()) {
                         std::vector<Context> local_contexts;
-                        local_contexts.emplace_back(std::move(covers),context_mask,context_relev);
+                        local_contexts.emplace_back(std::move(covers), context_mask, context_relev);
                         coalesced.emplace(zxy, std::move(local_contexts));
                     } else {
-                        cit->second.emplace_back(std::move(covers),context_mask,context_relev);
+                        cit->second.emplace_back(std::move(covers), context_mask, context_relev);
                     }
                 }
             }
@@ -1623,8 +1621,8 @@ void coalesceMulti(uv_work_t* req) {
         }
 
         // append coalesced to contexts by moving memory
-        for (auto && matched : coalesced) {
-            for (auto &&context : matched.second) {
+        for (auto&& matched : coalesced) {
+            for (auto&& context : matched.second) {
                 contexts.emplace_back(std::move(context));
             }
         }
@@ -1632,7 +1630,7 @@ void coalesceMulti(uv_work_t* req) {
         std::sort(contexts.begin(), contexts.end(), contextSortByRelev);
         coalesceFinalize(baton, std::move(contexts));
     } catch (std::exception const& ex) {
-       baton->error = ex.what();
+        baton->error = ex.what();
     }
 }
 
@@ -1661,19 +1659,20 @@ Local<Array> contextToArray(Context const& context) {
 }
 void coalesceAfter(uv_work_t* req) {
     Nan::HandleScope scope;
-    CoalesceBaton *baton = static_cast<CoalesceBaton *>(req->data);
+    CoalesceBaton* baton = static_cast<CoalesceBaton*>(req->data);
 
     // Reference count the cache objects
-    for (auto & subq : baton->stack) {
-        if (subq.type == TYPE_MEMORY) reinterpret_cast<MemoryCache*>(subq.cache)->_unref();
-        else reinterpret_cast<RocksDBCache*>(subq.cache)->_unref();
+    for (auto& subq : baton->stack) {
+        if (subq.type == TYPE_MEMORY)
+            reinterpret_cast<MemoryCache*>(subq.cache)->_unref();
+        else
+            reinterpret_cast<RocksDBCache*>(subq.cache)->_unref();
     }
 
     if (!baton->error.empty()) {
-        v8::Local<v8::Value> argv[1] = { Nan::Error(baton->error.c_str()) };
+        v8::Local<v8::Value> argv[1] = {Nan::Error(baton->error.c_str())};
         Nan::MakeCallback(Nan::GetCurrentContext()->Global(), Nan::New(baton->callback), 1, argv);
-    }
-    else {
+    } else {
         std::vector<Context> const& features = baton->features;
 
         Local<Array> jsFeatures = Nan::New<Array>(static_cast<int>(features.size()));
@@ -1681,7 +1680,7 @@ void coalesceAfter(uv_work_t* req) {
             jsFeatures->Set(i, contextToArray(features[i]));
         }
 
-        Local<Value> argv[2] = { Nan::Null(), jsFeatures };
+        Local<Value> argv[2] = {Nan::Null(), jsFeatures};
         Nan::MakeCallback(Nan::GetCurrentContext()->Global(), Nan::New(baton->callback), 2, argv);
     }
 
@@ -1853,7 +1852,7 @@ NAN_METHOD(coalesce) {
                 }
                 if (isMemoryCache) {
                     baton->stack.emplace_back(
-                        (void*) node::ObjectWrap::Unwrap<MemoryCache>(_cache),
+                        (void*)node::ObjectWrap::Unwrap<MemoryCache>(_cache),
                         TYPE_MEMORY,
                         weight,
                         phrase,
@@ -1861,11 +1860,10 @@ NAN_METHOD(coalesce) {
                         idx,
                         zoom,
                         mask,
-                        langfield
-                    );
+                        langfield);
                 } else {
                     baton->stack.emplace_back(
-                        (void*) node::ObjectWrap::Unwrap<RocksDBCache>(_cache),
+                        (void*)node::ObjectWrap::Unwrap<RocksDBCache>(_cache),
                         TYPE_ROCKSDB,
                         weight,
                         phrase,
@@ -1873,8 +1871,7 @@ NAN_METHOD(coalesce) {
                         idx,
                         zoom,
                         mask,
-                        langfield
-                    );
+                        langfield);
                 }
             }
         }
@@ -1946,9 +1943,11 @@ NAN_METHOD(coalesce) {
         // Release the managed baton
         baton_ptr.release();
         // Reference count the cache objects
-        for (auto & subq : baton->stack) {
-           if (subq.type == TYPE_MEMORY) reinterpret_cast<MemoryCache*>(subq.cache)->_ref();
-           else reinterpret_cast<RocksDBCache*>(subq.cache)->_ref();
+        for (auto& subq : baton->stack) {
+            if (subq.type == TYPE_MEMORY)
+                reinterpret_cast<MemoryCache*>(subq.cache)->_ref();
+            else
+                reinterpret_cast<RocksDBCache*>(subq.cache)->_ref();
         }
         // optimization: for stacks of 1, use coalesceSingle
         if (baton->stack.size() == 1) {
@@ -1965,8 +1964,7 @@ NAN_METHOD(coalesce) {
 }
 
 template <typename T>
-inline NAN_METHOD(_genericgetmatching)
-{
+inline NAN_METHOD(_genericgetmatching) {
     if (info.Length() < 2) {
         return Nan::ThrowTypeError("expected two or three info: id, match_prefixes, [languages]");
     }
@@ -2046,30 +2044,30 @@ void NormalizationCache::Initialize(Handle<Object> target) {
 }
 
 NormalizationCache::NormalizationCache()
-  : ObjectWrap(),
-    db() {}
+    : ObjectWrap(),
+      db() {}
 
-NormalizationCache::~NormalizationCache() { }
+NormalizationCache::~NormalizationCache() {}
 
 class UInt32Comparator : public rocksdb::Comparator {
-    public:
-        UInt32Comparator(const UInt32Comparator &) = delete;
-        UInt32Comparator &operator=(const UInt32Comparator &) = delete;
-        UInt32Comparator() = default;
+  public:
+    UInt32Comparator(const UInt32Comparator&) = delete;
+    UInt32Comparator& operator=(const UInt32Comparator&) = delete;
+    UInt32Comparator() = default;
 
-        int Compare(const rocksdb::Slice& a, const rocksdb::Slice& b) const override {
-            uint32_t ia = 0, ib = 0;
-            if (a.size() >= sizeof(uint32_t)) memcpy(&ia, a.data(), sizeof(uint32_t));
-            if (b.size() >= sizeof(uint32_t)) memcpy(&ib, b.data(), sizeof(uint32_t));
+    int Compare(const rocksdb::Slice& a, const rocksdb::Slice& b) const override {
+        uint32_t ia = 0, ib = 0;
+        if (a.size() >= sizeof(uint32_t)) memcpy(&ia, a.data(), sizeof(uint32_t));
+        if (b.size() >= sizeof(uint32_t)) memcpy(&ib, b.data(), sizeof(uint32_t));
 
-            if (ia < ib) return -1;
-            if (ia > ib) return +1;
-            return 0;
-        }
+        if (ia < ib) return -1;
+        if (ia > ib) return +1;
+        return 0;
+    }
 
     const char* Name() const override { return "UInt32Comparator"; }
-    void FindShortestSeparator(std::string *start, const rocksdb::Slice &limit) const override {}
-    void FindShortSuccessor(std::string *key) const override {}
+    void FindShortestSeparator(std::string* start, const rocksdb::Slice& limit) const override {}
+    void FindShortSuccessor(std::string* key) const override {}
 };
 UInt32Comparator UInt32ComparatorInstance;
 
@@ -2143,7 +2141,7 @@ NAN_METHOD(NormalizationCache::get) {
     found = s.ok();
 
     size_t message_length = message.size();
-    if (found && message_length >= sizeof (uint32_t)) {
+    if (found && message_length >= sizeof(uint32_t)) {
         Local<Array> out = Nan::New<Array>();
         uint32_t entry;
         for (uint32_t i = 0; i * sizeof(uint32_t) < message_length; i++) {
@@ -2315,15 +2313,14 @@ NAN_METHOD(NormalizationCache::writebatch) {
 }
 
 extern "C" {
-    static void start(Handle<Object> target) {
-        MemoryCache::Initialize(target);
-        RocksDBCache::Initialize(target);
-        NormalizationCache::Initialize(target);
-        Nan::SetMethod(target, "coalesce", coalesce);
-    }
+static void start(Handle<Object> target) {
+    MemoryCache::Initialize(target);
+    RocksDBCache::Initialize(target);
+    NormalizationCache::Initialize(target);
+    Nan::SetMethod(target, "coalesce", coalesce);
+}
 }
 
 } // namespace carmen
-
 
 NODE_MODULE(carmen, carmen::start)

@@ -22,7 +22,7 @@
     "install": "node-pre-gyp install --fallback-to-build"
   },
   "eslintConfig": {
-      "extends": "@mapbox/eslint-config-geocoding"
+    "extends": "@mapbox/eslint-config-geocoding"
   },
   "devDependencies": {
     "@mapbox/eslint-config-geocoding": "^1.0.1",
