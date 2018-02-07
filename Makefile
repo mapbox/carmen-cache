@@ -17,7 +17,10 @@ debug: node_modules
 
 coverage:
 	./scripts/coverage.sh
-
+tidy:
+	./scripts/clang-tidy.sh
+format:
+	./scripts/clang-format.sh
 clean:
 	rm -rf lib/binding
 	rm -rf build
