@@ -13,6 +13,9 @@
 #pragma clang diagnostic ignored "-Wsign-conversion"
 #pragma clang diagnostic ignored "-Wshorten-64-to-32"
 #include "radix_max_heap.h"
+#include "rocksdb/comparator.h"
+#include "rocksdb/db.h"
+#include "rocksdb/write_batch.h"
 #include <algorithm>
 #include <deque>
 #include <exception>
@@ -22,15 +25,12 @@
 #include <nan.h>
 #include <string>
 #include <vector>
-#include "rocksdb/comparator.h"
-#include "rocksdb/db.h"
-#include "rocksdb/write_batch.h"
 #pragma clang diagnostic pop
+#include <cassert>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <tuple>
-#include <cassert>
-#include <cstring>
 
 namespace carmen {
 
