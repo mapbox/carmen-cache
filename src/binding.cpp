@@ -1164,8 +1164,8 @@ ZXY pxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z) {
     zxy.z = target_z;
 
     // Interval between parent and target zoom level
-    unsigned zDist = target_z - z;
-    unsigned zMult = zDist - 1;
+    signed zDist = static_cast<signed>(target_z) - static_cast<signed>(z);
+    signed zMult = zDist - 1;
     if (zDist == 0) {
         zxy.x = x;
         zxy.y = y;
@@ -1173,12 +1173,12 @@ ZXY pxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z) {
     }
 
     // Midpoint length @ z for a tile at parent zoom level
-    unsigned pMid_d = static_cast<unsigned>(std::pow(2,zDist) / 2);
+    double pMid_d = static_cast<double>(std::pow(2,zDist) / 2);
     assert(pMid_d <= static_cast<double>(std::numeric_limits<unsigned>::max()));
     assert(pMid_d >= static_cast<double>(std::numeric_limits<unsigned>::min()));
-    unsigned pMid = static_cast<unsigned>(pMid_d);
-    zxy.x = (x * zMult) + pMid;
-    zxy.y = (y * zMult) + pMid;
+    signed pMid = static_cast<signed>(pMid_d);
+    zxy.x = static_cast<unsigned>((static_cast<signed>(x) * zMult) + pMid);
+    zxy.y = static_cast<unsigned>((static_cast<signed>(y) * zMult) + pMid);
     return zxy;
 }
 
@@ -1187,7 +1187,7 @@ ZXY bxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z, bool max=fals
     zxy.z = target_z;
 
     // Interval between parent and target zoom level
-    signed zDist = target_z - z;
+    signed zDist = static_cast<signed>(target_z) - static_cast<signed>(z);
     if (zDist == 0) {
         zxy.x = x;
         zxy.y = y;
