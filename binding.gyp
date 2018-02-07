@@ -12,7 +12,7 @@
             '-Wextra',
             '-Weffc++',
             '-Wconversion',
-            '-pedantic-errors',
+            '-pedantic',
             '-Wconversion',
             '-Wshadow',
             '-Wfloat-equal',

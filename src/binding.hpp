@@ -44,13 +44,7 @@ class noncopyable {
 
 typedef std::string key_type;
 typedef uint64_t value_type;
-
-// GCC complains about this type as being nonstandard, so shut it up
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-pedantic-errors"
 typedef unsigned __int128 langfield_type;
-#pragma GCC diagnostic pop
-
 // fully cached item
 typedef std::vector<value_type> intarray;
 typedef std::vector<key_type> keyarray;
