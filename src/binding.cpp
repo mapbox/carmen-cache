@@ -1136,7 +1136,7 @@ Cover numToCover(uint64_t num) {
     cover.distance = 0;
 
     return cover;
-};
+}
 
 struct ZXY {
     unsigned z;
