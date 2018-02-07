@@ -4,6 +4,7 @@
 #include <climits>
 #include <cstdint>
 #include <limits>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <vector>
