@@ -22,17 +22,15 @@
 #include <nan.h>
 #include <string>
 #include <vector>
+#include "rocksdb/comparator.h"
+#include "rocksdb/db.h"
+#include "rocksdb/write_batch.h"
 #pragma clang diagnostic pop
 #include <fstream>
 #include <iostream>
 #include <tuple>
-
 #include <cassert>
 #include <cstring>
-
-#include "rocksdb/comparator.h"
-#include "rocksdb/db.h"
-#include "rocksdb/write_batch.h"
 
 namespace carmen {
 
