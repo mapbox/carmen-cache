@@ -123,6 +123,7 @@ tape('pack', (assert) => {
 
     // invalid args
     assert.throws(() => { new carmenCache.RocksDBCache('a'); });
+    assert.throws(() => { const loader = new carmenCache.MemoryCache('a'); loader.pack(); });
     assert.throws(() => { const loader = new carmenCache.MemoryCache('a'); loader.pack(1); });
     assert.throws(() => { new carmenCache.RocksDBCache('a', 1); });
     assert.throws(() => { new carmenCache.RocksDBCache('a', null); });
@@ -135,6 +136,12 @@ tape('pack', (assert) => {
     const loader = new carmenCache.RocksDBCache('a', directLoad);
     assert.deepEqual(loader._get('5'), sortedDescending(array));
     assert.deepEqual(loader._get('6'), sortedDescending(array));
+
+    // test what happens when you pack a rocksdbcache
+    assert.throws(() => { loader.pack(); }, 'filename is required');
+    assert.throws(() => { loader.pack(1); }, 'filename must be a string');
+    assert.throws(() => { loader.pack(directLoad); }, 'can\'t pack into an already-loaded file');
+    assert.ok(() =>  { loader.pack(tmpfile()); }, 'repacking works');
 
     assert.end();
 });
