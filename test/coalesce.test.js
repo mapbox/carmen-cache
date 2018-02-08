@@ -347,6 +347,47 @@ test('coalesce args', (assert) => {
     });
 })();
 
+// exercise the sort function
+(function() {
+    const caches = {
+        'x': new MemoryCache('x', 0),
+        'y': new MemoryCache('y', 0)
+    };
+    for (const toIncrement of ['x', 'y']) {
+        const entries = [];
+        for (const incVal of [0, 1]) {
+            for (const id of [1, 2, 3]) {
+                const item = {
+                    id: id,
+                    x: 1,
+                    y: 1,
+                    relev: 1,
+                    score: 1
+                };
+                item[toIncrement] += incVal;
+                entries.push(item);
+            }
+        }
+        caches[toIncrement]._set('1', entries.map(Grid.encode));
+
+        test('coalesceSingle sort tests: ' + toIncrement, (assert) => {
+            coalesce([{
+                cache: caches[toIncrement],
+                mask: 1 << 0,
+                idx: 0,
+                zoom: 2,
+                weight: 1,
+                phrase: '1',
+                prefix: false
+            }], {}, (err, res) => {
+                assert.ifError(err);
+                assert.ok(res);
+                assert.end();
+            });
+        });
+    }
+})();
+
 (function() {
     const memcache = new MemoryCache('a', 0);
     const grids = [];
@@ -899,7 +940,6 @@ test('coalesce args', (assert) => {
         });
     });
 })();
-
 
 // cooalese multi bbox
 (function() {
