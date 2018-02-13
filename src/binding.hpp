@@ -115,6 +115,10 @@ constexpr langfield_type ALL_LANGUAGES = ~(langfield_type)(0);
 
 #define TYPE_MEMORY 1
 #define TYPE_ROCKSDB 2
+
+intarray __getmatching(MemoryCache const* c, std::string phrase, bool match_prefixes, langfield_type langfield);
+intarray __getmatching(RocksDBCache const* c, std::string phrase, bool match_prefixes, langfield_type langfield);
+
 } // namespace carmen
 
 #endif // __CARMEN_BINDING_HPP__

@@ -42,6 +42,9 @@
             'dependencies': [ 'action_before_build' ],
             'product_dir': '<(module_path)',
             'sources': [
+                "./src/cpp_util.cpp",
+                "./src/node_util.cpp",
+                "./src/coalesce.cpp",
                 "./src/binding.cpp"
             ],
             "include_dirs" : [
