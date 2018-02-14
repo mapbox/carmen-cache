@@ -1,8 +1,8 @@
 #ifndef __CARMEN_ROCKSDBCACHE_HPP__
 #define __CARMEN_ROCKSDBCACHE_HPP__
 
-#include "node_util.hpp"
 #include "cpp_util.hpp"
+#include "node_util.hpp"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunknown-pragmas"
@@ -100,7 +100,7 @@ class RocksDBCache : public node::ObjectWrap {
 };
 
 void mergeQueue(uv_work_t* req);
-void mergeAfter(uv_work_t* req);
+void mergeAfter(uv_work_t* req, int status);
 
 intarray __get(RocksDBCache const* c, std::string phrase, langfield_type langfield);
 intarray __getmatching(RocksDBCache const* c, std::string phrase, bool match_prefixes, langfield_type langfield);

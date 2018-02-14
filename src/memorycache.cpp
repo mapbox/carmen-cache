@@ -1,6 +1,6 @@
 
-#include "cpp_util.hpp"
 #include "memorycache.hpp"
+#include "cpp_util.hpp"
 
 namespace carmen {
 
@@ -72,7 +72,6 @@ MemoryCache::MemoryCache()
       cache_() {}
 
 MemoryCache::~MemoryCache() {}
-
 
 NAN_METHOD(MemoryCache::pack) {
     if (info.Length() < 1) {
@@ -180,7 +179,6 @@ NAN_METHOD(MemoryCache::pack) {
     return;
 }
 
-
 NAN_METHOD(MemoryCache::list) {
     try {
         Nan::Utf8String utf8_value(info[0]);
@@ -210,10 +208,7 @@ NAN_METHOD(MemoryCache::list) {
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
     }
-    info.GetReturnValue().Set(Nan::Undefined());
-    return;
 }
-
 
 NAN_METHOD(MemoryCache::_set) {
     if (info.Length() < 2) {
@@ -302,8 +297,6 @@ NAN_METHOD(MemoryCache::New) {
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
     }
-    info.GetReturnValue().Set(Nan::Undefined());
-    return;
 }
 
 NAN_METHOD(MemoryCache::_getmatching) {

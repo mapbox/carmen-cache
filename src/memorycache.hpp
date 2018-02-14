@@ -1,8 +1,8 @@
 #ifndef __CARMEN_MEMORYCACHE_HPP__
 #define __CARMEN_MEMORYCACHE_HPP__
 
-#include "node_util.hpp"
 #include "cpp_util.hpp"
+#include "node_util.hpp"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunknown-pragmas"
@@ -19,7 +19,6 @@
 #include <nan.h>
 
 #pragma clang diagnostic pop
-
 
 namespace carmen {
 

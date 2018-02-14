@@ -1,6 +1,6 @@
 
-#include "binding.hpp"
 #include "coalesce.hpp"
+#include "binding.hpp"
 
 namespace carmen {
 
@@ -170,7 +170,7 @@ NAN_METHOD(coalesce) {
                 }
                 if (isMemoryCache) {
                     baton->stack.emplace_back(
-                        (void*)node::ObjectWrap::Unwrap<MemoryCache>(_cache),
+                        static_cast<void*>(node::ObjectWrap::Unwrap<MemoryCache>(_cache)),
                         TYPE_MEMORY,
                         weight,
                         phrase,
@@ -181,7 +181,7 @@ NAN_METHOD(coalesce) {
                         langfield);
                 } else {
                     baton->stack.emplace_back(
-                        (void*)node::ObjectWrap::Unwrap<RocksDBCache>(_cache),
+                        static_cast<void*>(node::ObjectWrap::Unwrap<RocksDBCache>(_cache)),
                         TYPE_ROCKSDB,
                         weight,
                         phrase,
@@ -269,9 +269,9 @@ NAN_METHOD(coalesce) {
         }
         // optimization: for stacks of 1, use coalesceSingle
         if (baton->stack.size() == 1) {
-            uv_queue_work(uv_default_loop(), &baton->request, coalesceSingle, (uv_after_work_cb)coalesceAfter);
+            uv_queue_work(uv_default_loop(), &baton->request, coalesceSingle, static_cast<uv_after_work_cb>(coalesceAfter));
         } else {
-            uv_queue_work(uv_default_loop(), &baton->request, coalesceMulti, (uv_after_work_cb)coalesceAfter);
+            uv_queue_work(uv_default_loop(), &baton->request, coalesceMulti, static_cast<uv_after_work_cb>(coalesceAfter));
         }
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
@@ -589,7 +589,11 @@ void coalesceMulti(uv_work_t* req) {
     }
 }
 
-void coalesceAfter(uv_work_t* req) {
+// we don't use the 'status' parameter, but it's required as part of the uv_after_work_cb
+// function signature, so suppress the warning about it
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-parameter"
+void coalesceAfter(uv_work_t* req, int status) {
     Nan::HandleScope scope;
     CoalesceBaton* baton = static_cast<CoalesceBaton*>(req->data);
 
@@ -608,7 +612,7 @@ void coalesceAfter(uv_work_t* req) {
         std::vector<Context> const& features = baton->features;
 
         Local<Array> jsFeatures = Nan::New<Array>(static_cast<int>(features.size()));
-        for (std::size_t i = 0; i < features.size(); i++) {
+        for (uint32_t i = 0; i < features.size(); i++) {
             jsFeatures->Set(i, contextToArray(features[i]));
         }
 
@@ -619,6 +623,7 @@ void coalesceAfter(uv_work_t* req) {
     baton->callback.Reset();
     delete baton;
 }
+#pragma clang diagnostic pop
 
 void coalesceFinalize(CoalesceBaton* baton, std::vector<Context>&& contexts) {
     if (!contexts.empty()) {
