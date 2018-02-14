@@ -210,8 +210,6 @@ NAN_METHOD(MemoryCache::list) {
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
     }
-    info.GetReturnValue().Set(Nan::Undefined());
-    return;
 }
 
 
@@ -302,8 +300,6 @@ NAN_METHOD(MemoryCache::New) {
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
     }
-    info.GetReturnValue().Set(Nan::Undefined());
-    return;
 }
 
 NAN_METHOD(MemoryCache::_getmatching) {

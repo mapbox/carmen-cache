@@ -101,8 +101,6 @@ NAN_METHOD(NormalizationCache::New) {
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
     }
-    info.GetReturnValue().Set(Nan::Undefined());
-    return;
 }
 
 NAN_METHOD(NormalizationCache::get) {

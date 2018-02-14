@@ -168,8 +168,6 @@ NAN_METHOD(RocksDBCache::pack) {
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
     }
-    info.GetReturnValue().Set(Nan::Undefined());
-    return;
 }
 
 void mergeQueue(uv_work_t* req) {
@@ -378,6 +376,10 @@ void mergeQueue(uv_work_t* req) {
     }
 }
 
+// we don't use the 'status' parameter, but it's required as part of the uv_after_work_cb
+// function signature, so suppress the warning about it
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-parameter"
 void mergeAfter(uv_work_t* req, int status) {
     Nan::HandleScope scope;
     MergeBaton* baton = static_cast<MergeBaton*>(req->data);
@@ -391,6 +393,7 @@ void mergeAfter(uv_work_t* req, int status) {
     baton->callback.Reset();
     delete baton;
 }
+#pragma clang diagnostic pop
 
 
 NAN_METHOD(RocksDBCache::_get) {
@@ -428,8 +431,6 @@ NAN_METHOD(RocksDBCache::list) {
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
     }
-    info.GetReturnValue().Set(Nan::Undefined());
-    return;
 }
 
 NAN_METHOD(RocksDBCache::merge) {
@@ -496,8 +497,6 @@ NAN_METHOD(RocksDBCache::New) {
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
     }
-    info.GetReturnValue().Set(Nan::Undefined());
-    return;
 }
 
 NAN_METHOD(RocksDBCache::_getmatching) {
