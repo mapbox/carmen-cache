@@ -6,8 +6,28 @@
 #include <vector>
 #include <cassert>
 #include <cmath>
+#include <map>
+#include "rocksdb/db.h"
+#include <protozero/pbf_reader.hpp>
+#include <protozero/pbf_writer.hpp>
 
 namespace carmen {
+
+typedef std::string key_type;
+typedef uint64_t value_type;
+typedef unsigned __int128 langfield_type;
+// fully cached item
+typedef std::vector<value_type> intarray;
+typedef std::vector<key_type> keyarray;
+typedef std::map<key_type, intarray> arraycache;
+
+class noncopyable {
+  protected:
+    constexpr noncopyable() = default;
+    ~noncopyable() = default;
+    noncopyable(noncopyable const&) = delete;
+    noncopyable& operator=(noncopyable const&) = delete;
+};
 
 typedef unsigned __int128 langfield_type;
 constexpr uint64_t LANGUAGE_MATCH_BOOST = (const uint64_t)(1) << 63;
@@ -175,6 +195,85 @@ inline double tileDist(unsigned px, unsigned py, unsigned tileX, unsigned tileY)
 
     return distance;
 }
+
+
+constexpr langfield_type ALL_LANGUAGES = ~(langfield_type)(0);
+#define LANGFIELD_SEPARATOR '|'
+
+inline void add_langfield(std::string& s, langfield_type langfield) {
+    if (langfield != ALL_LANGUAGES) {
+        char* lf_as_char = reinterpret_cast<char*>(&langfield);
+
+        // we only want to copy over as many bytes as we're using
+        // so find the last byte that's not zero, and copy until there
+        // NOTE: this assumes little-endianness, where the bytes
+        // in use will be first rather than last
+        size_t highest(0);
+        for (size_t i = 0; i < sizeof(langfield_type); i++) {
+            if (lf_as_char[i] != 0) highest = i;
+        }
+        size_t field_length = highest + 1;
+
+        s.reserve(sizeof(LANGFIELD_SEPARATOR) + field_length);
+        s.push_back(LANGFIELD_SEPARATOR);
+        s.append(lf_as_char, field_length);
+    } else {
+        s.push_back(LANGFIELD_SEPARATOR);
+    }
+}
+
+// in general, the key format including language field is <key_text><separator character><8-byte langfield>
+// but as a size optimization for language-less indexes, we omit the langfield
+// if it would otherwise have been ALL_LANGUAGES (all 1's), so if the first occurence
+// of the separator character is also the last character in the string, we just retur ALL_LANGUAGES
+// otherwise we extract it from the string
+//
+// we centralize both the adding of the field and extracting of the field here to keep from having
+// to handle that optimization everywhere
+inline langfield_type extract_langfield(std::string const& s) {
+    size_t length = s.length();
+    size_t langfield_start = s.find(LANGFIELD_SEPARATOR) + 1;
+    size_t distance_from_end = length - langfield_start;
+
+    if (distance_from_end == 0) {
+        return ALL_LANGUAGES;
+    } else {
+        langfield_type result(0);
+        memcpy(&result, s.data() + langfield_start, distance_from_end);
+        return result;
+    }
+}
+
+inline void packVec(intarray const& varr, std::unique_ptr<rocksdb::DB> const& db, std::string const& key) {
+    std::string message;
+
+    protozero::pbf_writer item_writer(message);
+
+    {
+        // Using new (in protozero 1.3.0) packed writing API
+        // https://github.com/mapbox/protozero/commit/4e7e32ac5350ea6d3dcf78ff5e74faeee513a6e1
+        protozero::packed_field_uint64 field{item_writer, 1};
+        uint64_t lastval = 0;
+        for (auto const& vitem : varr) {
+            if (lastval == 0) {
+                field.add_element(static_cast<uint64_t>(vitem));
+            } else {
+                field.add_element(static_cast<uint64_t>(lastval - vitem));
+            }
+            lastval = vitem;
+        }
+    }
+
+    db->Put(rocksdb::WriteOptions(), key, message);
+}
+
+// rocksdb is also used in memorycache, and normalizationcache
+rocksdb::Status OpenDB(const rocksdb::Options& options, const std::string& name, std::unique_ptr<rocksdb::DB>& dbptr);
+rocksdb::Status OpenForReadOnlyDB(const rocksdb::Options& options, const std::string& name, std::unique_ptr<rocksdb::DB>& dbptr);
+
+
+#define TYPE_MEMORY 1
+#define TYPE_ROCKSDB 2
 
 } // namespace carmen
 

@@ -3,6 +3,7 @@
 
 #include "cpp_util.hpp"
 #include "node_util.hpp"
+#include <nan.h>
 
 namespace carmen {
 

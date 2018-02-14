@@ -44,6 +44,7 @@
             'sources': [
                 "./src/cpp_util.cpp",
                 "./src/node_util.cpp",
+                "./src/memorycache.cpp",
                 "./src/coalesce.cpp",
                 "./src/binding.cpp"
             ],

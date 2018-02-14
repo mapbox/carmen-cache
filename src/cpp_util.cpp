@@ -118,4 +118,18 @@ double scoredist(unsigned zoom, double distance, double score, double radius) {
     return score > scoredist ? score : scoredist;
 }
 
+rocksdb::Status OpenDB(const rocksdb::Options& options, const std::string& name, std::unique_ptr<rocksdb::DB>& dbptr) {
+    rocksdb::DB* db;
+    rocksdb::Status status = rocksdb::DB::Open(options, name, &db);
+    dbptr = std::unique_ptr<rocksdb::DB>(db);
+    return status;
+}
+
+rocksdb::Status OpenForReadOnlyDB(const rocksdb::Options& options, const std::string& name, std::unique_ptr<rocksdb::DB>& dbptr) {
+    rocksdb::DB* db;
+    rocksdb::Status status = rocksdb::DB::OpenForReadOnly(options, name, &db);
+    dbptr = std::unique_ptr<rocksdb::DB>(db);
+    return status;
+}
+
 } // namespace carmen
