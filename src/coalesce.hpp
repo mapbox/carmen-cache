@@ -40,7 +40,7 @@ struct CoalesceBaton : carmen::noncopyable {
 NAN_METHOD(coalesce);
 void coalesceSingle(uv_work_t* req);
 void coalesceMulti(uv_work_t* req);
-void coalesceAfter(uv_work_t* req);
+void coalesceAfter(uv_work_t* req, int status);
 void coalesceFinalize(CoalesceBaton* baton, std::vector<Context>&& contexts);
 
 } // namespace carmen

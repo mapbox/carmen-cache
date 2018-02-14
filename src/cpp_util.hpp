@@ -45,7 +45,7 @@ class noncopyable {
 };
 
 typedef unsigned __int128 langfield_type;
-constexpr uint64_t LANGUAGE_MATCH_BOOST = (const uint64_t)(1) << 63;
+constexpr uint64_t LANGUAGE_MATCH_BOOST = static_cast<const uint64_t>(1) << 63;
 
 //relev = 5 bits
 //count = 3 bits
@@ -212,7 +212,7 @@ inline double tileDist(unsigned px, unsigned py, unsigned tileX, unsigned tileY)
 }
 
 
-constexpr langfield_type ALL_LANGUAGES = ~(langfield_type)(0);
+constexpr langfield_type ALL_LANGUAGES = ~static_cast<langfield_type>(0);
 #define LANGFIELD_SEPARATOR '|'
 
 inline void add_langfield(std::string& s, langfield_type langfield) {

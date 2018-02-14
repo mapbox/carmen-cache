@@ -51,7 +51,7 @@ intarray __getmatching(RocksDBCache const* c, std::string phrase, bool match_pre
 
         // grab the langfield from the end of the key
         langfield_type message_langfield = extract_langfield(key);
-        bool matches_language = (bool)(message_langfield & langfield);
+        bool matches_language = static_cast<bool>(message_langfield & langfield);
 
         messages.emplace_back(std::make_tuple(rit->value().ToString(), matches_language));
     }
@@ -378,7 +378,7 @@ void mergeQueue(uv_work_t* req) {
     }
 }
 
-void mergeAfter(uv_work_t* req) {
+void mergeAfter(uv_work_t* req, int status) {
     Nan::HandleScope scope;
     MergeBaton* baton = static_cast<MergeBaton*>(req->data);
     if (!baton->error.empty()) {
@@ -452,7 +452,7 @@ NAN_METHOD(RocksDBCache::merge) {
     baton->method = method;
     baton->callback.Reset(callback.As<Function>());
     baton->request.data = baton;
-    uv_queue_work(uv_default_loop(), &baton->request, mergeQueue, (uv_after_work_cb)mergeAfter);
+    uv_queue_work(uv_default_loop(), &baton->request, mergeQueue, static_cast<uv_after_work_cb>(mergeAfter));
     info.GetReturnValue().Set(Nan::Undefined());
     return;
 }

@@ -44,8 +44,14 @@ class UInt32Comparator : public rocksdb::Comparator {
     }
 
     const char* Name() const override { return "UInt32Comparator"; }
+
+    // these function signatures are mandated by rocksdb, so suppress warnings about not
+    // using all the parameters
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wunused-parameter"
     void FindShortestSeparator(std::string* start, const rocksdb::Slice& limit) const override {}
     void FindShortSuccessor(std::string* key) const override {}
+    #pragma clang diagnostic pop
 };
 UInt32Comparator UInt32ComparatorInstance;
 
