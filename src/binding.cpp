@@ -1,18 +1,5 @@
 #include "binding.hpp"
 
-#include <algorithm>
-#include <cassert>
-#include <cmath>
-#include <cstring>
-#include <memory>
-#include <sstream>
-
-#include <protozero/pbf_reader.hpp>
-#include <protozero/pbf_writer.hpp>
-
-#include <chrono>
-typedef std::chrono::high_resolution_clock Clock;
-
 namespace carmen {
 
 using namespace v8;

@@ -1,6 +1,12 @@
 #ifndef __CARMEN_BINDING_HPP__
 #define __CARMEN_BINDING_HPP__
 
+#include "node_util.hpp"
+#include "coalesce.hpp"
+#include "normalizationcache.hpp"
+#include "memorycache.hpp"
+#include "rocksdbcache.hpp"
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunknown-pragmas"
 #pragma clang diagnostic ignored "-Wconversion"
@@ -13,14 +19,8 @@
 #pragma clang diagnostic ignored "-Wsign-conversion"
 #pragma clang diagnostic ignored "-Wshorten-64-to-32"
 
-#include "node_util.hpp"
-#include "coalesce.hpp"
-#include "normalizationcache.hpp"
-#include "memorycache.hpp"
-#include "rocksdbcache.hpp"
 
 #include "radix_max_heap.h"
-
 #include <algorithm>
 #include <deque>
 #include <exception>
