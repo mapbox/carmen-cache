@@ -282,10 +282,6 @@ NAN_METHOD(MemoryCache::_get) {
     return _genericget<MemoryCache>(info);
 }
 
-NAN_METHOD(RocksDBCache::_get) {
-    return _genericget<RocksDBCache>(info);
-}
-
 NAN_METHOD(MemoryCache::New) {
     if (!info.IsConstructCall()) {
         return Nan::ThrowTypeError("Cannot call constructor as function, you need to use 'new' keyword");

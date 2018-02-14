@@ -44,7 +44,9 @@
             'sources': [
                 "./src/cpp_util.cpp",
                 "./src/node_util.cpp",
+                "./src/normalizationcache.cpp",
                 "./src/memorycache.cpp",
+                "./src/rocksdbcache.cpp",
                 "./src/coalesce.cpp",
                 "./src/binding.cpp"
             ],

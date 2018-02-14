@@ -15,12 +15,12 @@
 
 #include "node_util.hpp"
 #include "coalesce.hpp"
+#include "normalizationcache.hpp"
 #include "memorycache.hpp"
+#include "rocksdbcache.hpp"
 
 #include "radix_max_heap.h"
-#include "rocksdb/comparator.h"
-#include "rocksdb/db.h"
-#include "rocksdb/write_batch.h"
+
 #include <algorithm>
 #include <deque>
 #include <exception>
@@ -41,51 +41,6 @@ namespace carmen {
 
 using namespace v8;
 
-
-class RocksDBCache : public node::ObjectWrap {
-  public:
-    ~RocksDBCache();
-    static Nan::Persistent<v8::FunctionTemplate> constructor;
-    static void Initialize(v8::Handle<v8::Object> target);
-    static NAN_METHOD(New);
-    static NAN_METHOD(pack);
-    static NAN_METHOD(merge);
-    static NAN_METHOD(list);
-    static NAN_METHOD(_get);
-    static NAN_METHOD(_getmatching);
-    static NAN_METHOD(_set);
-    static NAN_METHOD(coalesce);
-    explicit RocksDBCache();
-    void _ref() { Ref(); }
-    void _unref() { Unref(); }
-    std::shared_ptr<rocksdb::DB> db;
-};
-
-class NormalizationCache : public node::ObjectWrap {
-  public:
-    ~NormalizationCache();
-    static Nan::Persistent<v8::FunctionTemplate> constructor;
-    static void Initialize(v8::Handle<v8::Object> target);
-    static NAN_METHOD(New);
-    static NAN_METHOD(get);
-    static NAN_METHOD(getprefixrange);
-    static NAN_METHOD(getall);
-    static NAN_METHOD(writebatch);
-    explicit NormalizationCache();
-    void _ref() { Ref(); }
-    void _unref() { Unref(); }
-    std::shared_ptr<rocksdb::DB> db;
-};
-
-#define CACHE_MESSAGE 1
-#define CACHE_ITEM 1
-
-#define MEMO_PREFIX_LENGTH_T1 3
-#define MEMO_PREFIX_LENGTH_T2 6
-#define PREFIX_MAX_GRID_LENGTH 500000
-
-intarray __getmatching(RocksDBCache const* c, std::string phrase, bool match_prefixes, langfield_type langfield);
-intarray __get(RocksDBCache const* c, std::string phrase, langfield_type langfield);
 
 } // namespace carmen
 
