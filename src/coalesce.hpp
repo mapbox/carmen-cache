@@ -20,7 +20,6 @@
 
 #pragma clang diagnostic pop
 
-
 namespace carmen {
 
 struct CoalesceBaton : carmen::noncopyable {

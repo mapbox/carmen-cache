@@ -1,6 +1,6 @@
 
-#include "cpp_util.hpp"
 #include "rocksdbcache.hpp"
+#include "cpp_util.hpp"
 
 namespace carmen {
 
@@ -103,8 +103,6 @@ intarray __getmatching(RocksDBCache const* c, std::string phrase, bool match_pre
 
     return array;
 }
-
-
 
 void RocksDBCache::Initialize(Handle<Object> target) {
     Nan::HandleScope scope;
@@ -395,7 +393,6 @@ void mergeAfter(uv_work_t* req, int status) {
 }
 #pragma clang diagnostic pop
 
-
 NAN_METHOD(RocksDBCache::_get) {
     return _genericget<RocksDBCache>(info);
 }
@@ -457,7 +454,6 @@ NAN_METHOD(RocksDBCache::merge) {
     info.GetReturnValue().Set(Nan::Undefined());
     return;
 }
-
 
 NAN_METHOD(RocksDBCache::New) {
     if (!info.IsConstructCall()) {

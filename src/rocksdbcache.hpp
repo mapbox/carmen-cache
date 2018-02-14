@@ -1,8 +1,8 @@
 #ifndef __CARMEN_ROCKSDBCACHE_HPP__
 #define __CARMEN_ROCKSDBCACHE_HPP__
 
-#include "node_util.hpp"
 #include "cpp_util.hpp"
+#include "node_util.hpp"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunknown-pragmas"

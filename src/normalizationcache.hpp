@@ -15,10 +15,10 @@
 #pragma clang diagnostic ignored "-Wsign-conversion"
 #pragma clang diagnostic ignored "-Wshorten-64-to-32"
 
-#include <nan.h>
 #include "rocksdb/comparator.h"
 #include "rocksdb/db.h"
 #include "rocksdb/write_batch.h"
+#include <nan.h>
 
 #pragma clang diagnostic pop
 

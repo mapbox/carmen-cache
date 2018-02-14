@@ -2,8 +2,8 @@
 #define __CARMEN_NODE_UTIL_HPP__
 
 #include "binding.hpp"
-#include "memorycache.hpp"
 #include "cpp_util.hpp"
+#include "memorycache.hpp"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunknown-pragmas"

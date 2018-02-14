@@ -1,10 +1,10 @@
 #ifndef __CARMEN_BINDING_HPP__
 #define __CARMEN_BINDING_HPP__
 
-#include "node_util.hpp"
 #include "coalesce.hpp"
-#include "normalizationcache.hpp"
 #include "memorycache.hpp"
+#include "node_util.hpp"
+#include "normalizationcache.hpp"
 #include "rocksdbcache.hpp"
 
 // this is an external library, so squash this warning
@@ -16,7 +16,6 @@
 namespace carmen {
 
 using namespace v8;
-
 
 } // namespace carmen
 

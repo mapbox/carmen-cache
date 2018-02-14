@@ -1,6 +1,6 @@
 
-#include "binding.hpp"
 #include "coalesce.hpp"
+#include "binding.hpp"
 
 namespace carmen {
 

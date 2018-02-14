@@ -13,16 +13,16 @@
 #pragma clang diagnostic ignored "-Wsign-conversion"
 #pragma clang diagnostic ignored "-Wshorten-64-to-32"
 
-#include <nan.h>
-#include <cstdint>
-#include <string>
-#include <vector>
+#include "rocksdb/db.h"
 #include <cassert>
 #include <cmath>
+#include <cstdint>
 #include <map>
-#include "rocksdb/db.h"
+#include <nan.h>
 #include <protozero/pbf_reader.hpp>
 #include <protozero/pbf_writer.hpp>
+#include <string>
+#include <vector>
 
 #pragma clang diagnostic pop
 
@@ -211,7 +211,6 @@ inline double tileDist(unsigned px, unsigned py, unsigned tileX, unsigned tileY)
     return distance;
 }
 
-
 constexpr langfield_type ALL_LANGUAGES = ~static_cast<langfield_type>(0);
 #define LANGFIELD_SEPARATOR '|'
 
@@ -285,7 +284,6 @@ inline void packVec(intarray const& varr, std::unique_ptr<rocksdb::DB> const& db
 // rocksdb is also used in memorycache, and normalizationcache
 rocksdb::Status OpenDB(const rocksdb::Options& options, const std::string& name, std::unique_ptr<rocksdb::DB>& dbptr);
 rocksdb::Status OpenForReadOnlyDB(const rocksdb::Options& options, const std::string& name, std::unique_ptr<rocksdb::DB>& dbptr);
-
 
 #define TYPE_MEMORY 1
 #define TYPE_ROCKSDB 2
