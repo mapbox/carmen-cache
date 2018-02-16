@@ -16,7 +16,7 @@ using namespace v8;
  */
 
 /**
- * Keep phrases in memory for later reference
+ * Keep phrases in memory for indexing reference
  *
  * @name MemoryCache
  * @memberof MemoryCache

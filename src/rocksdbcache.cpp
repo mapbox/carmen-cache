@@ -6,6 +6,46 @@ namespace carmen {
 
 using namespace v8;
 
+/**
+ *
+ * @class RocksdbCache
+ *
+ * @example
+ * const cache = require('@mapbox/carmen-cache');
+ */
+
+/**
+ * Keep return vector tiles
+ *
+ * @name RocksdbCache
+ * @memberof RocksdbCache
+ * @param {String} type
+ * @param {Array} an array of ids as numbers
+ * @param {Function} callback a function invoked with `(error, unique results)`
+ * @returns {Object}
+ * @example
+ * const cache = require('@mapbox/carmen-cache');
+ * const RocksdbCache = new cache.RocksdbCache('');
+ *
+ * RocksdbCache.get((idString) => {
+ *      if (err) throw err;
+ *      console.log(array);
+ * });
+ * RocksdbCache.set(
+ *      console.log(array);
+ * );
+ * RocksdbCache.list(
+ *      console.log(array);
+ * );
+ * RocksdbCache.pack(
+ *      console.log(array);
+ * );
+ * RocksdbCache.load(
+ *      console.log(array);
+ * );
+ *
+ */
+
 Nan::Persistent<FunctionTemplate> RocksDBCache::constructor;
 
 intarray __get(RocksDBCache const* c, std::string phrase, langfield_type langfield) {
