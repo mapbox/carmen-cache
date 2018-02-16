@@ -6,6 +6,47 @@ namespace carmen {
 
 using namespace v8;
 
+
+/**
+ *
+ * @class MemoryCache
+ *
+ * @example
+ * const cache = require('@mapbox/carmen-cache');
+ */
+
+/**
+ * Keep phrases in memory for later reference
+ *
+ * @name MemoryCache
+ * @memberof MemoryCache
+ * @param {String} type
+ * @param {Array} an array of ids as numbers
+ * @param {Function} callback a function invoked with `(error, unique results)`
+ * @returns {Object}
+ * @example
+ * const cache = require('@mapbox/carmen-cache');
+ * const MemoryCache = new cache.MemoryCache('');
+ *
+ * MemoryCache.get((idString) => {
+ *      if (err) throw err;
+ *      console.log(array);
+ * });
+ * MemoryCache.set(
+ *      console.log(array);
+ * );
+ * MemoryCache.list(
+ *      console.log(array);
+ * );
+ * MemoryCache.pack(
+ *      console.log(array);
+ * );
+ * MemoryCache.load(
+ *      console.log(array);
+ * );
+ *
+ */
+
 Nan::Persistent<FunctionTemplate> MemoryCache::constructor;
 
 intarray __get(MemoryCache const* c, std::string phrase, langfield_type langfield) {
