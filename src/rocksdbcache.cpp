@@ -15,7 +15,7 @@ using namespace v8;
  */
 
 /**
- * Keep return vector tiles
+ * Keep return vector tiles 
  *
  * @name RocksdbCache
  * @memberof RocksdbCache

@@ -6,47 +6,6 @@ namespace carmen {
 
 using namespace v8;
 
-
-/**
- *
- * @class MemoryCache
- *
- * @example
- * const cache = require('@mapbox/carmen-cache');
- */
-
-/**
- * Keep phrases in memory for indexing reference
- *
- * @name MemoryCache
- * @memberof MemoryCache
- * @param {String} type
- * @param {Array} an array of ids as numbers
- * @param {Function} callback a function invoked with `(error, unique results)`
- * @returns {Object}
- * @example
- * const cache = require('@mapbox/carmen-cache');
- * const MemoryCache = new cache.MemoryCache('');
- *
- * MemoryCache.get((idString) => {
- *      if (err) throw err;
- *      console.log(array);
- * });
- * MemoryCache.set(
- *      console.log(array);
- * );
- * MemoryCache.list(
- *      console.log(array);
- * );
- * MemoryCache.pack(
- *      console.log(array);
- * );
- * MemoryCache.load(
- *      console.log(array);
- * );
- *
- */
-
 Nan::Persistent<FunctionTemplate> MemoryCache::constructor;
 
 intarray __get(MemoryCache const* c, std::string phrase, langfield_type langfield) {
@@ -113,6 +72,33 @@ MemoryCache::MemoryCache()
       cache_() {}
 
 MemoryCache::~MemoryCache() {}
+
+/**
+ * pack
+ * @function __pack
+ *
+ * @example
+ * const cache = require('@mapbox/carmen-cache');
+ * const cache = new Cache('a');
+ *
+ * cache.pack('a');
+ */
+
+/**
+ * packs the data in the object
+ *
+ * @name pack
+ * @memberof MemoryCache
+ * @param {String} id
+ * @param {Array}, data
+ * @returns {String}, filename
+ * @example
+ * const cache = require('@mapbox/carmen-cache');
+ * const MemoryCache = new cache.MemoryCache('a');
+ *
+ * cache.pack('filename');
+ *
+ */
 
 NAN_METHOD(MemoryCache::pack) {
     if (info.Length() < 1) {
@@ -220,6 +206,32 @@ NAN_METHOD(MemoryCache::pack) {
     return;
 }
 
+/**
+ * list
+ * @function __list
+ *
+ * @example
+ * const cache = require('@mapbox/carmen-cache');
+ * const cache = new Cache('a');
+ *
+ * cache.list('a');
+ */
+
+/**
+ * lists the data in the memory cache object
+ *
+ * @name list
+ * @memberof MemoryCache
+ * @param {String} id
+ * @returns {Array}
+ * @example
+ * const cache = require('@mapbox/carmen-cache');
+ * const MemoryCache = new cache.MemoryCache('a');
+ *
+ * cache.list('a');
+ *
+ */
+
 NAN_METHOD(MemoryCache::list) {
     try {
         Nan::Utf8String utf8_value(info[0]);
@@ -250,6 +262,33 @@ NAN_METHOD(MemoryCache::list) {
         return Nan::ThrowTypeError(ex.what());
     }
 }
+
+/**
+ * set
+ * @function __set
+ *
+ * @example
+ * const cache = require('@mapbox/carmen-cache');
+ * const cache = new Cache('a');
+ *
+ * cache.set('a');
+ */
+
+/**
+ * replaces the data in the object
+ *
+ * @name set
+ * @memberof MemoryCache
+ * @param {String} id
+ * @param {Array}, data
+ * @returns {String}
+ * @example
+ * const cache = require('@mapbox/carmen-cache');
+ * const MemoryCache = new cache.MemoryCache('a');
+ *
+ * cache.set('a', [1,2,3]);
+ *
+ */
 
 NAN_METHOD(MemoryCache::_set) {
     if (info.Length() < 2) {
@@ -318,6 +357,26 @@ NAN_METHOD(MemoryCache::_get) {
     return _genericget<MemoryCache>(info);
 }
 
+/**
+ * Constructor
+ * @class MemoryCache
+ *
+ * @example
+ * const cache = require('@mapbox/carmen-cache');
+ */
+
+/**
+ * Create MemoryCache object which keeps phrases in memory for indexing reference
+ *
+ * @name MemoryCache
+ * @memberof MemoryCache
+ * @param {String} id
+ * @returns {Object}
+ * @example
+ * const cache = require('@mapbox/carmen-cache');
+ * const MemoryCache = new cache.MemoryCache('a');
+ *
+ */
 NAN_METHOD(MemoryCache::New) {
     if (!info.IsConstructCall()) {
         return Nan::ThrowTypeError("Cannot call constructor as function, you need to use 'new' keyword");
@@ -340,6 +399,32 @@ NAN_METHOD(MemoryCache::New) {
     }
 }
 
+/**
+ * getmatching
+ * @function __getmatching
+ *
+ * @example
+ * const cache = require('@mapbox/carmen-cache');
+ * const cache = new Cache('a');
+ *
+ * cache._getMatching('a');
+ */
+
+/**
+ * get something that's matching
+ *
+ * @name getmatching
+ * @memberof MemoryCache
+ * @param MemoryCacheObject
+ * @param {String} id
+ * @returns {String}
+ * @example
+ * const cache = require('@mapbox/carmen-cache');
+ * const MemoryCache = new cache.MemoryCache('a');
+ *
+ * cache._getMatching('a');
+ *
+ */
 NAN_METHOD(MemoryCache::_getmatching) {
     return _genericgetmatching<MemoryCache>(info);
 }
