@@ -79,17 +79,16 @@ MemoryCache::~MemoryCache() {}
  *
  * @example
  * const cache = require('@mapbox/carmen-cache');
- * const cache = new Cache('a');
+ * const MemoryCache = new cache.MemoryCache('a');
  *
  * cache.pack('a');
  */
 
 /**
- * packs the data in the object
+ * creates database from filename
  *
  * @name pack
  * @memberof MemoryCache
- * @param {String} id
  * @param {String}, filename
  * @returns {String}, filename
  * @example
@@ -212,9 +211,8 @@ NAN_METHOD(MemoryCache::pack) {
  *
  * @example
  * const cache = require('@mapbox/carmen-cache');
- * const cache = new Cache('a');
+ * const MemoryCache = new cache.MemoryCache('a');
  *
- * cache.list('a');
  */
 
 /**
@@ -228,7 +226,10 @@ NAN_METHOD(MemoryCache::pack) {
  * const cache = require('@mapbox/carmen-cache');
  * const MemoryCache = new cache.MemoryCache('a');
  *
- * cache.list('a');
+ * cache.list('a', (err, result) => {
+ *    if (err) throw err;
+ *    console.log(result); //
+ * });
  *
  */
 
@@ -269,7 +270,7 @@ NAN_METHOD(MemoryCache::list) {
  *
  * @example
  * const cache = require('@mapbox/carmen-cache');
- * const cache = new Cache('a');
+ * const MemoryCache = new cache.MemoryCache('a');
  *
  * cache.set('a');
  */
@@ -286,7 +287,10 @@ NAN_METHOD(MemoryCache::list) {
  * const cache = require('@mapbox/carmen-cache');
  * const MemoryCache = new cache.MemoryCache('a');
  *
- * cache.set('a', [1,2,3]);
+ * cache.set('a', [1,2,3], (err, result) => {
+ *      if (err) throw err;
+ *      console.log(result) // id as string
+ *});
  *
  */
 
@@ -353,6 +357,35 @@ NAN_METHOD(MemoryCache::_set) {
     return;
 }
 
+/**
+ * get
+ * @function __get
+ *
+ * @example
+ * const cache = require('@mapbox/carmen-cache');
+ * const MemoryCache = new cache.MemoryCache('a');
+ *
+ * cache.get('a');
+ */
+
+/**
+ * retrieves data by id
+ *
+ * @name get
+ * @memberof MemoryCache
+ * @param {String} id
+ * @returns {String}
+ * @example
+ * const cache = require('@mapbox/carmen-cache');
+ * const MemoryCache = new cache.MemoryCache('a');
+ *
+ * cache.get('a', (err, result) => {
+ *      if (err) throw err;
+ *      console.log(result) // id as string
+ *});
+ *
+ */
+
 NAN_METHOD(MemoryCache::_get) {
     return _genericget<MemoryCache>(info);
 }
@@ -377,6 +410,7 @@ NAN_METHOD(MemoryCache::_get) {
  * const MemoryCache = new cache.MemoryCache('a');
  *
  */
+
 NAN_METHOD(MemoryCache::New) {
     if (!info.IsConstructCall()) {
         return Nan::ThrowTypeError("Cannot call constructor as function, you need to use 'new' keyword");
@@ -405,9 +439,9 @@ NAN_METHOD(MemoryCache::New) {
  *
  * @example
  * const cache = require('@mapbox/carmen-cache');
- * const cache = new Cache('a');
+ * const MemoryCache = new cache.MemoryCache('a');
  *
- * cache._getMatching('a');
+ * cache.getMatching('a');
  */
 
 /**
@@ -415,16 +449,16 @@ NAN_METHOD(MemoryCache::New) {
  *
  * @name getmatching
  * @memberof MemoryCache
- * @param MemoryCacheObject
  * @param {String} id
  * @returns {String}
  * @example
  * const cache = require('@mapbox/carmen-cache');
  * const MemoryCache = new cache.MemoryCache('a');
  *
- * cache._getMatching('a');
+ * cache.getMatching('a');
  *
  */
+
 NAN_METHOD(MemoryCache::_getmatching) {
     return _genericgetmatching<MemoryCache>(info);
 }
