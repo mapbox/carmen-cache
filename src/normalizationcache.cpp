@@ -7,6 +7,17 @@ using namespace v8;
 
 Nan::Persistent<FunctionTemplate> NormalizationCache::constructor;
 
+/**
+ * NormalizationCache represents an one-to-many integer-to-integer
+ * mapping where each integer is assumed to be the position of a given term
+ * in a lexicographically-sorted vocabulary. The purpose of the cache is to capture
+ * equivalencies between different elements in the dictionary, such that further metadata
+ * (e.g., in a RocksDBCache) can be stored only for the canonical form of a given name.
+ * The structure is stored using a RocksDB database on disk.
+ * @class NormalizationCache
+ *
+ */
+
 void NormalizationCache::Initialize(Handle<Object> target) {
     Nan::HandleScope scope;
     Local<FunctionTemplate> t = Nan::New<FunctionTemplate>(NormalizationCache::New);
@@ -54,6 +65,21 @@ class UInt32Comparator : public rocksdb::Comparator {
 #pragma clang diagnostic pop
 };
 UInt32Comparator UInt32ComparatorInstance;
+
+/**
+ * Constructor for NormalizationCache pointing to an on-disk RocksDB database
+ * to be used for reading or writing.
+ *
+ * @name NormalizationCache
+ * @memberof NormalizationCache
+ * @param {String} filename
+ * @param {String} read-only
+ * @returns {Object}
+ * @example
+ * const cache = require('@mapbox/carmen-cache');
+ * const nc = new cache.NormalizationCache('file.norm.rocksdb', false);
+ *
+ */
 
 NAN_METHOD(NormalizationCache::New) {
     if (!info.IsConstructCall()) {
@@ -103,6 +129,22 @@ NAN_METHOD(NormalizationCache::New) {
     }
 }
 
+/**
+ * retrieve the indices of the canonical labels for the index of a given non-canonical label
+ *
+ * @name get
+ * @memberof NormalizationCache
+ * @param {Number} id
+ * @returns {Array}
+ * @example
+ * const cache = require('@mapbox/carmen-cache');
+ * const nc = new cache.NormalizationCache('file.norm.rocksdb', true);
+ *
+ * // for a normalization cache with over the dictionary ['main st', 'main street']
+ * // where 'main st' is canonical
+ * const canonical = nc.get(1); // returns [0]
+ */
+
 NAN_METHOD(NormalizationCache::get) {
     if (info.Length() < 1) {
         return Nan::ThrowTypeError("expected one info: id");
@@ -137,6 +179,32 @@ NAN_METHOD(NormalizationCache::get) {
         return;
     }
 }
+
+/**
+ * given that in a lexicographically sorted list, all terms that share a prefix
+ * are grouped together, this function retrieves the indices of all canonical forms
+ * of all terms that share a given prefix as indicated by the index of the first term
+ * in the shared prefix list and the number of terms that share a prefix, for which the canonical
+ * form does not also share that same prefix
+ *
+ * @name getPrefixRange
+ * @memberof NormalizationCache
+ * @param {Number} start_id
+ * @param {Number} count
+ * @param {Number} [scan_max] - the maximum number of entries to scan
+ * @param {Number} [return_max] - the maximum number of indices to return
+ * @returns {Array}
+ * @example
+ * const cache = require('@mapbox/carmen-cache');
+ * const nc = new cache.NormalizationCache('file.norm.rocksdb', true);
+ *
+ * // for a normalization cache with over the dictionary
+ * // ['saint marks ave', 'saint peters ave', 'st marks ave', 'st peters ave']
+ * // where the 'st ...' forms are canonical
+ * const canonical = nc.getPrefixRange(0, 2); // looks up all the canonical
+ *                                            // forms for things that begin with
+ *                                            // 'saint'
+ */
 
 NAN_METHOD(NormalizationCache::getprefixrange) {
     if (info.Length() < 1) {
@@ -207,6 +275,21 @@ NAN_METHOD(NormalizationCache::getprefixrange) {
     return;
 }
 
+/**
+ * retrieve the entire contents of a NormalizationCache, as an array of arrays
+ *
+ * @name getAll
+ * @memberof NormalizationCache
+ * @returns {Array}
+ * @example
+ * const cache = require('@mapbox/carmen-cache');
+ * const nc = new cache.NormalizationCache('file.norm.rocksdb', true);
+ *
+ * // for a normalization cache with over the dictionary
+ * // ['saint marks ave', 'saint peters ave', 'st marks ave', 'st peters ave']
+ * // where the 'st ...' forms are canonical
+ * const canonical = nc.getAll() // returns [[0, [2]], [1, [3]]]
+ */
 NAN_METHOD(NormalizationCache::getall) {
     Local<Array> out = Nan::New<Array>();
     unsigned out_idx = 0;
@@ -240,6 +323,21 @@ NAN_METHOD(NormalizationCache::getall) {
     return;
 }
 
+/**
+ * bulk-set the contents of a NormalizationCache to an array of arrays
+ *
+ * @name writeBatch
+ * @memberof NormalizationCache
+ * @returns {Array}
+ * @example
+ * const cache = require('@mapbox/carmen-cache');
+ * const nc = new cache.NormalizationCache('file.norm.rocksdb', true);
+ *
+ * // for a normalization cache with over the dictionary
+ * // ['saint marks ave', 'saint peters ave', 'st marks ave', 'st peters ave']
+ * // where the 'st ...' forms are canonical
+ * nc.writeBatch([[0, [2]], [1, [3]]]);
+ */
 NAN_METHOD(NormalizationCache::writebatch) {
     if (info.Length() < 1) {
         return Nan::ThrowTypeError("expected one info: data");
