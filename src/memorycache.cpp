@@ -90,7 +90,7 @@ MemoryCache::~MemoryCache() {}
  * @name pack
  * @memberof MemoryCache
  * @param {String} id
- * @param {Array}, data
+ * @param {String}, filename
  * @returns {String}, filename
  * @example
  * const cache = require('@mapbox/carmen-cache');
