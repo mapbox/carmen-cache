@@ -29,6 +29,8 @@ Local<Object> coverToObject(Cover const& cover);
 Local<Array> contextToArray(Context const& context);
 
 constexpr unsigned MAX_LANG = (sizeof(langfield_type) * 8) - 1;
+// convert from a JS array of language IDs to a bitmask where the bits corresponding
+// to those IDs are set to 1
 inline langfield_type langarrayToLangfield(Local<v8::Array> const& array) {
     size_t array_size = array->Length();
     langfield_type out = 0;
@@ -43,6 +45,8 @@ inline langfield_type langarrayToLangfield(Local<v8::Array> const& array) {
     return out;
 }
 
+// convert from a bitmask where the bits corresponding to a set of language IDs
+// are set to 1 to a JS array of those language IDs
 inline Local<v8::Array> langfieldToLangarray(langfield_type langfield) {
     Local<Array> langs = Nan::New<Array>();
 
@@ -55,6 +59,9 @@ inline Local<v8::Array> langfieldToLangarray(langfield_type langfield) {
     return langs;
 }
 
+// this function is not exposed to JS directly, but rather, is exposed as
+// either RocksDBCache::get or MemoryCache::get -- they share input validation
+// and output formatting
 template <typename T>
 inline NAN_METHOD(_genericget) {
     if (info.Length() < 1) {

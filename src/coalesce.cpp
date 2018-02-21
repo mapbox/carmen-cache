@@ -6,6 +6,58 @@ namespace carmen {
 
 using namespace v8;
 
+/**
+ * @typedef PhrasematchSubq
+ * @name PhrasematchSubq
+ * @description The PhrasematchSubq type describes the metadata known about a possible matches to be assessed for stacking by coalesce.
+ * @type {Object}
+ * @property {String} phrase - The matched string
+ * @property {Number} weight - A float between 0 and 1 representing how much of the query this string covers
+ * @property {Boolean} prefix - whether or not to do a prefix scan (as opposed to an exact match scan); used for autocomplete
+ * @property {Number} idx - an identifier of the index the match came from; opaque to carmen-cache but returned in results
+ * @property {Number} zoom - the configured tile zoom level for the index
+ * @property {Number} mask - a bitmask representing which tokens in the original query the subquery covers
+ * @property {Number[]} languages - a list of the language IDs to be considered matching
+ * @property {Object} cache - the carmen-cache from the index in which the match was found
+ */
+
+/**
+  * @callback coalesceCallback
+  * @param err - error if any, or null if not
+  * @param {CoalesceResult[]} results - the results of the coalesce operation
+  */
+
+/**
+ * @typedef CoalesceResult
+ * @name CoalesceResult
+ * @description The a member of the result set from a coalesce operation.
+ * @type {Object}
+ * @property {Number} x - the X tile coordinate of the result
+ * @property {Number} y - the Y tile coordinate of the result
+ * @property {Number} relev - the computed relevance of the result
+ * @property {Number} score - the computed score of the result
+ * @property {Number} id - the feature ID of the result
+ * @property {Number} idx - the index ID (preserved from the inbound subquery) of the index the result came from
+ * @property {Number} tmpid - a composite ID used for uniquely identifying features across indexes that incorporates the ID and IDX
+ * @property {Number} distance - the distance metric computed using the feature and proximity, if supplied; 0 otherwise
+ * @property {Number} scoredist - the composite score incorporating the feature's score with the distance (or the score if distance is 0)
+ * @property {Boolean} matches_language - whether or not the match is valid for one of the languages in the inbound languages array
+ */
+
+/**
+ * The coalesce function determines whether or not phrase matches in different
+ * carmen indexes align spatially, and computes information about successful matches
+ * such as combined relevance and score. The computation is done on the thread pool,
+ * and exposed asynchronously to JS via a callback argument.
+ *
+ * @name coalesce
+ * @param {PhrasematchSubq[]} phrasematches - an array of PhrasematchSubq objects, each of which describes a match candidate
+ * @param {Object} options - options for how to perform the coalesce operation that aren't specific to a particular subquery
+ * @param {Number} [options.radius] - the fall-off radius for determining how wide-reaching the effect of proximity bias is
+ * @param {Number[]} [options.centerzxy] - a 3-number array representing the ZXY of the tile on which the proximity point can be found
+ * @param {Number[]} [options.bboxzxy] - a 5-number array representing the zoom, minX, minY, maxX, and maxY values of the tile cover of the requested bbox, if any
+ * @param {coalesceCallback} callback - the callback function
+ */
 NAN_METHOD(coalesce) {
     // PhrasematchStack (js => cpp)
     if (info.Length() < 3) {
@@ -281,6 +333,10 @@ NAN_METHOD(coalesce) {
     return;
 }
 
+// behind the scenes, coalesce has two different strategies, depending on whether
+// it's actually trying to stack multiple matches or whether it's considering a
+// single match that consumes the entire query; this function handles the latter case
+// and takes as a parameter the libuv task that contains info about the job it's supposed to do
 void coalesceSingle(uv_work_t* req) {
     CoalesceBaton* baton = static_cast<CoalesceBaton*>(req->data);
 
@@ -400,6 +456,8 @@ void coalesceSingle(uv_work_t* req) {
     }
 }
 
+// this function handles the case where stacking is occurring between multiple subqueries
+// again, it takes a libuv task as a parameter
 void coalesceMulti(uv_work_t* req) {
     CoalesceBaton* baton = static_cast<CoalesceBaton*>(req->data);
 
@@ -593,6 +651,8 @@ void coalesceMulti(uv_work_t* req) {
 // function signature, so suppress the warning about it
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-parameter"
+// this function handles getting the results of either coalesceSingle or coalesceMulti
+// ready to be passed back to JS land, and queues up a callback invokation on the main thread
 void coalesceAfter(uv_work_t* req, int status) {
     Nan::HandleScope scope;
     CoalesceBaton* baton = static_cast<CoalesceBaton*>(req->data);
@@ -625,6 +685,8 @@ void coalesceAfter(uv_work_t* req, int status) {
 }
 #pragma clang diagnostic pop
 
+// this function tabulates the results of either coalesceSingle or coalesceMulti in
+// a uniform way
 void coalesceFinalize(CoalesceBaton* baton, std::vector<Context>&& contexts) {
     if (!contexts.empty()) {
         // Coalesce stack, generate relevs.

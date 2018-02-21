@@ -5,6 +5,9 @@ namespace carmen {
 
 using namespace v8;
 
+// convert from a C++ coalesce result object to an equivalent JS one;
+// see the CoalesceResult JSDoc typedef in coalesce.cpp for an explanation
+// of the what each property represents
 Local<Object> coverToObject(Cover const& cover) {
     Local<Object> object = Nan::New<Object>();
     object->Set(Nan::New("x").ToLocalChecked(), Nan::New<Number>(cover.x));
@@ -19,6 +22,8 @@ Local<Object> coverToObject(Cover const& cover) {
     object->Set(Nan::New("matches_language").ToLocalChecked(), Nan::New<Boolean>(cover.matches_language));
     return object;
 }
+// convert an array of Cover C++ objects to an array of CoalesceResult JS objects
+// (basically just a wrapper around coverToObject, above)
 Local<Array> contextToArray(Context const& context) {
     std::size_t size = context.coverList.size();
     Local<Array> array = Nan::New<Array>(static_cast<int>(size));
