@@ -34,7 +34,6 @@ Nan::Persistent<FunctionTemplate> RocksDBCache::constructor;
  *
  * cache.get('a', 'en');
  *
- * // => {coords: [0,0], id: 'a', score: 1, relevance: 1}
  *
  */
 
@@ -66,8 +65,6 @@ intarray __get(RocksDBCache const* c, std::string phrase, langfield_type langfie
  * const MemoryCache = new cache.MemoryCache('a');
  *
  * cache.get('a', 'en');
- *
- * // => {coords: [0,0], id: 'a', score: 1, relevance: 1}
  *
  */
 
@@ -513,7 +510,7 @@ NAN_METHOD(RocksDBCache::_get) {
  *
  * cache.list('a', (err, result) => {
  *    if (err) throw err;
- *    console.log(result); //
+ *    console.log(result);
  * });
  *
  */
@@ -568,7 +565,7 @@ NAN_METHOD(RocksDBCache::list) {
  *
  * cache.merge('file1', 'file2', 'resultFile', 'method', (err, result) => {
  *    if (err) throw err;
- *    console.log(result); //
+ *    console.log(result);
  * });
  *
  */

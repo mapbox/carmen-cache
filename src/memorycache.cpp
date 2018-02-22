@@ -208,7 +208,7 @@ NAN_METHOD(MemoryCache::pack) {
  *
  * cache.list('a', (err, result) => {
  *    if (err) throw err;
- *    console.log(result); //
+ *    console.log(result);
  * });
  *
  */
@@ -258,7 +258,7 @@ NAN_METHOD(MemoryCache::list) {
  *
  * cache.set('a', [1,2,3], (err, result) => {
  *      if (err) throw err;
- *      console.log(result) // id as string
+ *      console.log(result)
  *});
  *
  */
@@ -339,7 +339,7 @@ NAN_METHOD(MemoryCache::_set) {
  *
  * cache.get('a', (err, result) => {
  *      if (err) throw err;
- *      console.log(result) // id as string
+ *      console.log(object)
  *});
  *
  */
