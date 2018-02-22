@@ -3,6 +3,7 @@
 
 namespace carmen {
 
+// derives grid values
 Cover numToCover(uint64_t num) {
     Cover cover;
     assert(((num >> 34) % POW2_14) <= static_cast<double>(std::numeric_limits<unsigned short>::max()));
@@ -33,6 +34,7 @@ Cover numToCover(uint64_t num) {
 
     return cover;
 }
+
 
 ZXY pxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z) {
     ZXY zxy;
@@ -118,6 +120,7 @@ double scoredist(unsigned zoom, double distance, double score, double radius) {
     return score > scoredist ? score : scoredist;
 }
 
+// database lookup
 rocksdb::Status OpenDB(const rocksdb::Options& options, const std::string& name, std::unique_ptr<rocksdb::DB>& dbptr) {
     rocksdb::DB* db;
     rocksdb::Status status = rocksdb::DB::Open(options, name, &db);
@@ -125,6 +128,7 @@ rocksdb::Status OpenDB(const rocksdb::Options& options, const std::string& name,
     return status;
 }
 
+// read only database lookup
 rocksdb::Status OpenForReadOnlyDB(const rocksdb::Options& options, const std::string& name, std::unique_ptr<rocksdb::DB>& dbptr) {
     rocksdb::DB* db;
     rocksdb::Status status = rocksdb::DB::OpenForReadOnly(options, name, &db);

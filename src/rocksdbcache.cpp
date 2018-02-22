@@ -10,73 +10,34 @@ using namespace v8;
  *
  * @class RocksdbCache
  *
+ * Maps phrase with language code and returns a grid of matching features
+ *
  * @example
  * const cache = require('@mapbox/carmen-cache');
- */
-
-/**
- * Keep return vector tiles
- *
- * @name RocksdbCache
- * @memberof RocksdbCache
- * @param {String} type
- * @param {Array} an array of ids as numbers
- * @param {Function} callback a function invoked with `(error, unique results)`
- * @returns {Object}
- * @example
- * const cache = require('@mapbox/carmen-cache');
- * const RocksdbCache = new cache.RocksdbCache('');
- *
- * RocksdbCache.get((idString) => {
- *      if (err) throw err;
- *      console.log(array);
- * });
- * RocksdbCache.set(
- *      console.log(array);
- * );
- * RocksdbCache.list(
- *      console.log(array);
- * );
- * RocksdbCache.pack(
- *      console.log(array);
- * );
- * RocksdbCache.load(
- *      console.log(array);
- * );
- *
+ * const RocksDBCache = new cache.RocksDBCache();
  */
 
 Nan::Persistent<FunctionTemplate> RocksDBCache::constructor;
 
 /**
- * get
- * @function __get
- *
- * @example
- * const cache = require('@mapbox/carmen-cache');
- * const MemoryCache = new cache.MemoryCache('a');
- *
- * cache.get('a');
- */
-
-/**
- * retrieves data by id
+ * retrieves exact_match grid for phrase and language code inputs
  *
  * @name get
  * @memberof MemoryCache
- * @param {String} id
- * @returns {String}
+ * @param {String} phrase
+ * @param {String} language code
+ * @returns {Object} value containing x,y coords, id, score, and relevance
+ *
  * @example
  * const cache = require('@mapbox/carmen-cache');
  * const MemoryCache = new cache.MemoryCache('a');
  *
- * cache.get('a', (err, result) => {
- *      if (err) throw err;
- *      console.log(result) // id as string
- *});
+ * cache.get('a', 'en');
+ *
+ * // => {coords: [0,0], id: 'a', score: 1, relevance: 1}
  *
  */
- 
+
 intarray __get(RocksDBCache const* c, std::string phrase, langfield_type langfield) {
     std::shared_ptr<rocksdb::DB> db = c->db;
     intarray array;
@@ -90,6 +51,25 @@ intarray __get(RocksDBCache const* c, std::string phrase, langfield_type langfie
 
     return array;
 }
+
+/**
+ * retrieves grid for that at least partially matches phrase and/or language code inputs
+ *
+ * @name get
+ * @memberof MemoryCache
+ * @param {String} phrase
+ * @param {String} language code
+ * @returns {Object} value containing x,y coords, id, score, and relevance
+ *
+ * @example
+ * const cache = require('@mapbox/carmen-cache');
+ * const MemoryCache = new cache.MemoryCache('a');
+ *
+ * cache.get('a', 'en');
+ *
+ * // => {coords: [0,0], id: 'a', score: 1, relevance: 1}
+ *
+ */
 
 intarray __getmatching(RocksDBCache const* c, std::string phrase, bool match_prefixes, langfield_type langfield) {
     intarray array;
@@ -194,18 +174,7 @@ RocksDBCache::RocksDBCache()
 RocksDBCache::~RocksDBCache() {}
 
 /**
- * pack
- * @function __pack
- *
- * @example
- * const cache = require('@mapbox/carmen-cache');
- * const RocksDBCache = new cache.RocksDBCache('a');
- *
- * cache.pack('a');
- */
-
-/**
- * creates database from filename
+ * Writes an identical copy RocksDBCache from another RocksDBCache; not really used
  *
  * @name pack
  * @memberof RocksDBCache
@@ -264,30 +233,23 @@ NAN_METHOD(RocksDBCache::pack) {
 }
 
 /**
- * mergeQueue
- * @function mergeQueue
  *
- * @example
- * const cache = require('@mapbox/carmen-cache');
- * const RocksDBCache = new cache.RocksDBCache('a');
- *
- * cache.mergeQueue('a');
- */
-
-/**
- * creates database from filename
+ * Used in merge() to queue files for merging; result of merge() is a compact rocksdb object
  *
  * @name mergeQueue
  * @memberof RocksDBCache
- * @param {String}, rocksdb filename
- * @returns {String}, filename
+ * @param {String}, rocksdb filename1
+ * @param {String}, rocksdb filename2
+ * @param {String}, rocksdb filename3
+ * @returns {String}, method
+ * @returns {Function}, callback
  * @example
  * const cache = require('@mapbox/carmen-cache');
  * const RocksDBCache = new cache.RocksDBCache('a');
  *
- * cache.mergeQueue('filename');
+ * cache.mergeQueue(filename1, 'filename2', 'filename3', 'method', callback);
  *
- */
+*/
 
 void mergeQueue(uv_work_t* req) {
     MergeBaton* baton = static_cast<MergeBaton*>(req->data);
@@ -496,30 +458,24 @@ void mergeQueue(uv_work_t* req) {
 }
 
 /**
- * mergeAfter
- * @function mergeAfter
  *
- * @example
- * const cache = require('@mapbox/carmen-cache');
- * const RocksDBCache = new cache.RocksDBCache('a');
- *
- * cache.mergeAfter('a');
- */
-
-/**
- * passes data to next scope
+ * Used in merge() to queue files for merging; result of merge() is a compact rocksdb object
  *
  * @name mergeAfter
  * @memberof RocksDBCache
- * @param {Function}, callback
- * @returns {String}, Null
+ * @param {String}, rocksdb filename1
+ * @param {String}, rocksdb filename2
+ * @param {String}, rocksdb filename3
+ * @returns {String}, method
+ * @returns {Function}, callback
  * @example
  * const cache = require('@mapbox/carmen-cache');
  * const RocksDBCache = new cache.RocksDBCache('a');
  *
- * cache.mergeAfter((baton) => {});
+ * cache.mergeAfter(filename1, 'filename2', 'filename3', 'method', callback);
  *
- */
+*/
+
 
 // we don't use the 'status' parameter, but it's required as part of the uv_after_work_cb
 // function signature, so suppress the warning about it
@@ -545,22 +501,12 @@ NAN_METHOD(RocksDBCache::_get) {
 }
 
 /**
- * list
- * @function __list
- *
- * @example
- * const cache = require('@mapbox/carmen-cache');
- * const RocksDBCache = new cache.RocksDBCache('a');
- *
- */
-
-/**
- * lists the data in the memory cache object
+ * lists the keys in the RocksDBCache object
  *
  * @name list
  * @memberof RocksDBCache
  * @param {String} id
- * @returns {Set} Set of ids
+ * @returns {Set} Set of keys/ids
  * @example
  * const cache = require('@mapbox/carmen-cache');
  * const RocksDBCache = new cache.RocksDBCache('a');
@@ -606,25 +552,15 @@ NAN_METHOD(RocksDBCache::list) {
 }
 
 /**
- * merge
- * @function __merge
- *
- * @example
- * const cache = require('@mapbox/carmen-cache');
- * const RocksDBCache = new cache.RocksDBCache('a');
- *
- */
-
-/**
- * merges the data in the memory cache object
+ * merges the contents from 2 RocksDBCaches
  *
  * @name merge
  * @memberof RocksDBCache
- * @param {String} file 1
- * @param {String} file 2
- * @param {String} result file
- * @param {String} method
- * @param {Function} callback
+ * @param {String} RocksDBCache file 1
+ * @param {String} RocksDBCache file 2
+ * @param {String} result RocksDBCache file
+ * @param {String} method which is either concat or freq
+ * @param {Function} callback called from the mergeAfter method
  * @returns {Set} Set of ids
  * @example
  * const cache = require('@mapbox/carmen-cache');
@@ -663,15 +599,7 @@ NAN_METHOD(RocksDBCache::merge) {
 }
 
 /**
- * Constructor
- * @class RocksDBCache
- *
- * @example
- * const cache = require('@mapbox/carmen-cache');
- */
-
-/**
- * Create RocksDBCache object which keeps phrases in memory for indexing reference
+ * Constructor - Create RocksDBCache object which keeps phrases in memory for indexing reference
  *
  * @name RocksDBCache
  * @memberof RocksDBCache
@@ -723,32 +651,6 @@ NAN_METHOD(RocksDBCache::New) {
         return Nan::ThrowTypeError(ex.what());
     }
 }
-
-/**
- * getmatching
- * @function getmatching
- *
- * @example
- * const cache = require('@mapbox/carmen-cache');
- * const RocksDBCache = new cache.RocksDBCache('a');
- *
- * cache.getMatching('a');
- */
-
-/**
- * get something that's matching
- *
- * @name getmatching
- * @memberof RocksDBCache
- * @param {String} id
- * @returns {String}
- * @example
- * const cache = require('@mapbox/carmen-cache');
- * const RocksDBCache = new cache.RocksDBCache('a');
- *
- * cache.getMatching('a');
- *
- */
 
 NAN_METHOD(RocksDBCache::_getmatching) {
     return _genericgetmatching<RocksDBCache>(info);

@@ -74,18 +74,8 @@ MemoryCache::MemoryCache()
 MemoryCache::~MemoryCache() {}
 
 /**
- * pack
- * @function __pack
- *
- * @example
- * const cache = require('@mapbox/carmen-cache');
- * const MemoryCache = new cache.MemoryCache('a');
- *
- * cache.pack('a');
- */
-
-/**
  * creates database from filename
+ * optimize a memory cache and write to disc as rocksdbcache
  *
  * @name pack
  * @memberof MemoryCache
@@ -206,16 +196,6 @@ NAN_METHOD(MemoryCache::pack) {
 }
 
 /**
- * list
- * @function __list
- *
- * @example
- * const cache = require('@mapbox/carmen-cache');
- * const MemoryCache = new cache.MemoryCache('a');
- *
- */
-
-/**
  * lists the data in the memory cache object
  *
  * @name list
@@ -263,17 +243,6 @@ NAN_METHOD(MemoryCache::list) {
         return Nan::ThrowTypeError(ex.what());
     }
 }
-
-/**
- * set
- * @function __set
- *
- * @example
- * const cache = require('@mapbox/carmen-cache');
- * const MemoryCache = new cache.MemoryCache('a');
- *
- * cache.set('a');
- */
 
 /**
  * replaces the data in the object
@@ -358,17 +327,6 @@ NAN_METHOD(MemoryCache::_set) {
 }
 
 /**
- * get
- * @function __get
- *
- * @example
- * const cache = require('@mapbox/carmen-cache');
- * const MemoryCache = new cache.MemoryCache('a');
- *
- * cache.get('a');
- */
-
-/**
  * retrieves data by id
  *
  * @name get
@@ -389,14 +347,6 @@ NAN_METHOD(MemoryCache::_set) {
 NAN_METHOD(MemoryCache::_get) {
     return _genericget<MemoryCache>(info);
 }
-
-/**
- * Constructor
- * @class MemoryCache
- *
- * @example
- * const cache = require('@mapbox/carmen-cache');
- */
 
 /**
  * Create MemoryCache object which keeps phrases in memory for indexing reference
@@ -432,17 +382,6 @@ NAN_METHOD(MemoryCache::New) {
         return Nan::ThrowTypeError(ex.what());
     }
 }
-
-/**
- * getmatching
- * @function __getmatching
- *
- * @example
- * const cache = require('@mapbox/carmen-cache');
- * const MemoryCache = new cache.MemoryCache('a');
- *
- * cache.getMatching('a');
- */
 
 /**
  * get something that's matching
