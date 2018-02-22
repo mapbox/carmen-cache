@@ -35,7 +35,7 @@ Cover numToCover(uint64_t num) {
     return cover;
 }
 
-
+// Compute distance between coordinates
 ZXY pxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z) {
     ZXY zxy;
     zxy.z = target_z;
@@ -59,6 +59,8 @@ ZXY pxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z) {
     return zxy;
 }
 
+
+// Compute distance between coords + zoom multiplier
 ZXY bxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z, bool max) {
     ZXY zxy;
     zxy.z = target_z;
