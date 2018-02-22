@@ -8,13 +8,8 @@ using namespace v8;
 
 /**
  *
- * @class RocksdbCache
+ * @class RocksDBCache
  *
- * Maps phrase with language code and returns a grid of matching features
- *
- * @example
- * const cache = require('@mapbox/carmen-cache');
- * const RocksDBCache = new cache.RocksDBCache();
  */
 
 Nan::Persistent<FunctionTemplate> RocksDBCache::constructor;
@@ -23,17 +18,16 @@ Nan::Persistent<FunctionTemplate> RocksDBCache::constructor;
  * retrieves exact_match grid for phrase and language code inputs
  *
  * @name get
- * @memberof MemoryCache
+ * @memberof RocksDBCache
  * @param {String} phrase
  * @param {String} language code
  * @returns {Object} value containing x,y coords, id, score, and relevance
  *
  * @example
  * const cache = require('@mapbox/carmen-cache');
- * const MemoryCache = new cache.MemoryCache('a');
+ * const RocksDBCache = new cache.RocksDBCache('a');
  *
  * cache.get('a', 'en');
- *
  *
  */
 
@@ -54,17 +48,17 @@ intarray __get(RocksDBCache const* c, std::string phrase, langfield_type langfie
 /**
  * retrieves grid for that at least partially matches phrase and/or language code inputs
  *
- * @name get
- * @memberof MemoryCache
+ * @name getmatching
+ * @memberof RocksDBCache
  * @param {String} phrase
  * @param {String} language code
  * @returns {Object} value containing x,y coords, id, score, and relevance
  *
  * @example
  * const cache = require('@mapbox/carmen-cache');
- * const MemoryCache = new cache.MemoryCache('a');
+ * const RocksDBCache = new cache.RocksDBCache('a');
  *
- * cache.get('a', 'en');
+ * cache.getmatching('a', 'en');
  *
  */
 

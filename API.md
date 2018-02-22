@@ -6,26 +6,28 @@
 -   [CoalesceResult](#coalesceresult)
 -   [coalesce](#coalesce)
 -   [PhrasematchSubq](#phrasematchsubq)
--   [list](#list)
--   [set](#set)
--   [get](#get)
--   [get](#get-1)
--   [get](#get-2)
 -   [MemoryCache](#memorycache)
--   [getmatching](#getmatching)
--   [pack](#pack)
+    -   [list](#list)
+    -   [set](#set)
+    -   [get](#get)
+    -   [MemoryCache](#memorycache-1)
+    -   [getmatching](#getmatching)
+    -   [pack](#pack)
 -   [NormalizationCache](#normalizationcache)
-    -   [get](#get-3)
+    -   [get](#get-1)
     -   [getPrefixRange](#getprefixrange)
     -   [getAll](#getall)
     -   [writeBatch](#writebatch)
     -   [NormalizationCache](#normalizationcache-1)
--   [pack](#pack-1)
--   [mergeQueue](#mergequeue)
--   [mergeAfter](#mergeafter)
--   [list](#list-1)
--   [merge](#merge)
 -   [RocksDBCache](#rocksdbcache)
+    -   [pack](#pack-1)
+    -   [get](#get-2)
+    -   [mergeQueue](#mergequeue)
+    -   [mergeAfter](#mergeafter)
+    -   [getmatching](#getmatching-1)
+    -   [list](#list-1)
+    -   [merge](#merge)
+    -   [RocksDBCache](#rocksdbcache-1)
 
 ## coalesceCallback
 
@@ -84,7 +86,9 @@ The PhrasematchSubq type describes the metadata known about a possible matches t
 -   `languages` **[Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array)&lt;[Number](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Number)>** a list of the language IDs to be considered matching
 -   `cache` **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** the carmen-cache from the index in which the match was found
 
-## list
+## MemoryCache
+
+### list
 
 lists the data in the memory cache object
 
@@ -106,7 +110,7 @@ cache.list('a', (err, result) => {
 
 Returns **[Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array)** 
 
-## set
+### set
 
 replaces the data in the object
 
@@ -129,7 +133,7 @@ cache.set('a', [1,2,3], (err, result) => {
 
 Returns **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** 
 
-## get
+### get
 
 retrieves data by id
 
@@ -151,47 +155,7 @@ cache.get('a', (err, result) => {
 
 Returns **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** 
 
-## get
-
-retrieves exact_match grid for phrase and language code inputs
-
-**Parameters**
-
--   `phrase` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** 
--   `language` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** code
-
-**Examples**
-
-```javascript
-const cache = require('@mapbox/carmen-cache');
-const MemoryCache = new cache.MemoryCache('a');
-
-cache.get('a', 'en');
-```
-
-Returns **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** value containing x,y coords, id, score, and relevance
-
-## get
-
-retrieves grid for that at least partially matches phrase and/or language code inputs
-
-**Parameters**
-
--   `phrase` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** 
--   `language` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** code
-
-**Examples**
-
-```javascript
-const cache = require('@mapbox/carmen-cache');
-const MemoryCache = new cache.MemoryCache('a');
-
-cache.get('a', 'en');
-```
-
-Returns **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** value containing x,y coords, id, score, and relevance
-
-## MemoryCache
+### MemoryCache
 
 Create MemoryCache object which keeps phrases in memory for indexing reference
 
@@ -208,7 +172,7 @@ const MemoryCache = new cache.MemoryCache('a');
 
 Returns **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** 
 
-## getmatching
+### getmatching
 
 get something that's matching
 
@@ -227,7 +191,7 @@ cache.getMatching('a');
 
 Returns **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** 
 
-## pack
+### pack
 
 creates database from filename
 optimize a memory cache and write to disc as rocksdbcache
@@ -363,7 +327,9 @@ const nc = new cache.NormalizationCache('file.norm.rocksdb', false);
 
 Returns **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** 
 
-## pack
+## RocksDBCache
+
+### pack
 
 Writes an identical copy RocksDBCache from another RocksDBCache; not really used
 
@@ -382,7 +348,27 @@ cache.pack('filename');
 
 Returns **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** , filename
 
-## mergeQueue
+### get
+
+retrieves exact_match grid for phrase and language code inputs
+
+**Parameters**
+
+-   `phrase` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** 
+-   `language` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** code
+
+**Examples**
+
+```javascript
+const cache = require('@mapbox/carmen-cache');
+const RocksDBCache = new cache.RocksDBCache('a');
+
+cache.get('a', 'en');
+```
+
+Returns **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** value containing x,y coords, id, score, and relevance
+
+### mergeQueue
 
 Used in merge() to queue files for merging; result of merge() is a compact rocksdb object
 
@@ -405,7 +391,7 @@ Returns **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/G
 
 Returns **[Function](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Statements/function)** , callback
 
-## mergeAfter
+### mergeAfter
 
 Used in merge() to queue files for merging; result of merge() is a compact rocksdb object
 
@@ -428,7 +414,27 @@ Returns **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/G
 
 Returns **[Function](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Statements/function)** , callback
 
-## list
+### getmatching
+
+retrieves grid for that at least partially matches phrase and/or language code inputs
+
+**Parameters**
+
+-   `phrase` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** 
+-   `language` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** code
+
+**Examples**
+
+```javascript
+const cache = require('@mapbox/carmen-cache');
+const RocksDBCache = new cache.RocksDBCache('a');
+
+cache.getmatching('a', 'en');
+```
+
+Returns **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** value containing x,y coords, id, score, and relevance
+
+### list
 
 lists the keys in the RocksDBCache object
 
@@ -450,7 +456,7 @@ cache.list('a', (err, result) => {
 
 Returns **[Set](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Set)** Set of keys/ids
 
-## merge
+### merge
 
 merges the contents from 2 RocksDBCaches
 
@@ -476,7 +482,7 @@ cache.merge('file1', 'file2', 'resultFile', 'method', (err, result) => {
 
 Returns **[Set](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Set)** Set of ids
 
-## RocksDBCache
+### RocksDBCache
 
 Constructor - Create RocksDBCache object which keeps phrases in memory for indexing reference
 
@@ -493,12 +499,3 @@ const RocksDBCache = new cache.RocksDBCache('a', 'filename');
 ```
 
 Returns **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** 
-
-## 
-
-**Examples**
-
-```javascript
-const cache = require('@mapbox/carmen-cache');
-const RocksDBCache = new cache.RocksDBCache();
-```

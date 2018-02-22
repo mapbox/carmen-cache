@@ -6,6 +6,10 @@ namespace carmen {
 
 using namespace v8;
 
+/**
+* @class MemoryCache
+*/
+
 Nan::Persistent<FunctionTemplate> MemoryCache::constructor;
 
 intarray __get(MemoryCache const* c, std::string phrase, langfield_type langfield) {
