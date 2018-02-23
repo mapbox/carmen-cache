@@ -22,9 +22,7 @@
 -   [RocksDBCache](#rocksdbcache)
     -   [pack](#pack-1)
     -   [get](#get-2)
-    -   [mergeQueue](#mergequeue)
-    -   [mergeAfter](#mergeafter)
-    -   [getmatching](#getmatching-1)
+    -   [get](#get-3)
     -   [list](#list-1)
     -   [merge](#merge)
     -   [RocksDBCache](#rocksdbcache-1)
@@ -90,7 +88,7 @@ The PhrasematchSubq type describes the metadata known about a possible matches t
 
 ### list
 
-lists the data in the memory cache object
+Lists the keys in the store of the MemoryCache Object
 
 **Parameters**
 
@@ -112,12 +110,14 @@ Returns **[Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Gl
 
 ### set
 
-replaces the data in the object
+Replaces or appends the data for a given key
 
 **Parameters**
 
 -   `id` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** 
--   `null` **[Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array)** , data
+-   `null` **[Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array)** , data; an array of numbers where each number represents a grid
+-   `an` **[Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array)** array of relevant languages
+-   `T` **[Boolean](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Boolean)** : append to data, F: replace data
 
 **Examples**
 
@@ -131,15 +131,17 @@ cache.set('a', [1,2,3], (err, result) => {
 });
 ```
 
-Returns **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** 
+Returns **any** undefined
 
 ### get
 
-retrieves data by id
+Retrieves data exactly matching phrase and language settings by id
 
 **Parameters**
 
 -   `id` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** 
+-   `matches_prefixes` **[Boolean](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Boolean)** : T if it matches exactly, F: if it does not
+-   `optional` **[Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array)** ; array of languages
 
 **Examples**
 
@@ -147,17 +149,16 @@ retrieves data by id
 const cache = require('@mapbox/carmen-cache');
 const MemoryCache = new cache.MemoryCache('a');
 
-cache.get('a', (err, result) => {
-     if (err) throw err;
-     console.log(object)
-});
+MemoryCache.get(id, languages);
+ // => [grid, grid, grid, grid... ]
 ```
 
-Returns **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** 
+Returns **[Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array)** integers referring to grids
 
 ### MemoryCache
 
-Create MemoryCache object which keeps phrases in memory for indexing reference
+Creates an in-memory key-value store mapping phrases  and language IDs
+to lists of corresponding grids (grids ie are integer representations of occurrences of the phrase within an index)
 
 **Parameters**
 
@@ -167,18 +168,23 @@ Create MemoryCache object which keeps phrases in memory for indexing reference
 
 ```javascript
 const cache = require('@mapbox/carmen-cache');
-const MemoryCache = new cache.MemoryCache('a');
+const MemoryCache = new cache.MemoryCache(id, languages);
 ```
 
-Returns **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** 
+Returns **[Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array)** grid of integers
 
 ### getmatching
 
-get something that's matching
+Retrieves data matching phrase and/or language settings by id.
+If match_prefixes is true, anything that starts with that phrase,
+and also for any entry regardless of language,
+and with a relevance penalty applied to languages that don't match those requested.
 
 **Parameters**
 
 -   `id` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** 
+-   `matches_prefixes` **[Boolean](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Boolean)** : T if it matches exactly, F: if it does not
+-   `optional` **[Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array)** ; array of languages
 
 **Examples**
 
@@ -186,10 +192,11 @@ get something that's matching
 const cache = require('@mapbox/carmen-cache');
 const MemoryCache = new cache.MemoryCache('a');
 
-cache.getMatching('a');
+MemoryCache.getmatching(id, languages);
+ // => [grid, grid, grid, grid... ]
 ```
 
-Returns **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** 
+Returns **[Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array)** integers referring to grids
 
 ### pack
 
@@ -209,7 +216,7 @@ const MemoryCache = new cache.MemoryCache('a');
 cache.pack('filename');
 ```
 
-Returns **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** , filename
+Returns **any** undefined
 
 ## NormalizationCache
 
@@ -346,16 +353,17 @@ const RocksDBCache = new cache.RocksDBCache('a');
 cache.pack('filename');
 ```
 
-Returns **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** , filename
+Returns **[Boolean](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Boolean)** 
 
 ### get
 
-retrieves exact_match grid for phrase and language code inputs
+Retrieves data exactly matching phrase and language settings by id
 
 **Parameters**
 
--   `phrase` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** 
--   `language` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** code
+-   `id` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** 
+-   `matches_prefixes` **[Boolean](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Boolean)** : T if it matches exactly, F: if it does not
+-   `optional` **[Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array)** ; array of languages
 
 **Examples**
 
@@ -363,20 +371,21 @@ retrieves exact_match grid for phrase and language code inputs
 const cache = require('@mapbox/carmen-cache');
 const RocksDBCache = new cache.RocksDBCache('a');
 
-cache.get('a', 'en');
+RocksDBCache.get(id, languages);
+ // => [grid, grid, grid, grid... ]
 ```
 
-Returns **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** value containing x,y coords, id, score, and relevance
+Returns **[Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array)** integers referring to grids
 
-### mergeQueue
+### get
 
-Used in merge() to queue files for merging; result of merge() is a compact rocksdb object
+Retrieves grid that at least partially matches phrase and/or language inputs
 
 **Parameters**
 
--   `null` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** , rocksdb filename1
--   `null` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** , rocksdb filename2
--   `null` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** , rocksdb filename3
+-   `id` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** 
+-   `matches_prefixes` **[Boolean](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Boolean)** : T if it matches exactly, F: if it does not
+-   `optional` **[Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array)** ; array of languages
 
 **Examples**
 
@@ -384,55 +393,11 @@ Used in merge() to queue files for merging; result of merge() is a compact rocks
 const cache = require('@mapbox/carmen-cache');
 const RocksDBCache = new cache.RocksDBCache('a');
 
-cache.mergeQueue(filename1, 'filename2', 'filename3', 'method', callback);
+RocksDBCache.get(id, languages);
+ // => [grid, grid, grid, grid... ]
 ```
 
-Returns **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** , method
-
-Returns **[Function](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Statements/function)** , callback
-
-### mergeAfter
-
-Used in merge() to queue files for merging; result of merge() is a compact rocksdb object
-
-**Parameters**
-
--   `null` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** , rocksdb filename1
--   `null` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** , rocksdb filename2
--   `null` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** , rocksdb filename3
-
-**Examples**
-
-```javascript
-const cache = require('@mapbox/carmen-cache');
-const RocksDBCache = new cache.RocksDBCache('a');
-
-cache.mergeAfter(filename1, 'filename2', 'filename3', 'method', callback);
-```
-
-Returns **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** , method
-
-Returns **[Function](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Statements/function)** , callback
-
-### getmatching
-
-retrieves grid for that at least partially matches phrase and/or language code inputs
-
-**Parameters**
-
--   `phrase` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** 
--   `language` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** code
-
-**Examples**
-
-```javascript
-const cache = require('@mapbox/carmen-cache');
-const RocksDBCache = new cache.RocksDBCache('a');
-
-cache.getmatching('a', 'en');
-```
-
-Returns **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** value containing x,y coords, id, score, and relevance
+Returns **[Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array)** integers referring to grids
 
 ### list
 
@@ -454,7 +419,7 @@ cache.list('a', (err, result) => {
 });
 ```
 
-Returns **[Set](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Set)** Set of keys/ids
+Returns **[Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array)** Set of keys/ids
 
 ### merge
 
@@ -484,7 +449,8 @@ Returns **[Set](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Glob
 
 ### RocksDBCache
 
-Constructor - Create RocksDBCache object which keeps phrases in memory for indexing reference
+Creates an in-memory key-value store mapping phrases  and language IDs
+to lists of corresponding grids (grids ie are integer representations of occurrences of the phrase within an index)
 
 **Parameters**
 

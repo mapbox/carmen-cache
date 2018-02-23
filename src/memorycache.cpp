@@ -84,7 +84,7 @@ MemoryCache::~MemoryCache() {}
  * @name pack
  * @memberof MemoryCache
  * @param {String}, filename
- * @returns {String}, filename
+ * @returns undefined
  * @example
  * const cache = require('@mapbox/carmen-cache');
  * const MemoryCache = new cache.MemoryCache('a');
@@ -200,7 +200,7 @@ NAN_METHOD(MemoryCache::pack) {
 }
 
 /**
- * lists the data in the memory cache object
+ * Lists the keys in the store of the MemoryCache Object
  *
  * @name list
  * @memberof MemoryCache
@@ -249,13 +249,15 @@ NAN_METHOD(MemoryCache::list) {
 }
 
 /**
- * replaces the data in the object
+ * Replaces or appends the data for a given key
  *
  * @name set
  * @memberof MemoryCache
  * @param {String} id
- * @param {Array}, data
- * @returns {String}
+ * @param {Array}, data; an array of numbers where each number represents a grid
+ * @param {Array} an array of relevant languages
+ * @param {Boolean} T: append to data, F: replace data
+ * @returns undefined
  * @example
  * const cache = require('@mapbox/carmen-cache');
  * const MemoryCache = new cache.MemoryCache('a');
@@ -331,20 +333,20 @@ NAN_METHOD(MemoryCache::_set) {
 }
 
 /**
- * retrieves data by id
+ * Retrieves data exactly matching phrase and language settings by id
  *
  * @name get
  * @memberof MemoryCache
  * @param {String} id
- * @returns {String}
+ * @param {Boolean} matches_prefixes: T if it matches exactly, F: if it does not
+ * @param {Array} optional; array of languages
+ * @returns {Array} integers referring to grids
  * @example
  * const cache = require('@mapbox/carmen-cache');
  * const MemoryCache = new cache.MemoryCache('a');
  *
- * cache.get('a', (err, result) => {
- *      if (err) throw err;
- *      console.log(object)
- *});
+ * MemoryCache.get(id, languages);
+ *  // => [grid, grid, grid, grid... ]
  *
  */
 
@@ -353,15 +355,16 @@ NAN_METHOD(MemoryCache::_get) {
 }
 
 /**
- * Create MemoryCache object which keeps phrases in memory for indexing reference
+ * Creates an in-memory key-value store mapping phrases  and language IDs
+ * to lists of corresponding grids (grids ie are integer representations of occurrences of the phrase within an index)
  *
  * @name MemoryCache
  * @memberof MemoryCache
  * @param {String} id
- * @returns {Object}
+ * @returns {Array} grid of integers
  * @example
  * const cache = require('@mapbox/carmen-cache');
- * const MemoryCache = new cache.MemoryCache('a');
+ * const MemoryCache = new cache.MemoryCache(id, languages);
  *
  */
 
@@ -388,17 +391,23 @@ NAN_METHOD(MemoryCache::New) {
 }
 
 /**
- * get something that's matching
+ * Retrieves data matching phrase and/or language settings by id.
+ * If match_prefixes is true, anything that starts with that phrase,
+ * and also for any entry regardless of language,
+ * and with a relevance penalty applied to languages that don't match those requested.
  *
  * @name getmatching
  * @memberof MemoryCache
  * @param {String} id
- * @returns {String}
+ * @param {Boolean} matches_prefixes: T if it matches exactly, F: if it does not
+ * @param {Array} optional; array of languages
+ * @returns {Array} integers referring to grids
  * @example
  * const cache = require('@mapbox/carmen-cache');
  * const MemoryCache = new cache.MemoryCache('a');
  *
- * cache.getMatching('a');
+ * MemoryCache.getmatching(id, languages);
+ *  // => [grid, grid, grid, grid... ]
  *
  */
 

@@ -14,22 +14,6 @@ using namespace v8;
 
 Nan::Persistent<FunctionTemplate> RocksDBCache::constructor;
 
-/**
- * retrieves exact_match grid for phrase and language code inputs
- *
- * @name get
- * @memberof RocksDBCache
- * @param {String} phrase
- * @param {String} language code
- * @returns {Object} value containing x,y coords, id, score, and relevance
- *
- * @example
- * const cache = require('@mapbox/carmen-cache');
- * const RocksDBCache = new cache.RocksDBCache('a');
- *
- * cache.get('a', 'en');
- *
- */
 
 intarray __get(RocksDBCache const* c, std::string phrase, langfield_type langfield) {
     std::shared_ptr<rocksdb::DB> db = c->db;
@@ -44,23 +28,6 @@ intarray __get(RocksDBCache const* c, std::string phrase, langfield_type langfie
 
     return array;
 }
-
-/**
- * retrieves grid for that at least partially matches phrase and/or language code inputs
- *
- * @name getmatching
- * @memberof RocksDBCache
- * @param {String} phrase
- * @param {String} language code
- * @returns {Object} value containing x,y coords, id, score, and relevance
- *
- * @example
- * const cache = require('@mapbox/carmen-cache');
- * const RocksDBCache = new cache.RocksDBCache('a');
- *
- * cache.getmatching('a', 'en');
- *
- */
 
 intarray __getmatching(RocksDBCache const* c, std::string phrase, bool match_prefixes, langfield_type langfield) {
     intarray array;
@@ -170,7 +137,7 @@ RocksDBCache::~RocksDBCache() {}
  * @name pack
  * @memberof RocksDBCache
  * @param {String}, filename
- * @returns {String}, filename
+ * @returns {Boolean}
  * @example
  * const cache = require('@mapbox/carmen-cache');
  * const RocksDBCache = new cache.RocksDBCache('a');
@@ -223,25 +190,7 @@ NAN_METHOD(RocksDBCache::pack) {
     }
 }
 
-/**
- *
- * Used in merge() to queue files for merging; result of merge() is a compact rocksdb object
- *
- * @name mergeQueue
- * @memberof RocksDBCache
- * @param {String}, rocksdb filename1
- * @param {String}, rocksdb filename2
- * @param {String}, rocksdb filename3
- * @returns {String}, method
- * @returns {Function}, callback
- * @example
- * const cache = require('@mapbox/carmen-cache');
- * const RocksDBCache = new cache.RocksDBCache('a');
- *
- * cache.mergeQueue(filename1, 'filename2', 'filename3', 'method', callback);
- *
-*/
-
+// Used in merge() to queue files for merging; result is undefined
 void mergeQueue(uv_work_t* req) {
     MergeBaton* baton = static_cast<MergeBaton*>(req->data);
     std::string const& filename1 = baton->filename1;
@@ -448,25 +397,7 @@ void mergeQueue(uv_work_t* req) {
     }
 }
 
-/**
- *
- * Used in merge() to queue files for merging; result of merge() is a compact rocksdb object
- *
- * @name mergeAfter
- * @memberof RocksDBCache
- * @param {String}, rocksdb filename1
- * @param {String}, rocksdb filename2
- * @param {String}, rocksdb filename3
- * @returns {String}, method
- * @returns {Function}, callback
- * @example
- * const cache = require('@mapbox/carmen-cache');
- * const RocksDBCache = new cache.RocksDBCache('a');
- *
- * cache.mergeAfter(filename1, 'filename2', 'filename3', 'method', callback);
- *
-*/
-
+// Used in merge() to queue files for merging
 
 // we don't use the 'status' parameter, but it's required as part of the uv_after_work_cb
 // function signature, so suppress the warning about it
@@ -487,6 +418,24 @@ void mergeAfter(uv_work_t* req, int status) {
 }
 #pragma clang diagnostic pop
 
+/**
+ * Retrieves data exactly matching phrase and language settings by id
+ *
+ * @name get
+ * @memberof RocksDBCache
+ * @param {String} id
+ * @param {Boolean} matches_prefixes: T if it matches exactly, F: if it does not
+ * @param {Array} optional; array of languages
+ * @returns {Array} integers referring to grids
+ * @example
+ * const cache = require('@mapbox/carmen-cache');
+ * const RocksDBCache = new cache.RocksDBCache('a');
+ *
+ * RocksDBCache.get(id, languages);
+ *  // => [grid, grid, grid, grid... ]
+ *
+ */
+
 NAN_METHOD(RocksDBCache::_get) {
     return _genericget<RocksDBCache>(info);
 }
@@ -497,7 +446,7 @@ NAN_METHOD(RocksDBCache::_get) {
  * @name list
  * @memberof RocksDBCache
  * @param {String} id
- * @returns {Set} Set of keys/ids
+ * @returns {Array} Set of keys/ids
  * @example
  * const cache = require('@mapbox/carmen-cache');
  * const RocksDBCache = new cache.RocksDBCache('a');
@@ -590,8 +539,9 @@ NAN_METHOD(RocksDBCache::merge) {
 }
 
 /**
- * Constructor - Create RocksDBCache object which keeps phrases in memory for indexing reference
- *
+* Creates an in-memory key-value store mapping phrases  and language IDs
+* to lists of corresponding grids (grids ie are integer representations of occurrences of the phrase within an index)
+*
  * @name RocksDBCache
  * @memberof RocksDBCache
  * @param {String} id
@@ -642,6 +592,24 @@ NAN_METHOD(RocksDBCache::New) {
         return Nan::ThrowTypeError(ex.what());
     }
 }
+
+/**
+ * Retrieves grid that at least partially matches phrase and/or language inputs
+ *
+ * @name get
+ * @memberof RocksDBCache
+ * @param {String} id
+ * @param {Boolean} matches_prefixes: T if it matches exactly, F: if it does not
+ * @param {Array} optional; array of languages
+ * @returns {Array} integers referring to grids
+ * @example
+ * const cache = require('@mapbox/carmen-cache');
+ * const RocksDBCache = new cache.RocksDBCache('a');
+ *
+ * RocksDBCache.get(id, languages);
+ *  // => [grid, grid, grid, grid... ]
+ *
+ */
 
 NAN_METHOD(RocksDBCache::_getmatching) {
     return _genericgetmatching<RocksDBCache>(info);
