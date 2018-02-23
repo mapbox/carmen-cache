@@ -6,6 +6,10 @@ namespace carmen {
 
 using namespace v8;
 
+/**
+* @class MemoryCache
+*/
+
 Nan::Persistent<FunctionTemplate> MemoryCache::constructor;
 
 intarray __get(MemoryCache const* c, std::string phrase, langfield_type langfield) {
@@ -208,7 +212,7 @@ NAN_METHOD(MemoryCache::pack) {
  *
  * cache.list('a', (err, result) => {
  *    if (err) throw err;
- *    console.log(result); //
+ *    console.log(result);
  * });
  *
  */
@@ -258,7 +262,7 @@ NAN_METHOD(MemoryCache::list) {
  *
  * cache.set('a', [1,2,3], (err, result) => {
  *      if (err) throw err;
- *      console.log(result) // id as string
+ *      console.log(result)
  *});
  *
  */
@@ -339,7 +343,7 @@ NAN_METHOD(MemoryCache::_set) {
  *
  * cache.get('a', (err, result) => {
  *      if (err) throw err;
- *      console.log(result) // id as string
+ *      console.log(object)
  *});
  *
  */
