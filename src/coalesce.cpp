@@ -9,7 +9,7 @@ using namespace v8;
 /**
  * @typedef PhrasematchSubq
  * @name PhrasematchSubq
- * @description The PhrasematchSubq type describes the metadata known about a possible matches to be assessed for stacking by coalesce.
+ * @description The PhrasematchSubq type describes the metadata known about possible matches to be assessed for stacking by coalesce.
  * @type {Object}
  * @property {String} phrase - The matched string
  * @property {Number} weight - A float between 0 and 1 representing how much of the query this string covers

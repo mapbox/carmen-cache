@@ -140,7 +140,7 @@ NAN_METHOD(NormalizationCache::New) {
  * const cache = require('@mapbox/carmen-cache');
  * const nc = new cache.NormalizationCache('file.norm.rocksdb', true);
  *
- * // for a normalization cache with over the dictionary ['main st', 'main street']
+ * // for a normalization cache for the dictionary ['main st', 'main street']
  * // where 'main st' is canonical
  * const canonical = nc.get(1); // returns [0]
  */
@@ -198,7 +198,7 @@ NAN_METHOD(NormalizationCache::get) {
  * const cache = require('@mapbox/carmen-cache');
  * const nc = new cache.NormalizationCache('file.norm.rocksdb', true);
  *
- * // for a normalization cache with over the dictionary
+ * // for a normalization cache for the dictionary
  * // ['saint marks ave', 'saint peters ave', 'st marks ave', 'st peters ave']
  * // where the 'st ...' forms are canonical
  * const canonical = nc.getPrefixRange(0, 2); // looks up all the canonical
@@ -285,7 +285,7 @@ NAN_METHOD(NormalizationCache::getprefixrange) {
  * const cache = require('@mapbox/carmen-cache');
  * const nc = new cache.NormalizationCache('file.norm.rocksdb', true);
  *
- * // for a normalization cache with over the dictionary
+ * // for a normalization cache for the dictionary
  * // ['saint marks ave', 'saint peters ave', 'st marks ave', 'st peters ave']
  * // where the 'st ...' forms are canonical
  * const canonical = nc.getAll() // returns [[0, [2]], [1, [3]]]
@@ -328,12 +328,13 @@ NAN_METHOD(NormalizationCache::getall) {
  *
  * @name writeBatch
  * @memberof NormalizationCache
+ * @param {Array} data - the values to be written to the cache, in the form [[from, [to, to, ...]], ...]
  * @returns {Array}
  * @example
  * const cache = require('@mapbox/carmen-cache');
  * const nc = new cache.NormalizationCache('file.norm.rocksdb', true);
  *
- * // for a normalization cache with over the dictionary
+ * // for a normalization cache for the dictionary
  * // ['saint marks ave', 'saint peters ave', 'st marks ave', 'st peters ave']
  * // where the 'st ...' forms are canonical
  * nc.writeBatch([[0, [2]], [1, [3]]]);
@@ -343,11 +344,11 @@ NAN_METHOD(NormalizationCache::writebatch) {
         return Nan::ThrowTypeError("expected one info: data");
     }
     if (!info[0]->IsArray()) {
-        return Nan::ThrowTypeError("second arg must be an Array");
+        return Nan::ThrowTypeError("first arg must be an Array");
     }
     Local<Array> data = Local<Array>::Cast(info[0]);
     if (data->IsNull() || data->IsUndefined()) {
-        return Nan::ThrowTypeError("an array expected for second argument");
+        return Nan::ThrowTypeError("an array expected for first argument");
     }
 
     NormalizationCache* c = node::ObjectWrap::Unwrap<NormalizationCache>(info.This());
