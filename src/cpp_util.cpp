@@ -60,7 +60,6 @@ ZXY pxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z) {
     return zxy;
 }
 
-
 // Calculates a ZXY for appropriate for a given coalesce operation out of the supplied bbox ZXY coordinates.
 ZXY bxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z, bool max) {
     ZXY zxy;

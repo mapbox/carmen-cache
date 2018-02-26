@@ -14,7 +14,6 @@ using namespace v8;
 
 Nan::Persistent<FunctionTemplate> RocksDBCache::constructor;
 
-
 intarray __get(RocksDBCache const* c, std::string phrase, langfield_type langfield) {
     std::shared_ptr<rocksdb::DB> db = c->db;
     intarray array;
