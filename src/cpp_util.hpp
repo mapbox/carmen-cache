@@ -116,7 +116,9 @@ struct Context {
     uint32_t mask;
     double relev;
 
-    Context(Context const& c) = default;
+    Context() = delete;
+    Context(Context const& c) = delete;
+    Context& operator=(Context const& c) = delete;
     Context(Cover&& cov,
             uint32_t mask,
             double relev)
