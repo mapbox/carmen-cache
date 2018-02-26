@@ -10,6 +10,9 @@ fs.mkdirSync(tmpdir);
 let tmpidx = 0;
 const tmpfile = function() { return tmpdir + '/' + (tmpidx++) + '.dat'; };
 
+// packs each MemoryCaches into a RocksDBCache, then merges all into a single RocksDBCache
+
+// merges grid caches
 tape('#merge concat', (assert) => {
     const cacheA = new Cache('a');
     cacheA._set('....1', [0,1,2,3]);
@@ -35,6 +38,7 @@ tape('#merge concat', (assert) => {
     });
 });
 
+// merges frequency caches: used at index time to decide which words are important/not important
 tape('#merge freq', (assert) => {
     const cacheA = new Cache('a');
     // these would not ordinarily all be in the same shard, but force them to be

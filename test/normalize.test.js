@@ -31,6 +31,7 @@ const norm = {
 
 const file = tmpfile();
 
+// test creating the cache and writing it to disk
 tape('write/dump', (assert) => {
     const cache = new carmenCache.NormalizationCache(file, false);
 
@@ -74,6 +75,7 @@ tape('write/dump', (assert) => {
     return assert.end();
 });
 
+// tests reading cache from disk
 tape('read', (assert) => {
     const cache = new carmenCache.NormalizationCache(file, true);
 

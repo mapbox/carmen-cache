@@ -3,6 +3,10 @@ const carmenCache = require('../index.js');
 const tape = require('tape');
 const fs = require('fs');
 
+// These tests are testing to ensure both MemoryCache and RocksDBCache are identical.
+// It loops over each to check that they are the same.
+// Check API.md to see what each of these actually tests.
+
 const tmpdir = '/tmp/temp.' + Math.random().toString(36).substr(2, 5);
 fs.mkdirSync(tmpdir);
 let tmpidx = 0;

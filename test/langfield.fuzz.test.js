@@ -3,6 +3,8 @@ const carmenCache = require('../index.js');
 const tape = require('tape');
 const fs = require('fs');
 
+// Checks the language field setting operation is working
+
 const tmpdir = '/tmp/temp.' + Math.random().toString(36).substr(2, 5);
 fs.mkdirSync(tmpdir);
 let tmpidx = 0;

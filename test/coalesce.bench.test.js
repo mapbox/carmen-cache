@@ -47,6 +47,8 @@ const test = require('tape');
         }
         run(runs);
     });
+    // Coalesce can optionally take a proximity parameter, and use this as a parameter.
+    // This can be more computationally expensive which is why it is a part of the benchmark test.
     test('coalesceSingle proximity', (assert) => {
         const time = +new Date;
         function run(remaining) {
@@ -79,7 +81,7 @@ const test = require('tape');
 })();
 
 (function() {
-    // asan makes everything slow, so skip benching
+    // asan makes everything slow, so skip benching for the sake of letting Travis build
     if (process.env.ASAN_OPTIONS) return;
 
     const runs = 50;

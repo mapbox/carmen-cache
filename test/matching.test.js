@@ -4,6 +4,9 @@ const tape = require('tape');
 const fs = require('fs');
 const Grid = require('./grid.js');
 
+// Check API.md documentation for an explanationon getmatching operation.
+// It is identical for both MemoryCache and RocksDBCache.
+
 const tmpdir = '/tmp/temp.' + Math.random().toString(36).substr(2, 5);
 fs.mkdirSync(tmpdir);
 let tmpidx = 0;
