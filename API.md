@@ -71,7 +71,7 @@ and exposed asynchronously to JS via a callback argument.
 
 ## PhrasematchSubq
 
-The PhrasematchSubq type describes the metadata known about a possible matches to be assessed for stacking by coalesce.
+The PhrasematchSubq type describes the metadata known about possible matches to be assessed for stacking by coalesce.
 
 **Properties**
 
@@ -241,7 +241,7 @@ retrieve the indices of the canonical labels for the index of a given non-canoni
 const cache = require('@mapbox/carmen-cache');
 const nc = new cache.NormalizationCache('file.norm.rocksdb', true);
 
-// for a normalization cache with over the dictionary ['main st', 'main street']
+// for a normalization cache for the dictionary ['main st', 'main street']
 // where 'main st' is canonical
 const canonical = nc.get(1); // returns [0]
 ```
@@ -269,7 +269,7 @@ form does not also share that same prefix
 const cache = require('@mapbox/carmen-cache');
 const nc = new cache.NormalizationCache('file.norm.rocksdb', true);
 
-// for a normalization cache with over the dictionary
+// for a normalization cache for the dictionary
 // ['saint marks ave', 'saint peters ave', 'st marks ave', 'st peters ave']
 // where the 'st ...' forms are canonical
 const canonical = nc.getPrefixRange(0, 2); // looks up all the canonical
@@ -289,7 +289,7 @@ retrieve the entire contents of a NormalizationCache, as an array of arrays
 const cache = require('@mapbox/carmen-cache');
 const nc = new cache.NormalizationCache('file.norm.rocksdb', true);
 
-// for a normalization cache with over the dictionary
+// for a normalization cache for the dictionary
 // ['saint marks ave', 'saint peters ave', 'st marks ave', 'st peters ave']
 // where the 'st ...' forms are canonical
 const canonical = nc.getAll() // returns [[0, [2]], [1, [3]]]
@@ -301,13 +301,17 @@ Returns **[Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Gl
 
 bulk-set the contents of a NormalizationCache to an array of arrays
 
+**Parameters**
+
+-   `data` **[Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array)** the values to be written to the cache, in the form \[\[from, [to, to, ...]], ...]
+
 **Examples**
 
 ```javascript
 const cache = require('@mapbox/carmen-cache');
 const nc = new cache.NormalizationCache('file.norm.rocksdb', true);
 
-// for a normalization cache with over the dictionary
+// for a normalization cache for the dictionary
 // ['saint marks ave', 'saint peters ave', 'st marks ave', 'st peters ave']
 // where the 'st ...' forms are canonical
 nc.writeBatch([[0, [2]], [1, [3]]]);
