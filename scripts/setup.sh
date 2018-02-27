@@ -3,7 +3,7 @@
 set -eu
 set -o pipefail
 
-export MASON_RELEASE="${MASON_RELEASE:-eeba3b5}"
+export MASON_RELEASE="${MASON_RELEASE:-v0.18.0}"
 export MASON_LLVM_RELEASE="${MASON_LLVM_RELEASE:-5.0.0}"
 export BINUTILS_VERSION="${BINUTILS_VERSION:-2.30}"
 
