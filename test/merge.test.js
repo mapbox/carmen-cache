@@ -2,7 +2,7 @@
 const carmenCache = require('../index.js');
 const Cache = carmenCache.MemoryCache;
 const RocksDBCache = carmenCache.RocksDBCache;
-const tape = require('tape');
+const test = require('tape');
 const fs = require('fs');
 
 const tmpdir = '/tmp/temp.' + Math.random().toString(36).substr(2, 5);
@@ -13,7 +13,7 @@ const tmpfile = function() { return tmpdir + '/' + (tmpidx++) + '.dat'; };
 // packs each MemoryCaches into a RocksDBCache, then merges all into a single RocksDBCache
 
 // merges grid caches
-tape('#merge concat', (assert) => {
+test('#merge concat', (t) => {
     const cacheA = new Cache('a');
     cacheA._set('....1', [0,1,2,3]);
     cacheA._set('....2', [0,1,2,3]);
@@ -29,17 +29,17 @@ tape('#merge concat', (assert) => {
 
     const merged = tmpfile();
     RocksDBCache.merge(pbfA, pbfB, merged, 'concat', (err) => {
-        assert.ifError(err);
+        t.ifError(err, 'no errors');
         const cacheC = new RocksDBCache('c', merged);
-        assert.deepEqual(cacheC._get('....2').sort(numSort), [0,1,2,3], 'a-only');
-        assert.deepEqual(cacheC._get('....3').sort(numSort), [10,11,12,13], 'b-only');
-        assert.deepEqual(cacheC._get('....1').sort(numSort), [0,1,2,3,10,11,12,13], 'a-b-merged');
-        assert.end();
+        t.deepEqual(cacheC._get('....2').sort(numSort), [0,1,2,3], 'a-only');
+        t.deepEqual(cacheC._get('....3').sort(numSort), [10,11,12,13], 'b-only');
+        t.deepEqual(cacheC._get('....1').sort(numSort), [0,1,2,3,10,11,12,13], 'a-b-merged');
+        t.end();
     });
 });
 
 // merges frequency caches: used at index time to decide which words are important/not important
-tape('#merge freq', (assert) => {
+test('#merge freq', (t) => {
     const cacheA = new Cache('a');
     // these would not ordinarily all be in the same shard, but force them to be
     // in the same shard to make this test actually work
@@ -59,13 +59,13 @@ tape('#merge freq', (assert) => {
 
     const merged = tmpfile();
     RocksDBCache.merge(pbfA, pbfB, merged, 'freq', (err) => {
-        assert.ifError(err);
+        t.ifError(err, 'no errors');
         const cacheC = new RocksDBCache('c', merged);
-        assert.deepEqual(cacheC._get('__MAX__').sort(numSort), [2], 'a-b-max');
-        assert.deepEqual(cacheC._get('__COUNT__').sort(numSort), [3], 'a-b-sum');
-        assert.deepEqual(cacheC._get('3').sort(numSort), [1], 'a-only');
-        assert.deepEqual(cacheC._get('4').sort(numSort), [2], 'b-only');
-        assert.end();
+        t.deepEqual(cacheC._get('__MAX__').sort(numSort), [2], 'a-b-max');
+        t.deepEqual(cacheC._get('__COUNT__').sort(numSort), [3], 'a-b-sum');
+        t.deepEqual(cacheC._get('3').sort(numSort), [1], 'a-only');
+        t.deepEqual(cacheC._get('4').sort(numSort), [2], 'b-only');
+        t.end();
     });
 });
 

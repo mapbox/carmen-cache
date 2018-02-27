@@ -20,7 +20,7 @@ const test = require('tape');
         prefix: false,
         mask: 1 << 0
     }];
-    test('coalesceSingle', (assert) => {
+    test('coalesceSingle', (t) => {
         const time = +new Date;
         function run(remaining) {
             if (!remaining) {
@@ -29,8 +29,8 @@ const test = require('tape');
                 if (process.env.BUILDTYPE === 'debug') {
                     expected_ops = 500;
                 }
-                assert.equal(ops < expected_ops, true, 'coalesceSingle @ ' + ops + 'ms < ' + expected_ops + 'ms');
-                assert.end();
+                t.equal(ops < expected_ops, true, 'coalesceSingle @ ' + ops + 'ms < ' + expected_ops + 'ms');
+                t.end();
                 return;
             }
             coalesce(stacks, {}, (err, res) => {
@@ -38,8 +38,8 @@ const test = require('tape');
                 checks = checks && res.length === 37;
                 checks = checks && res[0][0].tmpid === 129900;
                 if (!checks) {
-                    assert.fail('Failed checks');
-                    assert.end();
+                    t.fail('Failed checks');
+                    t.end();
                 } else {
                     run(--remaining);
                 }
@@ -49,7 +49,7 @@ const test = require('tape');
     });
     // Coalesce can optionally take a proximity parameter, and use this as a parameter.
     // This can be more computationally expensive which is why it is a part of the benchmark test.
-    test('coalesceSingle proximity', (assert) => {
+    test('coalesceSingle proximity', (t) => {
         const time = +new Date;
         function run(remaining) {
             if (!remaining) {
@@ -58,8 +58,8 @@ const test = require('tape');
                 if (process.env.BUILDTYPE === 'debug') {
                     expected_ops = 500;
                 }
-                assert.equal(ops < expected_ops, true, 'coalesceSingle + proximity @ ' + ops + 'ms < ' + expected_ops + 'ms');
-                assert.end();
+                t.equal(ops < expected_ops, true, 'coalesceSingle + proximity @ ' + ops + 'ms < ' + expected_ops + 'ms');
+                t.end();
                 return;
             }
             coalesce(stacks, { centerzxy: [14,4893,6001] }, (err, res) => {
@@ -69,8 +69,8 @@ const test = require('tape');
                 checks = checks && res[0][0].y === 6001;
                 checks = checks && res[0][0].tmpid === 446213;
                 if (!checks) {
-                    assert.fail('Failed checks');
-                    assert.end();
+                    t.fail('Failed checks');
+                    t.end();
                 } else {
                     run(--remaining);
                 }
@@ -106,7 +106,7 @@ const test = require('tape');
         phrase: '3848571113',
         prefix: false
     }];
-    test('coalesceMulti', (assert) => {
+    test('coalesceMulti', (t) => {
         const time = +new Date;
         function run(remaining) {
             if (!remaining) {
@@ -115,8 +115,8 @@ const test = require('tape');
                 if (process.env.BUILDTYPE === 'debug') {
                     expected_ops = 1000;
                 }
-                assert.equal(ops < expected_ops, true, 'coalesceMulti @ ' + ops + 'ms < ' + expected_ops + 'ms');
-                assert.end();
+                t.equal(ops < expected_ops, true, 'coalesceMulti @ ' + ops + 'ms < ' + expected_ops + 'ms');
+                t.end();
                 return;
             }
             coalesce(stacks, {}, (err, res) => {
@@ -125,8 +125,8 @@ const test = require('tape');
                 checks = checks && res[0][0].tmpid === 33593999;
                 checks = checks && res[0][1].tmpid === 514584;
                 if (!checks) {
-                    assert.fail('Failed checks');
-                    assert.end();
+                    t.fail('Failed checks');
+                    t.end();
                 } else {
                     run(--remaining);
                 }
@@ -134,7 +134,7 @@ const test = require('tape');
         }
         run(runs);
     });
-    test('coalesceMulti proximity', (assert) => {
+    test('coalesceMulti proximity', (t) => {
         const time = +new Date;
         function run(remaining) {
             if (!remaining) {
@@ -143,8 +143,8 @@ const test = require('tape');
                 if (process.env.BUILDTYPE === 'debug') {
                     expected_ops = 1000;
                 }
-                assert.equal(ops < expected_ops, true, 'coalesceMulti + proximity @' + ops + 'ms < ' + expected_ops + 'ms');
-                assert.end();
+                t.equal(ops < expected_ops, true, 'coalesceMulti + proximity @' + ops + 'ms < ' + expected_ops + 'ms');
+                t.end();
                 return;
             }
             coalesce(stacks, { centerzxy: [14,4893,6001] }, (err, res) => {
@@ -155,8 +155,8 @@ const test = require('tape');
                 checks = checks && res[0][0].tmpid === 34000645;
                 checks = checks && res[0][1].tmpid === 5156;
                 if (!checks) {
-                    assert.fail('Failed checks');
-                    assert.end();
+                    t.fail('Failed checks');
+                    t.end();
                 } else {
                     run(--remaining);
                 }

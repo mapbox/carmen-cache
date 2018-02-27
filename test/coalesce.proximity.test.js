@@ -48,7 +48,7 @@ const test = require('tape');
 
     // This centerpoint favors the N/S direction over E/W slightly to make
     // expected output order obvious
-    test('proximity ne', (assert) => {
+    test('proximity ne', (t) => {
         coalesce([{
             cache: cache,
             mask: 1 << 0,
@@ -61,14 +61,14 @@ const test = require('tape');
             radius: 200,
             centerzxy: [14, 100 + 10, 100 + 15]
         }, (err, res) => {
-            assert.ifError(err);
-            assert.deepEqual(res.map((cover) => cover[0].id), [ne.id, nw.id, se.id, sw.id], 'right order');
-            assert.deepEqual(res.map((cover) => Math.floor(cover[0].distance)), [123, 139, 146, 159], 'distances check out');
-            assert.end();
+            t.ifError(err, 'no errors');
+            t.deepEqual(res.map((cover) => cover[0].id), [ne.id, nw.id, se.id, sw.id], 'right order');
+            t.deepEqual(res.map((cover) => Math.floor(cover[0].distance)), [123, 139, 146, 159], 'distances check out');
+            t.end();
         });
     });
 
-    test('proximity se', (assert) => {
+    test('proximity se', (t) => {
         coalesce([{
             cache: cache,
             mask: 1 << 0,
@@ -81,14 +81,14 @@ const test = require('tape');
             radius: 200,
             centerzxy: [14, 100 + 10, 100 - 15]
         }, (err, res) => {
-            assert.ifError(err);
-            assert.deepEqual(res.map((cover) => cover[0].id), [se.id, sw.id, ne.id, nw.id], 'right order');
-            assert.deepEqual(res.map((cover) => Math.floor(cover[0].distance)), [123, 139, 146, 159], 'distances check out');
-            assert.end();
+            t.ifError(err, 'no errors');
+            t.deepEqual(res.map((cover) => cover[0].id), [se.id, sw.id, ne.id, nw.id], 'right order');
+            t.deepEqual(res.map((cover) => Math.floor(cover[0].distance)), [123, 139, 146, 159], 'distances check out');
+            t.end();
         });
     });
 
-    test('proximity sw', (assert) => {
+    test('proximity sw', (t) => {
         coalesce([{
             cache: cache,
             mask: 1 << 0,
@@ -101,14 +101,14 @@ const test = require('tape');
             radius: 200,
             centerzxy: [14, 100 - 10, 100 - 15]
         }, (err, res) => {
-            assert.ifError(err);
-            assert.deepEqual(res.map((cover) => cover[0].id), [sw.id, se.id, nw.id, ne.id], 'right order');
-            assert.deepEqual(res.map((cover) => Math.floor(cover[0].distance)), [123, 139, 146, 159], 'distances check out');
-            assert.end();
+            t.ifError(err, 'no errors');
+            t.deepEqual(res.map((cover) => cover[0].id), [sw.id, se.id, nw.id, ne.id], 'right order');
+            t.deepEqual(res.map((cover) => Math.floor(cover[0].distance)), [123, 139, 146, 159], 'distances check out');
+            t.end();
         });
     });
 
-    test('proximity nw', (assert) => {
+    test('proximity nw', (t) => {
         coalesce([{
             cache: cache,
             mask: 1 << 0,
@@ -121,10 +121,10 @@ const test = require('tape');
             radius: 200,
             centerzxy: [14, 100 - 10, 100 + 15]
         }, (err, res) => {
-            assert.ifError(err);
-            assert.deepEqual(res.map((cover) => cover[0].id), [nw.id, ne.id, sw.id, se.id], 'right order');
-            assert.deepEqual(res.map((cover) => Math.floor(cover[0].distance)), [123, 139, 146, 159], 'distances check out');
-            assert.end();
+            t.ifError(err, 'no errors');
+            t.deepEqual(res.map((cover) => cover[0].id), [nw.id, ne.id, sw.id, se.id], 'right order');
+            t.deepEqual(res.map((cover) => Math.floor(cover[0].distance)), [123, 139, 146, 159], 'distances check out');
+            t.end();
         });
     });
 })();
