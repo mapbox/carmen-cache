@@ -1,9 +1,5 @@
 {
     'includes': [ 'common.gypi' ],
-    'make_global_settings': [
-        ['CXX', '<(module_root_dir)/mason_packages/.link/bin/clang++-3.9'],
-        ['LINK', '<(module_root_dir)/mason_packages/.link/bin/clang++-3.9']
-    ],
     "variables": {
         # Flags we pass to the compiler to ensure the compiler
         # warns us about potentially buggy or dangerous code
