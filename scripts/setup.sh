@@ -67,7 +67,7 @@ function run() {
 
 
     # install binutils for LTO on linux
-    if [[ $(uname -s) == 'Linux' ]]; then
+    if [[ $(uname -s) == 'Linux' ]] && [[ ${CXX:-} =~ 'clang++' ]]; then
       $(pwd)/.mason/mason install binutils ${BINUTILS_VERSION}
       $(pwd)/.mason/mason link binutils ${BINUTILS_VERSION}
     fi
