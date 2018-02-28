@@ -77,7 +77,7 @@ function run() {
 
     echo "export PATH=${llvm_toolchain_dir}/bin:$(pwd)/.mason:$(pwd)/mason_packages/.link/bin:"'${PATH}' > ${config}
     echo "export CXX=${CXX:-${llvm_toolchain_dir}/bin/clang++}" >> ${config}
-    echo "export CC=${CC:-llvm_toolchain_dir}/bin/clang" >> ${config}
+    echo "export CC=${CC:-${llvm_toolchain_dir}/bin/clang" >> ${config}
     echo 'export MASON_CXX=${CXX}' >> ${config}
     echo 'export MASON_CC=${CC}' >> ${config}
     echo "export MASON_RELEASE=${MASON_RELEASE}" >> ${config}
