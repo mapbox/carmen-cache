@@ -22,7 +22,7 @@ const test = require('tape');
         function run(remaining) {
             if (!remaining) {
                 const ops = (+new Date - time) / runs;
-                let expected_ops = 30;
+                const expected_ops = 30;
                 t.pass('coalesceSingle @ ' + ops + 'ms should be less than ' + expected_ops + 'ms');
                 t.end();
                 return;
@@ -48,7 +48,7 @@ const test = require('tape');
         function run(remaining) {
             if (!remaining) {
                 const ops = (+new Date - time) / runs;
-                let expected_ops = 30;
+                const expected_ops = 30;
                 t.pass('coalesceSingle + proximity @ ' + ops + 'ms should be less than ' + expected_ops + 'ms');
                 t.end();
                 return;
@@ -99,7 +99,7 @@ const test = require('tape');
         function run(remaining) {
             if (!remaining) {
                 const ops = (+new Date - time) / runs;
-                let expected_ops = 60;
+                const expected_ops = 60;
                 t.pass('coalesceMulti @ ' + ops + 'ms should be less than ' + expected_ops + 'ms');
                 t.end();
                 return;
@@ -124,7 +124,7 @@ const test = require('tape');
         function run(remaining) {
             if (!remaining) {
                 const ops = (+new Date - time) / runs;
-                let expected_ops = 60;
+                const expected_ops = 60;
                 t.pass('coalesceMulti + proximity @' + ops + 'ms should be less than ' + expected_ops + 'ms');
                 t.end();
                 return;
