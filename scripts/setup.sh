@@ -3,8 +3,9 @@
 set -eu
 set -o pipefail
 
-export MASON_RELEASE="${MASON_RELEASE:-v0.18.0}"
-export MASON_LLVM_RELEASE="${MASON_LLVM_RELEASE:-5.0.0}"
+# TODO(springmeyer) currently depends on mason branch: https://github.com/mapbox/mason/issues/566
+export MASON_RELEASE="${MASON_RELEASE:-cxx-override}"
+export MASON_LLVM_RELEASE="${MASON_LLVM_RELEASE:-5.0.1}"
 export BINUTILS_VERSION="${BINUTILS_VERSION:-2.30}"
 
 PLATFORM=$(uname | tr A-Z a-z)
@@ -67,7 +68,7 @@ function run() {
 
 
     # install binutils for LTO on linux
-    if [[ $(uname -s) == 'Linux' ]]; then
+    if [[ $(uname -s) == 'Linux' ]] && [[ ${CXX:-} =~ 'clang++' ]]; then
       $(pwd)/.mason/mason install binutils ${BINUTILS_VERSION}
       $(pwd)/.mason/mason link binutils ${BINUTILS_VERSION}
     fi
@@ -77,6 +78,9 @@ function run() {
 
     echo "export PATH=${llvm_toolchain_dir}/bin:$(pwd)/.mason:$(pwd)/mason_packages/.link/bin:"'${PATH}' > ${config}
     echo "export CXX=${CXX:-${llvm_toolchain_dir}/bin/clang++}" >> ${config}
+    echo "export CC=${CC:-${llvm_toolchain_dir}/bin/clang}" >> ${config}
+    echo 'export MASON_CXX=${CXX}' >> ${config}
+    echo 'export MASON_CC=${CC}' >> ${config}
     echo "export MASON_RELEASE=${MASON_RELEASE}" >> ${config}
     echo "export MASON_LLVM_RELEASE=${MASON_LLVM_RELEASE}" >> ${config}
     # https://github.com/google/sanitizers/wiki/AddressSanitizerAsDso
