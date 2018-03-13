@@ -1,14 +1,16 @@
 'use strict';
 const carmenCache = require('../index.js');
-const tape = require('tape');
+const test = require('tape');
 const fs = require('fs');
+
+// Checks the language field setting operation is working
 
 const tmpdir = '/tmp/temp.' + Math.random().toString(36).substr(2, 5);
 fs.mkdirSync(tmpdir);
 let tmpidx = 0;
 const tmpfile = function() { return tmpdir + '/' + (tmpidx++) + '.dat'; };
 
-tape('language fuzzing', (assert) => {
+test('language fuzzing', (t) => {
     const cache = new carmenCache.MemoryCache('a');
 
     const records = new Map();
@@ -32,26 +34,26 @@ tape('language fuzzing', (assert) => {
     }
 
     let list = cache.list();
-    assert.equal(list.length, records.size, 'got the same number of items out as went in');
+    t.equal(list.length, records.size, 'got the same number of items out as went in');
     let hasAll = true;
     for (const item of list) {
         const recordId = item[0] + '-' + (item[1] == null ? 'null' : item[1].join('-'));
         hasAll = hasAll && records.has(recordId);
     }
-    assert.ok(hasAll, 'all records and languages came out that went in');
+    t.ok(hasAll, 'all records and languages came out that went in');
 
     const pack = tmpfile();
     cache.pack(pack);
     const loader = new carmenCache.RocksDBCache('b', pack);
 
     list = loader.list();
-    assert.equal(list.length, records.size, 'got the same number of items out as went in');
+    t.equal(list.length, records.size, 'got the same number of items out as went in');
     hasAll = true;
     for (const item of list) {
         const recordId = item[0] + '-' + (item[1] == null ? 'null' : item[1].join('-'));
         hasAll = hasAll && records.has(recordId);
     }
-    assert.ok(hasAll, 'all records and languages came out that went in');
+    t.ok(hasAll, 'all records and languages came out that went in');
 
-    assert.end();
+    t.end();
 });

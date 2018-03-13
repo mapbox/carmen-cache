@@ -2,13 +2,6 @@ language: node_js
 
 sudo: false
 
-# build options and AWS keys for publishing binaries
-# note: you'll need to generate your own keys for publishing a separate project
-env:
-  global:
-    - secure: bLTdbWwf3v8X7yJlLLqPc9BRhFquwma4oYL9T2C38FXzSuqhXJZF+kNXjHd85E4lJNnuLXDjrPJLLkigd70J9Tclu2XQvy3cGzXI+EMsO6rDvQN24Eoi6uJ/qHhTrAoud526ouxO8qk9YYLjD6UWX1EOtqcEdwPMose8L1wsMZI=
-    - secure: lmfuNtK0/ubV4ZZobgfeKY6DzG41ZciS4a00yCe29jHLxAg+EEmB/qpsW5d1//cC94OKsAySW08xp2uX5wBVvtryaaoiwU7fdKF9DOxHRHieGw/3+m8NNjELkd5hKMKiqDj7l4QPMchzBQR2PQkoG0UMCGUFe+RmzZ2/iCdGHXU=
-
 # enable c++11/14 builds
 addons:
   apt:
@@ -42,14 +35,6 @@ script:
 # run your tests and build binaries
 matrix:
   include:
-    # linux publishable node v4/release
-    - os: linux
-      env: BUILDTYPE=release
-      node_js: 4
-    # linux publishable node v4/debug
-    - os: linux
-      env: BUILDTYPE=debug
-      node_js: 4
     # linux publishable node v6
     - os: linux
       env: BUILDTYPE=release
@@ -58,11 +43,6 @@ matrix:
     - os: linux
       env: BUILDTYPE=debug
       node_js: 6
-    # osx publishable node v4
-    - os: osx
-      osx_image: xcode8.2
-      env: BUILDTYPE=release
-      node_js: 4
     # osx publishable node v6
     - os: osx
       osx_image: xcode8.2
@@ -71,7 +51,7 @@ matrix:
     # Sanitizer build node v4/Debug
     - os: linux
       env: BUILDTYPE=debug TOOLSET=asan
-      node_js: 4
+      node_js: 6
       sudo: required
       # Overrides `install` to set up custom asan flags
       install:
@@ -94,7 +74,7 @@ matrix:
     # g++ build (default builds all use clang++)
     - os: linux
       env: BUILDTYPE=debug CXX="g++-6" CC="gcc-6"
-      node_js: 4
+      node_js: 6
       addons:
         apt:
           sources:
@@ -111,7 +91,7 @@ matrix:
     # Coverage build
     - os: linux
       env: BUILDTYPE=debug CXXFLAGS="--coverage" LDFLAGS="--coverage"
-      node_js: 4
+      node_js: 6
       # Overrides `script` to publish coverage data to codecov
       before_script:
         - npm test
@@ -137,7 +117,7 @@ matrix:
     # Clang tidy build
     - os: linux
       env: CLANG_TIDY
-      node_js: 4
+      node_js: 6
       # Overrides `install` to avoid initializing clang toolchain
       install:
         # First run the clang-tidy target

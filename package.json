@@ -7,7 +7,7 @@
     "url": "git://github.com/mapbox/carmen-cache.git",
     "type": "git"
   },
-  "version": "0.20.0",
+  "version": "0.20.0-cache-split-2",
   "dependencies": {
     "nan": "~2.5.1",
     "node-pre-gyp": "~0.6.32",
@@ -17,18 +17,30 @@
     "node-pre-gyp"
   ],
   "scripts": {
-    "test": "tape test/*.test.js && eslint *.js test/*.js",
-    "lint": "eslint *.js test/*.js",
-    "install": "node-pre-gyp install --fallback-to-build"
+    "test": "tape test/*.test.js bench/*.js && eslint *.js test/*.js bench/*.js",
+    "lint": "eslint *.js test/*.js bench/*.js",
+    "bench": "tape bench/*.js",
+    "install": "node-pre-gyp install --fallback-to-build",
+    "docs": "documentation build src/*.cpp --polyglot -f md -o API.md"
   },
   "eslintConfig": {
-    "extends": "@mapbox/eslint-config-geocoding"
+    "plugins": ["tape"],
+    "extends": [
+        "@mapbox/eslint-config-geocoding"
+    ],
+    "rules": {
+        "tape/assertion-message": ["error", "always"],
+        "tape/use-t": "error",
+        "tape/use-test": "error"
+    }
   },
   "devDependencies": {
     "@mapbox/eslint-config-geocoding": "^1.0.1",
+    "eslint-plugin-tape": "1.1.0",
+    "aws-sdk": "^2.55.0",
+    "documentation": "^4.0.0-beta5",
     "eslint": "^4.17.0",
     "eslint-plugin-node": "^5.2.1",
-    "aws-sdk": "^2.55.0",
     "tape": "^4.6.3"
   },
   "main": "./index.js",

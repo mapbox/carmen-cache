@@ -9,6 +9,9 @@ const mp14 = Math.pow(2,14);
 module.exports.encode = encode;
 module.exports.decode = decode;
 
+// Utility functions used in coalesce. We need these functions in JS, whic is why they are in this folder.
+// These functions are copied over from /carmen and /carmen does test them.
+
 function encode(grid) {
     if (grid.id >= mp20) throw new Error('id must be < 2^20');
     if (grid.x >= mp14) throw new Error('x must be < 2^14');
