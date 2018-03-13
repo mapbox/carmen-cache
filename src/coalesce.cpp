@@ -7,9 +7,12 @@ namespace carmen {
 using namespace v8;
 
 /**
- * @typedef PhrasematchSubq
- * @name PhrasematchSubq
- * @description The PhrasematchSubq type describes the metadata known about possible matches to be assessed for stacking by coalesce.
+ * The PhrasematchSubqObject type describes the metadata known about possible matches to be assessed for stacking by
+ * coalesce as seen from Javascript. Note: it is of similar purpose to the PhrasematchSubq C++ struct type, but differs
+ * slightly in specific field names and types.
+ *
+ * @typedef PhrasematchSubqObject
+ * @name PhrasematchSubqObject
  * @type {Object}
  * @property {String} phrase - The matched string
  * @property {Number} weight - A float between 0 and 1 representing how much of the query this string covers
@@ -28,9 +31,10 @@ using namespace v8;
   */
 
 /**
+ * A member of the result set from a coalesce operation.
+ *
  * @typedef CoalesceResult
  * @name CoalesceResult
- * @description The a member of the result set from a coalesce operation.
  * @type {Object}
  * @property {Number} x - the X tile coordinate of the result
  * @property {Number} y - the Y tile coordinate of the result
@@ -51,7 +55,7 @@ using namespace v8;
  * and exposed asynchronously to JS via a callback argument.
  *
  * @name coalesce
- * @param {PhrasematchSubq[]} phrasematches - an array of PhrasematchSubq objects, each of which describes a match candidate
+ * @param {PhrasematchSubqObject[]} phrasematches - an array of PhrasematchSubqObject objects, each of which describes a match candidate
  * @param {Object} options - options for how to perform the coalesce operation that aren't specific to a particular subquery
  * @param {Number} [options.radius] - the fall-off radius for determining how wide-reaching the effect of proximity bias is
  * @param {Number[]} [options.centerzxy] - a 3-number array representing the ZXY of the tile on which the proximity point can be found
@@ -61,17 +65,17 @@ using namespace v8;
 NAN_METHOD(coalesce) {
     // PhrasematchStack (js => cpp)
     if (info.Length() < 3) {
-        return Nan::ThrowTypeError("Expects 3 arguments: a PhrasematchSubq array, an option object, and a callback");
+        return Nan::ThrowTypeError("Expects 3 arguments: an array of PhrasematchSubqObjects, an option object, and a callback");
     }
 
     if (!info[0]->IsArray()) {
-        return Nan::ThrowTypeError("Arg 1 must be a PhrasematchSubq array");
+        return Nan::ThrowTypeError("Arg 1 must be a PhrasematchSubqObject array");
     }
 
     Local<Array> array = Local<Array>::Cast(info[0]);
     auto array_length = array->Length();
     if (array_length < 1) {
-        return Nan::ThrowTypeError("Arg 1 must be an array with one or more PhrasematchSubq objects");
+        return Nan::ThrowTypeError("Arg 1 must be an array with one or more PhrasematchSubqObjects");
     }
 
     // Options object (js => cpp)
@@ -98,11 +102,11 @@ NAN_METHOD(coalesce) {
         for (uint32_t i = 0; i < array_length; i++) {
             Local<Value> val = array->Get(i);
             if (!val->IsObject()) {
-                return Nan::ThrowTypeError("All items in array must be valid PhrasematchSubq objects");
+                return Nan::ThrowTypeError("All items in array must be valid PhrasematchSubqObjects");
             }
             Local<Object> jsStack = val->ToObject();
             if (jsStack->IsNull() || jsStack->IsUndefined()) {
-                return Nan::ThrowTypeError("All items in array must be valid PhrasematchSubq objects");
+                return Nan::ThrowTypeError("All items in array must be valid PhrasematchSubqObjects");
             }
 
             double weight;

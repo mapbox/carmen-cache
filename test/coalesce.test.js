@@ -36,11 +36,11 @@ test('coalesce args', (t) => {
 
     t.throws(() => {
         coalesce([-1], {}, () => {} );
-    }, /All items in array must be valid PhrasematchSubq objects/, 'throws');
+    }, /All items in array must be valid PhrasematchSubqObjects/, 'throws');
 
     t.throws(() => {
         coalesce(undefined, {}, () => {} );
-    }, /Arg 1 must be a PhrasematchSubq array/, 'throws');
+    }, /Arg 1 must be a PhrasematchSubqObject array/, 'throws');
 
     t.throws(() => {
         coalesce([], {}, () => {} );
@@ -48,11 +48,11 @@ test('coalesce args', (t) => {
 
     t.throws(() => {
         coalesce([undefined], {}, () => {} );
-    }, /All items in array must be valid PhrasematchSubq objects/, 'throws');
+    }, /All items in array must be valid PhrasematchSubqObjects/, 'throws');
 
     t.throws(() => {
         coalesce([null], {}, () => {} );
-    }, /All items in array must be valid PhrasematchSubq objects/, 'throws');
+    }, /All items in array must be valid PhrasematchSubqObjects/, 'throws');
 
     const valid_subq = {
         cache: new MemoryCache('a'),

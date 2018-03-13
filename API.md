@@ -5,7 +5,7 @@
 -   [coalesceCallback](#coalescecallback)
 -   [CoalesceResult](#coalesceresult)
 -   [coalesce](#coalesce)
--   [PhrasematchSubq](#phrasematchsubq)
+-   [PhrasematchSubqObject](#phrasematchsubqobject)
 -   [MemoryCache](#memorycache)
     -   [list](#list)
     -   [set](#set)
@@ -38,7 +38,7 @@ Type: [Function](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Sta
 
 ## CoalesceResult
 
-The a member of the result set from a coalesce operation.
+A member of the result set from a coalesce operation.
 
 **Properties**
 
@@ -62,16 +62,18 @@ and exposed asynchronously to JS via a callback argument.
 
 **Parameters**
 
--   `phrasematches` **[Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array)&lt;[PhrasematchSubq](#phrasematchsubq)>** an array of PhrasematchSubq objects, each of which describes a match candidate
+-   `phrasematches` **[Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array)&lt;[PhrasematchSubqObject](#phrasematchsubqobject)>** an array of PhrasematchSubqObject objects, each of which describes a match candidate
 -   `options` **[Object](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Object)** options for how to perform the coalesce operation that aren't specific to a particular subquery
     -   `options.radius` **[Number](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Number)?** the fall-off radius for determining how wide-reaching the effect of proximity bias is
     -   `options.centerzxy` **[Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array)&lt;[Number](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Number)>?** a 3-number array representing the ZXY of the tile on which the proximity point can be found
     -   `options.bboxzxy` **[Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array)&lt;[Number](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Number)>?** a 5-number array representing the zoom, minX, minY, maxX, and maxY values of the tile cover of the requested bbox, if any
 -   `callback` **[coalesceCallback](#coalescecallback)** the callback function
 
-## PhrasematchSubq
+## PhrasematchSubqObject
 
-The PhrasematchSubq type describes the metadata known about possible matches to be assessed for stacking by coalesce.
+The PhrasematchSubqObject type describes the metadata known about possible matches to be assessed for stacking by
+coalesce as seen from Javascript. Note: it is of similar purpose to the PhrasematchSubq C++ struct type, but differs
+slightly in specific field names and types.
 
 **Properties**
 
