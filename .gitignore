@@ -4,4 +4,7 @@ src/index.pb.h
 lib/carmen.node
 build
 mason
+.mason/
+.toolchain/
+local.env
 mason_packages

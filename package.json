@@ -9,20 +9,27 @@
   },
   "version": "0.20.0",
   "dependencies": {
-    "node-pre-gyp": "~0.6.32",
     "nan": "~2.5.1",
+    "node-pre-gyp": "~0.6.32",
     "protozero": "~1.5.1"
   },
   "bundledDependencies": [
     "node-pre-gyp"
   ],
   "scripts": {
-    "test": "tape test/*.test.js",
+    "test": "tape test/*.test.js && eslint *.js test/*.js",
+    "lint": "eslint *.js test/*.js",
     "install": "node-pre-gyp install --fallback-to-build"
   },
+  "eslintConfig": {
+    "extends": "@mapbox/eslint-config-geocoding"
+  },
   "devDependencies": {
-    "tape": "^4.6.3",
-    "aws-sdk": "^2.55.0"
+    "@mapbox/eslint-config-geocoding": "^1.0.1",
+    "eslint": "^4.17.0",
+    "eslint-plugin-node": "^5.2.1",
+    "aws-sdk": "^2.55.0",
+    "tape": "^4.6.3"
   },
   "main": "./index.js",
   "description": "C++ protobuf cache used by carmen",

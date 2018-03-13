@@ -12,37 +12,34 @@
 #pragma clang diagnostic ignored "-Wold-style-cast"
 #pragma clang diagnostic ignored "-Wsign-conversion"
 #pragma clang diagnostic ignored "-Wshorten-64-to-32"
-#include <nan.h>
-#include <exception>
-#include <string>
-#include <map>
-#include <list>
-#include <vector>
-#include <deque>
-#include <limits>
-#include <algorithm>
 #include "radix_max_heap.h"
+#include "rocksdb/comparator.h"
+#include "rocksdb/db.h"
+#include "rocksdb/write_batch.h"
+#include <algorithm>
+#include <deque>
+#include <exception>
+#include <limits>
+#include <list>
+#include <map>
+#include <nan.h>
+#include <string>
+#include <vector>
 #pragma clang diagnostic pop
-#include <iostream>
-#include <fstream>
-#include <tuple>
-
 #include <cassert>
 #include <cstring>
-
-#include "rocksdb/db.h"
-#include "rocksdb/comparator.h"
-#include "rocksdb/write_batch.h"
+#include <fstream>
+#include <iostream>
+#include <tuple>
 
 namespace carmen {
 
-class noncopyable
-{
-protected:
+class noncopyable {
+  protected:
     constexpr noncopyable() = default;
     ~noncopyable() = default;
-    noncopyable( noncopyable const& ) = delete;
-    noncopyable& operator=(noncopyable const& ) = delete;
+    noncopyable(noncopyable const&) = delete;
+    noncopyable& operator=(noncopyable const&) = delete;
 };
 
 typedef std::string key_type;
@@ -51,10 +48,10 @@ typedef unsigned __int128 langfield_type;
 // fully cached item
 typedef std::vector<value_type> intarray;
 typedef std::vector<key_type> keyarray;
-typedef std::map<key_type,intarray> arraycache;
+typedef std::map<key_type, intarray> arraycache;
 
-class MemoryCache: public node::ObjectWrap {
-public:
+class MemoryCache : public node::ObjectWrap {
+  public:
     ~MemoryCache();
     static Nan::Persistent<v8::FunctionTemplate> constructor;
     static void Initialize(v8::Handle<v8::Object> target);
@@ -71,8 +68,8 @@ public:
     arraycache cache_;
 };
 
-class RocksDBCache: public node::ObjectWrap {
-public:
+class RocksDBCache : public node::ObjectWrap {
+  public:
     ~RocksDBCache();
     static Nan::Persistent<v8::FunctionTemplate> constructor;
     static void Initialize(v8::Handle<v8::Object> target);
@@ -90,8 +87,8 @@ public:
     std::shared_ptr<rocksdb::DB> db;
 };
 
-class NormalizationCache: public node::ObjectWrap {
-public:
+class NormalizationCache : public node::ObjectWrap {
+  public:
     ~NormalizationCache();
     static Nan::Persistent<v8::FunctionTemplate> constructor;
     static void Initialize(v8::Handle<v8::Object> target);
@@ -118,6 +115,6 @@ constexpr langfield_type ALL_LANGUAGES = ~(langfield_type)(0);
 
 #define TYPE_MEMORY 1
 #define TYPE_ROCKSDB 2
-}
+} // namespace carmen
 
 #endif // __CARMEN_BINDING_HPP__

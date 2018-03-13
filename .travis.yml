@@ -38,7 +38,7 @@ before_script:
 script:
   - true
 
-# the matrix allows you to specify different operating systems and environments to 
+# the matrix allows you to specify different operating systems and environments to
 # run your tests and build binaries
 matrix:
   include:
@@ -72,6 +72,7 @@ matrix:
     - os: linux
       env: BUILDTYPE=debug TOOLSET=asan
       node_js: 4
+      sudo: required
       # Overrides `install` to set up custom asan flags
       install:
         - ./scripts/setup.sh --config local.env
@@ -120,3 +121,29 @@ matrix:
         - curl -S -f https://codecov.io/bash -o codecov
         - chmod +x codecov
         - ./codecov -x "llvm-cov gcov" -Z
+    # Clang format build
+    - os: linux
+      # can be generic since we don't need nodejs to run formatting
+      language: generic
+      env: CLANG_FORMAT
+      # Overrides `install` to avoid initializing clang toolchain
+      install:
+        # Run the clang-format script. Any code formatting changes
+        # will trigger the build to fail (idea here is to get us to pay attention
+        # and get in the habit of running these locally before committing)
+        - make format
+      # Overrides `script`, no need to run tests
+      before_script:
+    # Clang tidy build
+    - os: linux
+      env: CLANG_TIDY
+      node_js: 4
+      # Overrides `install` to avoid initializing clang toolchain
+      install:
+        # First run the clang-tidy target
+        # Any code formatting fixes automatically applied by clang-tidy
+        # will trigger the build to fail (idea here is to get us to pay attention
+        # and get in the habit of running these locally before committing)
+        - make tidy
+      # Overrides `script`, no need to run tests
+      before_script:

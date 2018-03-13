@@ -1,14 +1,10 @@
+'use strict';
 // Caching shows a 6% perf bump
-var mp51 = Math.pow(2,51);
-var mp48 = Math.pow(2,48);
-var mp39 = Math.pow(2,39);
-var mp34 = Math.pow(2,34);
-var mp25 = Math.pow(2,25);
-var mp23 = Math.pow(2,23);
-var mp20 = Math.pow(2,20);
-var mp14 = Math.pow(2,14);
-var mp3 = Math.pow(2,3);
-var mp2 = Math.pow(2,2);
+const mp51 = Math.pow(2,51);
+const mp48 = Math.pow(2,48);
+const mp34 = Math.pow(2,34);
+const mp20 = Math.pow(2,20);
+const mp14 = Math.pow(2,14);
 
 module.exports.encode = encode;
 module.exports.decode = decode;
@@ -21,8 +17,8 @@ function encode(grid) {
     if (grid.y < 0) throw new Error('y must be > 0');
     if (grid.relev > 1 || grid.relev < 0.4) throw new Error('relev must be between 0.4 and 1');
 
-    var relev = Math.max(0, Math.min(3, Math.round((grid.relev - 0.4) / 0.2)));
-    var score = Math.max(0, Math.min(7, grid.score));
+    const relev = Math.max(0, Math.min(3, Math.round((grid.relev - 0.4) / 0.2)));
+    const score = Math.max(0, Math.min(7, grid.score));
     return (relev * mp51) + (score * mp48) + (grid.y * mp34) + (grid.x * mp20) + grid.id;
 }
 
@@ -35,4 +31,3 @@ function decode(num) {
         id: Math.floor(num % mp20)
     };
 }
-

@@ -1,59 +1,60 @@
-var MemoryCache = require('../index.js').MemoryCache;
-var RocksDBCache = require('../index.js').RocksDBCache;
-var Grid = require('./grid.js');
-var coalesce = require('../index.js').coalesce;
-var test = require('tape');
-var fs = require('fs');
+'use strict';
+const MemoryCache = require('../index.js').MemoryCache;
+const RocksDBCache = require('../index.js').RocksDBCache;
+const Grid = require('./grid.js');
+const coalesce = require('../index.js').coalesce;
+const test = require('tape');
+const fs = require('fs');
 
-var tmpdir = "/tmp/temp." + Math.random().toString(36).substr(2, 5);
+const tmpdir = '/tmp/temp.' + Math.random().toString(36).substr(2, 5);
 fs.mkdirSync(tmpdir);
-var tmpidx = 0;
-var tmpfile = function() { return tmpdir + "/" + (tmpidx++) + ".dat"; };
+let tmpidx = 0;
+const tmpfile = function() { return tmpdir + '/' + (tmpidx++) + '.dat'; };
 
-var toRocksCache = function(memcache) {
-    var pack = tmpfile();
+const toRocksCache = function(memcache) {
+    const pack = tmpfile();
     memcache.pack(pack);
-    return new RocksDBCache(memcache.id + ".rocks", pack);
-}
+    return new RocksDBCache(memcache.id + '.rocks', pack);
+};
 
-test('coalesce args', function(assert) {
-    assert.throws(function() {
+test('coalesce args', (assert) => {
+    assert.throws(() => {
         coalesce();
     }, /Expects 3 arguments/, 'throws');
 
-    assert.throws(function() {
+    assert.throws(() => {
         coalesce([]);
     }, /Expects 3 arguments/, 'throws');
 
-    assert.throws(function() {
+    assert.throws(() => {
         coalesce([], {} );
     }, /Expects 3 arguments/, 'throws');
 
-    assert.throws(function() {
-        coalesce([{}], {}, function() {} );
+    assert.throws(() => {
+        coalesce([{}], {}, () => {} );
     }, /missing idx property/, 'throws');
 
-    assert.throws(function() {
-        coalesce([-1], {}, function() {} );
+    assert.throws(() => {
+        coalesce([-1], {}, () => {} );
     }, /All items in array must be valid PhrasematchSubq objects/, 'throws');
 
-    assert.throws(function() {
-        coalesce(undefined, {}, function() {} );
+    assert.throws(() => {
+        coalesce(undefined, {}, () => {} );
     }, /Arg 1 must be a PhrasematchSubq array/, 'throws');
 
-    assert.throws(function() {
-        coalesce([], {}, function() {} );
+    assert.throws(() => {
+        coalesce([], {}, () => {} );
     }, /Arg 1 must be an array with one or more/, 'throws');
 
-    assert.throws(function() {
-        coalesce([undefined], {}, function() {} );
+    assert.throws(() => {
+        coalesce([undefined], {}, () => {} );
     }, /All items in array must be valid PhrasematchSubq objects/, 'throws');
 
-    assert.throws(function() {
-        coalesce([null], {}, function() {} );
+    assert.throws(() => {
+        coalesce([null], {}, () => {} );
     }, /All items in array must be valid PhrasematchSubq objects/, 'throws');
 
-    var valid_subq = {
+    const valid_subq = {
         cache: new MemoryCache('a'),
         mask: 1 << 0,
         idx: 0,
@@ -63,68 +64,68 @@ test('coalesce args', function(assert) {
         prefix: false
     };
 
-    assert.throws(function() {
-        coalesce([valid_subq],undefined,function(){});
+    assert.throws(() => {
+        coalesce([valid_subq],undefined,() => {});
     }, /Arg 2 must be an options object/, 'throws');
 
-    assert.throws(function() {
-        coalesce([valid_subq],undefined,function(){});
+    assert.throws(() => {
+        coalesce([valid_subq],undefined,() => {});
     }, /Arg 2 must be an options object/, 'throws');
 
-    if (process.versions.node[0] != '0') {
-        assert.throws(function() {
-            coalesce([Object.assign({},valid_subq,{idx:-1})],{},function(){});
+    if (process.versions.node[0] !== '0') {
+        assert.throws(() => {
+            coalesce([Object.assign({},valid_subq,{ idx:-1 })],{},() => {});
         }, /encountered idx value too large to fit/, 'throws');
 
-        assert.throws(function() {
-            coalesce([Object.assign({},valid_subq,{idx:null})],{},function(){});
+        assert.throws(() => {
+            coalesce([Object.assign({},valid_subq,{ idx:null })],{},() => {});
         }, /value must be a number/, 'throws');
 
-        assert.throws(function() {
-            coalesce([Object.assign({},valid_subq,{zoom:-1})],{},function(){});
+        assert.throws(() => {
+            coalesce([Object.assign({},valid_subq,{ zoom:-1 })],{},() => {});
         }, /encountered zoom value too large to fit/, 'throws');
 
-        assert.throws(function() {
-            coalesce([Object.assign({},valid_subq,{zoom:null})],{},function(){});
+        assert.throws(() => {
+            coalesce([Object.assign({},valid_subq,{ zoom:null })],{},() => {});
         }, /value must be a number/, 'throws');
 
-        assert.throws(function() {
-            coalesce([Object.assign({},valid_subq,{zoom:-1})],{},function(){});
+        assert.throws(() => {
+            coalesce([Object.assign({},valid_subq,{ zoom:-1 })],{},() => {});
         }, /encountered zoom value too large to fit/, 'throws');
 
-        assert.throws(function() {
-            coalesce([Object.assign({},valid_subq,{mask:null})],{},function(){});
+        assert.throws(() => {
+            coalesce([Object.assign({},valid_subq,{ mask:null })],{},() => {});
         }, /value must be a number/, 'throws');
 
-        assert.throws(function() {
-            coalesce([Object.assign({},valid_subq,{mask:-1})],{},function(){});
+        assert.throws(() => {
+            coalesce([Object.assign({},valid_subq,{ mask:-1 })],{},() => {});
         }, /encountered mask value too large to fit/, 'throws');
 
-        assert.throws(function() {
-            coalesce([Object.assign({},valid_subq,{weight:null})],{},function(){});
+        assert.throws(() => {
+            coalesce([Object.assign({},valid_subq,{ weight:null })],{},() => {});
         }, /weight value must be a number/, 'throws');
 
-        assert.throws(function() {
-            coalesce([Object.assign({},valid_subq,{weight:-1})],{},function(){});
+        assert.throws(() => {
+            coalesce([Object.assign({},valid_subq,{ weight:-1 })],{},() => {});
         }, /encountered weight value too large to fit in double/, 'throws');
 
-        assert.throws(function() {
-            coalesce([Object.assign({},valid_subq,{phrase:null})],{},function(){});
+        assert.throws(() => {
+            coalesce([Object.assign({},valid_subq,{ phrase:null })],{},() => {});
         }, /phrase value must be a string/, 'throws');
 
-        assert.throws(function() {
-            coalesce([Object.assign({},valid_subq,{phrase:''})],{},function(){});
+        assert.throws(() => {
+            coalesce([Object.assign({},valid_subq,{ phrase:'' })],{},() => {});
         }, /encountered invalid phrase/, 'throws');
 
-        assert.throws(function() {
-            coalesce([Object.assign({},valid_subq,{cache:null})],{},function(){});
+        assert.throws(() => {
+            coalesce([Object.assign({},valid_subq,{ cache:null })],{},() => {});
         }, /cache value must be a Cache object/, 'throws');
 
-        assert.throws(function() {
-            coalesce([Object.assign({},valid_subq,{cache:{}})],{},function(){});
+        assert.throws(() => {
+            coalesce([Object.assign({},valid_subq,{ cache:{} })],{},() => {});
         }, /cache value must be/, 'throws');
 
-        var valid_stack = [
+        const valid_stack = [
             {
                 cache: new MemoryCache('a'),
                 mask: 1 << 0,
@@ -132,7 +133,7 @@ test('coalesce args', function(assert) {
                 zoom: 0,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
+                prefix: false
             },
             {
                 cache: new MemoryCache('b'),
@@ -141,121 +142,121 @@ test('coalesce args', function(assert) {
                 zoom: 1,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
+                prefix: false
             }
         ];
 
-        assert.throws(function() {
-            coalesce(valid_stack.concat([Object.assign({},valid_subq,{cache:null})]),{},function(){});
+        assert.throws(() => {
+            coalesce(valid_stack.concat([Object.assign({},valid_subq,{ cache:null })]),{},() => {});
         }, /cache value must be a Cache object/, 'throws');
 
     }
 
-    assert.throws(function() {
-        coalesce([valid_subq], { radius:null },function(){} );
+    assert.throws(() => {
+        coalesce([valid_subq], { radius:null },() => {} );
     }, /radius must be a number/, 'throws');
 
-    assert.throws(function() {
-        coalesce([valid_subq], { radius:5e9 },function(){} );
+    assert.throws(() => {
+        coalesce([valid_subq], { radius:5e9 },() => {} );
     }, /encountered radius too large to fit in unsigned/, 'throws');
 
-    assert.throws(function() {
-        coalesce([valid_subq], { bboxzxy:null },function(){} );
+    assert.throws(() => {
+        coalesce([valid_subq], { bboxzxy:null },() => {} );
     }, /bboxzxy must be an array/, 'throws');
 
-    assert.throws(function() {
-        coalesce([valid_subq], { bboxzxy:[0,0,0,0] },function(){} );
+    assert.throws(() => {
+        coalesce([valid_subq], { bboxzxy:[0,0,0,0] },() => {} );
     }, /bboxzxy must be an array of 5 numbers/, 'throws');
 
-    assert.throws(function() {
-        coalesce([valid_subq], { bboxzxy:['',0,0,0,0] },function(){} );
+    assert.throws(() => {
+        coalesce([valid_subq], { bboxzxy:['',0,0,0,0] },() => {} );
     }, /bboxzxy values must be number/, 'throws');
 
-    assert.throws(function() {
-        coalesce([valid_subq], { bboxzxy:[-1,0,0,0,0] },function(){} );
+    assert.throws(() => {
+        coalesce([valid_subq], { bboxzxy:[-1,0,0,0,0] },() => {} );
     }, /encountered bboxzxy value too large to fit in uint32_t/, 'throws');
 
-    assert.throws(function() {
-        coalesce([valid_subq], { bboxzxy:[4294967296,0,0,0,0] },function(){} );
+    assert.throws(() => {
+        coalesce([valid_subq], { bboxzxy:[4294967296,0,0,0,0] },() => {} );
     }, /encountered bboxzxy value too large to fit in uint32_t/, 'throws');
 
-    assert.throws(function() {
-        coalesce([valid_subq], { centerzxy:null },function(){} );
+    assert.throws(() => {
+        coalesce([valid_subq], { centerzxy:null },() => {} );
     }, /centerzxy must be an array/, 'throws');
 
-    assert.throws(function() {
-        coalesce([valid_subq], { centerzxy:['',0,0] },function(){} );
+    assert.throws(() => {
+        coalesce([valid_subq], { centerzxy:['',0,0] },() => {} );
     }, /centerzxy values must be number/, 'throws');
 
-    assert.throws(function() {
-        coalesce([valid_subq], { centerzxy:[0,0] },function(){} );
+    assert.throws(() => {
+        coalesce([valid_subq], { centerzxy:[0,0] },() => {} );
     }, /centerzxy must be an array of 3 numbers/, 'throws');
 
-    assert.throws(function() {
-        coalesce([valid_subq], { centerzxy:[-1,0,0] },function(){} );
+    assert.throws(() => {
+        coalesce([valid_subq], { centerzxy:[-1,0,0] },() => {} );
     }, /encountered centerzxy value too large to fit in uint32_t/, 'throws');
 
-    assert.throws(function() {
-        coalesce([valid_subq], { centerzxy:[4294967296,0,0] },function(){} );
+    assert.throws(() => {
+        coalesce([valid_subq], { centerzxy:[4294967296,0,0] },() => {} );
     }, /encountered centerzxy value too large to fit in uint32_t/, 'throws');
 
-    assert.throws(function() {
+    assert.throws(() => {
         coalesce([valid_subq], { centerzxy:[0,0,0] }, 5 );
     }, /Arg 3 must be a callback/, 'throws');
 
-    assert.throws(function() {
-        coalesce([{mask: 1 << 0, idx: 1, zoom: 1, weight: .5, phrase: '1', prefix: false}],{},function(){});
+    assert.throws(() => {
+        coalesce([{ mask: 1 << 0, idx: 1, zoom: 1, weight: .5, phrase: '1', prefix: false }],{},() => {});
     }, /missing/, 'throws');
 
-    assert.throws(function() {
-        coalesce([{cache: new MemoryCache('b'), idx: 1, zoom: 1, weight: .5, phrase: '1', prefix: false}],{},function(){});
+    assert.throws(() => {
+        coalesce([{ cache: new MemoryCache('b'), idx: 1, zoom: 1, weight: .5, phrase: '1', prefix: false }],{},() => {});
     }, /missing/, 'throws');
 
-    assert.throws(function() {
-        coalesce([{cache: new MemoryCache('b'), mask: 1 << 0, zoom: 1, weight: .5, phrase: '1', prefix: false}],{},function(){});
+    assert.throws(() => {
+        coalesce([{ cache: new MemoryCache('b'), mask: 1 << 0, zoom: 1, weight: .5, phrase: '1', prefix: false }],{},() => {});
     }, /missing/, 'throws');
 
-    assert.throws(function() {
-        coalesce([{cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, weight: .5, phrase: '1', prefix: false}],{},function(){});
+    assert.throws(() => {
+        coalesce([{ cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, weight: .5, phrase: '1', prefix: false }],{},() => {});
     }, /missing/, 'throws');
 
-    assert.throws(function() {
-        coalesce([{cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, zoom: 1, phrase: '1', prefix: false}],{},function(){});
+    assert.throws(() => {
+        coalesce([{ cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, zoom: 1, phrase: '1', prefix: false }],{},() => {});
     }, /missing/, 'throws');
 
-    assert.throws(function() {
-        coalesce([{cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, zoom: 1, weight: .5, prefix: false}],{},function(){});
+    assert.throws(() => {
+        coalesce([{ cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, zoom: 1, weight: .5, prefix: false }],{},() => {});
     }, /missing/, 'throws');
 
-    assert.throws(function() {
-        coalesce([{cache: '', mask: 1 << 0, idx: 1, weight: .5,  zoom: 1, phrase: '1', prefix: false}],{},function(){});
+    assert.throws(() => {
+        coalesce([{ cache: '', mask: 1 << 0, idx: 1, weight: .5,  zoom: 1, phrase: '1', prefix: false }],{},() => {});
     }, /cache value must be a Cache object/, 'throws');
 
-    assert.throws(function() {
-        coalesce([{cache: new MemoryCache('b'), mask: '', idx: 1, zoom: 1, weight: .5, phrase: '1', prefix: false}],{},function(){});
+    assert.throws(() => {
+        coalesce([{ cache: new MemoryCache('b'), mask: '', idx: 1, zoom: 1, weight: .5, phrase: '1', prefix: false }],{},() => {});
     }, /mask value must be a number/, 'throws');
 
-    assert.throws(function() {
-        coalesce([{cache: new MemoryCache('b'), mask: 1 << 0, idx: '', weight: .5, zoom: 1, phrase: '1', prefix: false}],{},function(){});
+    assert.throws(() => {
+        coalesce([{ cache: new MemoryCache('b'), mask: 1 << 0, idx: '', weight: .5, zoom: 1, phrase: '1', prefix: false }],{},() => {});
     }, /idx value must be a number/, 'throws');
 
-    assert.throws(function() {
-        coalesce([{cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, weight: .5, zoom: '', phrase: '1', prefix: false}],{},function(){});
+    assert.throws(() => {
+        coalesce([{ cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, weight: .5, zoom: '', phrase: '1', prefix: false }],{},() => {});
     }, /zoom value must be a number/, 'throws');
 
-    assert.throws(function() {
-        coalesce([{cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, weight: '', zoom: 1, phrase: '1', prefix: false}],{},function(){});
+    assert.throws(() => {
+        coalesce([{ cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, weight: '', zoom: 1, phrase: '1', prefix: false }],{},() => {});
     }, /weight value must be a number/, 'throws');
 
-    assert.throws(function() {
-        coalesce([{cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, weight: .5, zoom: 1, phrase: ''}],{},function(){});
+    assert.throws(() => {
+        coalesce([{ cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, weight: .5, zoom: 1, phrase: '' }],{},() => {});
     }, /encountered invalid phrase/, 'throws');
 
     assert.end();
 });
 
 (function() {
-    var memcache = new MemoryCache('a', 0);
+    const memcache = new MemoryCache('a', 0);
     memcache._set('1', [
         Grid.encode({
             id: 2,
@@ -277,12 +278,12 @@ test('coalesce args', function(assert) {
             y: 1,
             relev: 1,
             score: 7
-        }),
+        })
     ]);
-    var rockscache = toRocksCache(memcache);
+    const rockscache = toRocksCache(memcache);
 
-    [memcache, rockscache].forEach(function(cache) {
-        test('coalesceSingle: ' + cache.id, function(assert) {
+    [memcache, rockscache].forEach((cache) => {
+        test('coalesceSingle: ' + cache.id, (assert) => {
             coalesce([{
                 cache: cache,
                 mask: 1 << 0,
@@ -290,8 +291,8 @@ test('coalesce args', function(assert) {
                 zoom: 2,
                 weight: 1,
                 phrase: '1',
-                prefix: false,
-            }], {}, function(err, res) {
+                prefix: false
+            }], {}, (err, res) => {
                 assert.ifError(err);
                 assert.deepEqual(res[0].relev, 1, '0.relev');
                 assert.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 1, idx: 0, relev: 1.0, score: 7, scoredist: 7, tmpid: 1, x: 1, y: 1 }, '0.0');
@@ -302,7 +303,7 @@ test('coalesce args', function(assert) {
                 assert.end();
             });
         });
-        test('coalesceSingle proximity: ' + cache.id, function(assert) {
+        test('coalesceSingle proximity: ' + cache.id, (assert) => {
             coalesce([{
                 cache: cache,
                 mask: 1 << 0,
@@ -310,10 +311,10 @@ test('coalesce args', function(assert) {
                 zoom: 2,
                 weight: 1,
                 phrase: '1',
-                prefix: false,
+                prefix: false
             }], {
                 centerzxy: [3,3,3]
-            }, function(err, res) {
+            }, (err, res) => {
                 assert.ifError(err);
                 assert.deepEqual(res[0].relev, 1, '0.relev');
                 assert.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 3, idx: 0, relev: 1.0, score: 1, scoredist: 124.85901539399482, tmpid: 3, x: 3, y: 3 }, '0.0');
@@ -324,7 +325,7 @@ test('coalesce args', function(assert) {
                 assert.end();
             });
         });
-        test('coalesceSingle bbox: ' + cache.id, function(assert) {
+        test('coalesceSingle bbox: ' + cache.id, (assert) => {
             coalesce([{
                 cache: cache,
                 mask: 1 << 0,
@@ -332,10 +333,10 @@ test('coalesce args', function(assert) {
                 zoom: 2,
                 weight: 1,
                 phrase: '1',
-                prefix: false,
+                prefix: false
             }], {
                 bboxzxy: [2, 1, 1, 1, 1]
-            }, function(err, res) {
+            }, (err, res) => {
                 assert.ifError(err);
                 assert.deepEqual(res[0].relev, 1, '1.relev');
                 assert.deepEqual(res.length, 1);
@@ -346,17 +347,58 @@ test('coalesce args', function(assert) {
     });
 })();
 
+// exercise the sort function
 (function() {
-    var memcache = new MemoryCache('a', 0);
-    var grids = [];
-    var encoded1 = Grid.encode({
+    const caches = {
+        'x': new MemoryCache('x', 0),
+        'y': new MemoryCache('y', 0)
+    };
+    for (const toIncrement of ['x', 'y']) {
+        const entries = [];
+        for (const incVal of [0, 1]) {
+            for (const id of [1, 2, 3]) {
+                const item = {
+                    id: id,
+                    x: 1,
+                    y: 1,
+                    relev: 1,
+                    score: 1
+                };
+                item[toIncrement] += incVal;
+                entries.push(item);
+            }
+        }
+        caches[toIncrement]._set('1', entries.map(Grid.encode));
+
+        test('coalesceSingle sort tests: ' + toIncrement, (assert) => {
+            coalesce([{
+                cache: caches[toIncrement],
+                mask: 1 << 0,
+                idx: 0,
+                zoom: 2,
+                weight: 1,
+                phrase: '1',
+                prefix: false
+            }], {}, (err, res) => {
+                assert.ifError(err);
+                assert.ok(res);
+                assert.end();
+            });
+        });
+    }
+})();
+
+(function() {
+    const memcache = new MemoryCache('a', 0);
+    const grids = [];
+    const encoded1 = Grid.encode({
         id: 1,
         x: 1,
         y: 1,
         relev: 1,
         score: 0
     });
-    for (var i = 0; i < 80; i++) grids.push(encoded1);
+    for (let i = 0; i < 80; i++) grids.push(encoded1);
     grids.push(Grid.encode({
         id: 2,
         x: 1,
@@ -366,9 +408,9 @@ test('coalesce args', function(assert) {
     }));
 
     memcache._set('1', grids);
-    var rockscache = toRocksCache(memcache);
-    [memcache, rockscache].forEach(function(cache) {
-        test('coalesceSingle: ' + cache.id, function(assert) {
+    const rockscache = toRocksCache(memcache);
+    [memcache, rockscache].forEach((cache) => {
+        test('coalesceSingle: ' + cache.id, (assert) => {
             coalesce([{
                 cache: cache,
                 mask: 1 << 0,
@@ -376,8 +418,8 @@ test('coalesce args', function(assert) {
                 zoom: 2,
                 weight: 1,
                 phrase: '1',
-                prefix: false,
-            }], {}, function(err, res) {
+                prefix: false
+            }], {}, (err, res) => {
                 assert.ifError(err);
                 assert.equal(res.length, 2);
                 assert.deepEqual(res[0].relev, 1, '0.relev');
@@ -391,8 +433,7 @@ test('coalesce args', function(assert) {
 })();
 
 (function() {
-    var memcache = new MemoryCache('a', 0);
-    var grids = [];
+    const memcache = new MemoryCache('a', 0);
 
     memcache._set('1', [Grid.encode({
         id: 1,
@@ -422,9 +463,9 @@ test('coalesce args', function(assert) {
         relev: 1,
         score: 0
     })], [2]);
-    var rockscache = toRocksCache(memcache);
-    [memcache, rockscache].forEach(function(cache) {
-        test('coalesceSingle, ALL_LANGUAGES: ' + cache.id, function(assert) {
+    const rockscache = toRocksCache(memcache);
+    [memcache, rockscache].forEach((cache) => {
+        test('coalesceSingle, ALL_LANGUAGES: ' + cache.id, (assert) => {
             coalesce([{
                 cache: cache,
                 mask: 1 << 0,
@@ -432,8 +473,8 @@ test('coalesce args', function(assert) {
                 zoom: 2,
                 weight: 1,
                 phrase: '1',
-                prefix: false,
-            }], {}, function(err, res) {
+                prefix: false
+            }], {}, (err, res) => {
                 assert.ifError(err);
                 assert.equal(res.length, 4);
                 assert.deepEqual(res[0].relev, 1, '0.relev');
@@ -447,7 +488,7 @@ test('coalesce args', function(assert) {
                 assert.end();
             });
         });
-        test('coalesceSingle, [0]: ' + cache.id, function(assert) {
+        test('coalesceSingle, [0]: ' + cache.id, (assert) => {
             coalesce([{
                 cache: cache,
                 mask: 1 << 0,
@@ -457,7 +498,7 @@ test('coalesce args', function(assert) {
                 phrase: '1',
                 prefix: false,
                 languages: [0]
-            }], {}, function(err, res) {
+            }], {}, (err, res) => {
                 assert.ifError(err);
                 assert.equal(res.length, 4);
                 assert.deepEqual(res[0].relev, 1, '0.relev');
@@ -471,7 +512,7 @@ test('coalesce args', function(assert) {
                 assert.end();
             });
         });
-        test('coalesceSingle, [3]: ' + cache.id, function(assert) {
+        test('coalesceSingle, [3]: ' + cache.id, (assert) => {
             coalesce([{
                 cache: cache,
                 mask: 1 << 0,
@@ -481,7 +522,7 @@ test('coalesce args', function(assert) {
                 phrase: '1',
                 prefix: false,
                 languages: [3]
-            }], {}, function(err, res) {
+            }], {}, (err, res) => {
                 assert.ifError(err);
                 assert.equal(res.length, 4);
                 assert.deepEqual(res[0].relev, 0.9, '0.relev');
@@ -499,8 +540,8 @@ test('coalesce args', function(assert) {
 })();
 
 (function() {
-    var memA = new MemoryCache('a', 0);
-    var memB = new MemoryCache('b', 0);
+    const memA = new MemoryCache('a', 0);
+    const memB = new MemoryCache('b', 0);
     memA._set('1', [
         Grid.encode({
             id: 1,
@@ -515,7 +556,7 @@ test('coalesce args', function(assert) {
             y: 2,
             relev: 1,
             score: 1
-        }),
+        })
     ]);
     memB._set('1', [
         Grid.encode({
@@ -538,16 +579,16 @@ test('coalesce args', function(assert) {
             y: 1,
             relev: 1,
             score: 3
-        }),
+        })
     ]);
-    var rocksA = toRocksCache(memA);
-    var rocksB = toRocksCache(memB);
+    const rocksA = toRocksCache(memA);
+    const rocksB = toRocksCache(memB);
 
-    [[memA, memB], [rocksA, rocksB], [memA, rocksB]].forEach(function(caches) {
-        var a = caches[0],
+    [[memA, memB], [rocksA, rocksB], [memA, rocksB]].forEach((caches) => {
+        const a = caches[0],
             b = caches[1];
 
-        test('coalesceUV: ' + a.id + ', ' + b.id, function(assert) {
+        test('coalesceUV: ' + a.id + ', ' + b.id, (assert) => {
             coalesce([{
                 cache: a,
                 mask: 1 << 1,
@@ -555,7 +596,7 @@ test('coalesce args', function(assert) {
                 zoom: 1,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
+                prefix: false
             }, {
                 cache: b,
                 mask: 1 << 0,
@@ -563,8 +604,8 @@ test('coalesce args', function(assert) {
                 zoom: 2,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
-            }], {}, function(err, res) {
+                prefix: false
+            }], {}, (err, res) => {
                 assert.ifError(err);
                 // sorts by relev, score
                 assert.deepEqual(res[0].relev, 1, '0.relev');
@@ -576,7 +617,7 @@ test('coalesce args', function(assert) {
                 assert.end();
             });
         });
-        test('coalesceUV proximity: ' + a.id + ', ' + b.id, function(assert) {
+        test('coalesceUV proximity: ' + a.id + ', ' + b.id, (assert) => {
             coalesce([{
                 cache: a,
                 mask: 1 << 1,
@@ -584,7 +625,7 @@ test('coalesce args', function(assert) {
                 zoom: 1,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
+                prefix: false
             }, {
                 cache: b,
                 mask: 1 << 0,
@@ -592,10 +633,10 @@ test('coalesce args', function(assert) {
                 zoom: 2,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
+                prefix: false
             }], {
                 centerzxy: [2,3,3]
-            }, function(err, res) {
+            }, (err, res) => {
                 assert.ifError(err);
                 // sorts by relev, score
                 assert.deepEqual(res[0].relev, 1, '0.relev');
@@ -611,8 +652,8 @@ test('coalesce args', function(assert) {
 })();
 
 (function() {
-    var memA = new MemoryCache('a', 0);
-    var memB = new MemoryCache('b', 0);
+    const memA = new MemoryCache('a', 0);
+    const memB = new MemoryCache('b', 0);
     memA._set('1', [
         Grid.encode({
             id: 1,
@@ -640,14 +681,14 @@ test('coalesce args', function(assert) {
             score: 1
         })
     ], [1]);
-    var rocksA = toRocksCache(memA);
-    var rocksB = toRocksCache(memB);
+    const rocksA = toRocksCache(memA);
+    const rocksB = toRocksCache(memB);
 
-    [[memA, memB], [rocksA, rocksB], [memA, rocksB]].forEach(function(caches) {
-        var a = caches[0],
+    [[memA, memB], [rocksA, rocksB], [memA, rocksB]].forEach((caches) => {
+        const a = caches[0],
             b = caches[1];
 
-        test('coalesceMulti, ALL_LANGUAGES: ' + a.id + ', ' + b.id, function(assert) {
+        test('coalesceMulti, ALL_LANGUAGES: ' + a.id + ', ' + b.id, (assert) => {
             coalesce([{
                 cache: a,
                 mask: 1 << 1,
@@ -655,7 +696,7 @@ test('coalesce args', function(assert) {
                 zoom: 1,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
+                prefix: false
             }, {
                 cache: b,
                 mask: 1 << 0,
@@ -663,8 +704,8 @@ test('coalesce args', function(assert) {
                 zoom: 1,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
-            }], {}, function(err, res) {
+                prefix: false
+            }], {}, (err, res) => {
                 assert.ifError(err);
                 // sorts by relev, score
                 assert.deepEqual(res[0].relev, 1, '0.relev');
@@ -676,7 +717,7 @@ test('coalesce args', function(assert) {
                 assert.end();
             });
         });
-        test('coalesceMulti, [0]: ' + a.id + ', ' + b.id, function(assert) {
+        test('coalesceMulti, [0]: ' + a.id + ', ' + b.id, (assert) => {
             coalesce([{
                 cache: a,
                 mask: 1 << 1,
@@ -684,7 +725,7 @@ test('coalesce args', function(assert) {
                 zoom: 1,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
+                prefix: false
             }, {
                 cache: b,
                 mask: 1 << 0,
@@ -694,7 +735,7 @@ test('coalesce args', function(assert) {
                 phrase: '1',
                 prefix: false,
                 languages: [0]
-            }], {}, function(err, res) {
+            }], {}, (err, res) => {
                 assert.ifError(err);
                 // sorts by relev, score
                 assert.deepEqual(res[0].relev, 1, '0.relev');
@@ -707,7 +748,7 @@ test('coalesce args', function(assert) {
                 assert.end();
             });
         });
-        test('coalesceMulti, [3]: ' + a.id + ', ' + b.id, function(assert) {
+        test('coalesceMulti, [3]: ' + a.id + ', ' + b.id, (assert) => {
             coalesce([{
                 cache: a,
                 mask: 1 << 1,
@@ -715,7 +756,7 @@ test('coalesce args', function(assert) {
                 zoom: 1,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
+                prefix: false
             }, {
                 cache: b,
                 mask: 1 << 0,
@@ -725,7 +766,7 @@ test('coalesce args', function(assert) {
                 phrase: '1',
                 prefix: false,
                 languages: [3]
-            }], {}, function(err, res) {
+            }], {}, (err, res) => {
                 assert.ifError(err);
                 // sorts by relev, score
                 assert.deepEqual(res[0].relev, 0.95, '0.relev');
@@ -742,8 +783,8 @@ test('coalesce args', function(assert) {
 })();
 
 (function() {
-    var memA = new MemoryCache('a', 0);
-    var memB = new MemoryCache('b', 0);
+    const memA = new MemoryCache('a', 0);
+    const memB = new MemoryCache('b', 0);
     memA._set('1', [
         Grid.encode({
             id: 1,
@@ -751,7 +792,7 @@ test('coalesce args', function(assert) {
             y: 0,
             relev: 1,
             score: 1
-        }),
+        })
     ]);
     memB._set('1', [
         Grid.encode({
@@ -769,14 +810,14 @@ test('coalesce args', function(assert) {
             score: 1
         })
     ]);
-    var rocksA = toRocksCache(memA);
-    var rocksB = toRocksCache(memB);
+    const rocksA = toRocksCache(memA);
+    const rocksB = toRocksCache(memB);
 
-    [[memA, memB], [rocksA, rocksB], [memA, rocksB]].forEach(function(caches) {
-        var a = caches[0],
+    [[memA, memB], [rocksA, rocksB], [memA, rocksB]].forEach((caches) => {
+        const a = caches[0],
             b = caches[1];
 
-        test('coalesce scoredist (close proximity): ' + a.id + ', ' + b.id, function(assert) {
+        test('coalesce scoredist (close proximity): ' + a.id + ', ' + b.id, (assert) => {
             coalesce([{
                 cache: a,
                 mask: 1 << 1,
@@ -784,7 +825,7 @@ test('coalesce args', function(assert) {
                 zoom: 0,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
+                prefix: false
             }, {
                 cache: b,
                 mask: 1 << 0,
@@ -792,10 +833,10 @@ test('coalesce args', function(assert) {
                 zoom: 14,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
+                prefix: false
             }], {
                 centerzxy: [14,4601,6200]
-            }, function(err, res) {
+            }, (err, res) => {
                 assert.ifError(err);
                 assert.deepEqual(res[0][0].id, 3, 'matches feat 3');
                 assert.deepEqual(res[1][0].id, 2, 'matches feat 2');
@@ -803,7 +844,7 @@ test('coalesce args', function(assert) {
                 assert.end();
             });
         });
-        test('coalesce scoredist (far proximity): ' + a.id + ', ' + b.id, function(assert) {
+        test('coalesce scoredist (far proximity): ' + a.id + ', ' + b.id, (assert) => {
             coalesce([{
                 cache: a,
                 mask: 1 << 1,
@@ -811,7 +852,7 @@ test('coalesce args', function(assert) {
                 zoom: 0,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
+                prefix: false
             }, {
                 cache: b,
                 mask: 1 << 0,
@@ -819,10 +860,10 @@ test('coalesce args', function(assert) {
                 zoom: 14,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
+                prefix: false
             }], {
                 centerzxy: [14,4610,6200]
-            }, function(err, res) {
+            }, (err, res) => {
                 assert.ifError(err);
                 assert.deepEqual(res[0][0].id, 2, 'matches feat 2 (higher score)');
                 assert.deepEqual(res[1][0].id, 3, 'matches feat 3');
@@ -834,8 +875,8 @@ test('coalesce args', function(assert) {
 })();
 
 (function() {
-    var memA = new MemoryCache('a', 0);
-    var memB = new MemoryCache('b', 0);
+    const memA = new MemoryCache('a', 0);
+    const memB = new MemoryCache('b', 0);
     memA._set('1', [
         Grid.encode({
             id: 1,
@@ -850,7 +891,7 @@ test('coalesce args', function(assert) {
             y: 1,
             relev: 1,
             score: 1
-        }),
+        })
     ]);
     memB._set('1', [
         Grid.encode({
@@ -859,17 +900,17 @@ test('coalesce args', function(assert) {
             y: 2,
             relev: 1,
             score: 1
-        }),
+        })
     ]);
 
-    var rocksA = toRocksCache(memA);
-    var rocksB = toRocksCache(memB);
+    const rocksA = toRocksCache(memA);
+    const rocksB = toRocksCache(memB);
 
-    [[memA, memB], [rocksA, rocksB], [memA, rocksB]].forEach(function(caches) {
-        var a = caches[0],
+    [[memA, memB], [rocksA, rocksB], [memA, rocksB]].forEach((caches) => {
+        const a = caches[0],
             b = caches[1];
 
-        test('coalesceMulti (higher relev wins): ' + a.id + ', ' + b.id, function(assert) {
+        test('coalesceMulti (higher relev wins): ' + a.id + ', ' + b.id, (assert) => {
             coalesce([{
                 cache: a,
                 mask: 1 << 1,
@@ -877,7 +918,7 @@ test('coalesce args', function(assert) {
                 zoom: 1,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
+                prefix: false
             }, {
                 cache: b,
                 mask: 1 << 0,
@@ -885,8 +926,8 @@ test('coalesce args', function(assert) {
                 zoom: 2,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
-            }], {}, function(err, res) {
+                prefix: false
+            }], {}, (err, res) => {
                 assert.ifError(err);
                 // sorts by relev, score
                 assert.deepEqual(res.length, 1, '1 result');
@@ -900,12 +941,11 @@ test('coalesce args', function(assert) {
     });
 })();
 
-
 // cooalese multi bbox
 (function() {
-    var memA = new MemoryCache('a', 0);
-    var memB = new MemoryCache('b', 0);
-    var memC = new MemoryCache('c', 0);
+    const memA = new MemoryCache('a', 0);
+    const memB = new MemoryCache('b', 0);
+    const memC = new MemoryCache('c', 0);
     memA._set('1', [
         Grid.encode({
             id: 1,
@@ -955,16 +995,16 @@ test('coalesce args', function(assert) {
         })
     ]);
 
-    var rocksA = toRocksCache(memA);
-    var rocksB = toRocksCache(memB);
-    var rocksC = toRocksCache(memC);
+    const rocksA = toRocksCache(memA);
+    const rocksB = toRocksCache(memB);
+    const rocksC = toRocksCache(memC);
 
-    [[memA, memB, memC], [rocksA, rocksB, rocksC], [memA, rocksB, memC]].forEach(function(caches) {
-        var a = caches[0],
+    [[memA, memB, memC], [rocksA, rocksB, rocksC], [memA, rocksB, memC]].forEach((caches) => {
+        const a = caches[0],
             b = caches[1],
             c = caches[2];
 
-        test('coalesceMulti bbox: ' + a.id + ', ' + b.id + ', ' + c.id, function(assert) {
+        test('coalesceMulti bbox: ' + a.id + ', ' + b.id + ', ' + c.id, (assert) => {
             coalesce([{
                 cache: a,
                 mask: 1 << 1,
@@ -972,7 +1012,7 @@ test('coalesce args', function(assert) {
                 zoom: 1,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
+                prefix: false
             }, {
                 cache: b,
                 mask: 1 << 0,
@@ -980,16 +1020,16 @@ test('coalesce args', function(assert) {
                 zoom: 2,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
+                prefix: false
             }], {
                 bboxzxy: [1, 0, 0, 1, 0]
-            }, function(err, res) {
+            }, (err, res) => {
                 assert.ifError(err);
                 assert.deepEqual(res.length, 2, '2 results: 1/0/0, 2/3/0');
                 assert.end();
             });
         });
-        test('coalesceMulti bbox: ' + a.id + ', ' + b.id + ', ' + c.id, function(assert) {
+        test('coalesceMulti bbox: ' + a.id + ', ' + b.id + ', ' + c.id, (assert) => {
             coalesce([{
                 cache: a,
                 mask: 1 << 1,
@@ -997,7 +1037,7 @@ test('coalesce args', function(assert) {
                 zoom: 1,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
+                prefix: false
             }, {
                 cache: b,
                 mask: 1 << 0,
@@ -1005,16 +1045,16 @@ test('coalesce args', function(assert) {
                 zoom: 2,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
+                prefix: false
             }], {
                 bboxzxy: [2, 0, 0, 1, 3]
-            }, function(err, res) {
+            }, (err, res) => {
                 assert.ifError(err);
                 assert.deepEqual(res.length, 2, '2 results: 1/0/0, 2/0/3');
                 assert.end();
             });
         });
-        test('coalesceMulti bbox: ' + a.id + ', ' + b.id + ', ' + c.id, function(assert) {
+        test('coalesceMulti bbox: ' + a.id + ', ' + b.id + ', ' + c.id, (assert) => {
             coalesce([{
                 cache: a,
                 mask: 1 << 1,
@@ -1022,7 +1062,7 @@ test('coalesce args', function(assert) {
                 zoom: 1,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
+                prefix: false
             }, {
                 cache: b,
                 mask: 1 << 0,
@@ -1030,16 +1070,16 @@ test('coalesce args', function(assert) {
                 zoom: 2,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
+                prefix: false
             }], {
                 bboxzxy: [6, 14, 30, 15, 64]
-            }, function(err, res) {
+            }, (err, res) => {
                 assert.ifError(err);
                 assert.deepEqual(res.length, 2, '2 results: 1/0/0, 2/0/3');
                 assert.end();
             });
         });
-        test('coalesceMulti bbox: ' + a.id + ', ' + b.id + ', ' + c.id, function(assert) {
+        test('coalesceMulti bbox: ' + a.id + ', ' + b.id + ', ' + c.id, (assert) => {
             coalesce([{
                 cache: b,
                 mask: 1 << 1,
@@ -1047,7 +1087,7 @@ test('coalesce args', function(assert) {
                 zoom: 2,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
+                prefix: false
             }, {
                 cache: c,
                 mask: 1 << 0,
@@ -1055,10 +1095,10 @@ test('coalesce args', function(assert) {
                 zoom: 5,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
+                prefix: false
             }], {
                 bboxzxy: [1, 0, 0, 1, 0]
-            }, function(err, res) {
+            }, (err, res) => {
                 assert.ifError(err);
                 assert.deepEqual(res.length, 2, '2 results: 5/20/7, 2/3/0');
                 assert.end();
@@ -1069,8 +1109,8 @@ test('coalesce args', function(assert) {
 
 // Multi sandwich scenario
 (function() {
-    var memA = new MemoryCache('a', 0);
-    var memB = new MemoryCache('b', 0);
+    const memA = new MemoryCache('a', 0);
+    const memB = new MemoryCache('b', 0);
     memA._set('1', [
         Grid.encode({
             id: 3,
@@ -1103,14 +1143,14 @@ test('coalesce args', function(assert) {
             score: 1
         })
     ]);
-    var rocksA = toRocksCache(memA);
-    var rocksB = toRocksCache(memB);
+    const rocksA = toRocksCache(memA);
+    const rocksB = toRocksCache(memB);
 
-    [[memA, memB], [rocksA, rocksB], [memA, rocksB]].forEach(function(caches) {
-        var a = caches[0],
+    [[memA, memB], [rocksA, rocksB], [memA, rocksB]].forEach((caches) => {
+        const a = caches[0],
             b = caches[1];
 
-        test('coalesceMulti sandwich: ' + a.id + ', ' + b.id, function(assert) {
+        test('coalesceMulti sandwich: ' + a.id + ', ' + b.id, (assert) => {
             coalesce([{
                 cache: a,
                 mask: 1 << 1,
@@ -1118,7 +1158,7 @@ test('coalesce args', function(assert) {
                 zoom: 0,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
+                prefix: false
             }, {
                 cache: b,
                 mask: 1 << 0,
@@ -1126,13 +1166,13 @@ test('coalesce args', function(assert) {
                 zoom: 1,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
-            }], {}, function(err, res) {
+                prefix: false
+            }], {}, (err, res) => {
                 assert.ifError(err);
                 assert.equal(res.length, 2, 'res length = 2');
                 // sorts by relev, score
-                assert.deepEqual(res[0].map(function(f) { return f.id; }), [1,4], '0.relev = 1');
-                assert.deepEqual(res[1].map(function(f) { return f.id; }), [2,4], '0.relev = 1');
+                assert.deepEqual(res[0].map((f) => { return f.id; }), [1,4], '0.relev = 1');
+                assert.deepEqual(res[1].map((f) => { return f.id; }), [2,4], '0.relev = 1');
                 assert.end();
             });
         });
@@ -1141,8 +1181,8 @@ test('coalesce args', function(assert) {
 
 // Multi sandwich scenario
 (function() {
-    var memA = new MemoryCache('a', 0);
-    var memB = new MemoryCache('b', 0);
+    const memA = new MemoryCache('a', 0);
+    const memB = new MemoryCache('b', 0);
     memA._set('1', [
         Grid.encode({
             id: 3,
@@ -1169,14 +1209,14 @@ test('coalesce args', function(assert) {
         })
     ]);
 
-    var rocksA = toRocksCache(memA);
-    var rocksB = toRocksCache(memB);
+    const rocksA = toRocksCache(memA);
+    const rocksB = toRocksCache(memB);
 
-    [[memA, memB], [rocksA, rocksB], [memA, rocksB]].forEach(function(caches) {
-        var a = caches[0],
+    [[memA, memB], [rocksA, rocksB], [memA, rocksB]].forEach((caches) => {
+        const a = caches[0],
             b = caches[1];
 
-        test('coalesceMulti sandwich: ' + a.id + ', ' + b.id, function(assert) {
+        test('coalesceMulti sandwich: ' + a.id + ', ' + b.id, (assert) => {
             coalesce([{
                 cache: a,
                 mask: 1 << 1,
@@ -1184,7 +1224,7 @@ test('coalesce args', function(assert) {
                 zoom: 0,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
+                prefix: false
             }, {
                 cache: b,
                 mask: 1 << 0,
@@ -1192,12 +1232,12 @@ test('coalesce args', function(assert) {
                 zoom: 0,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
-            }], {}, function(err, res) {
+                prefix: false
+            }], {}, (err, res) => {
                 assert.ifError(err);
                 assert.equal(res.length, 2, 'res length = 2');
-                assert.deepEqual(res[0].map(function(f) { return f.id; }), [3,1], '0.relev = 1');
-                assert.deepEqual(res[1].map(function(f) { return f.id; }), [4,1], '0.relev = 1');
+                assert.deepEqual(res[0].map((f) => { return f.id; }), [3,1], '0.relev = 1');
+                assert.deepEqual(res[1].map((f) => { return f.id; }), [4,1], '0.relev = 1');
                 assert.end();
             });
         });
@@ -1206,12 +1246,12 @@ test('coalesce args', function(assert) {
 
 // Mask overflow
 (function() {
-    var memA = new MemoryCache('a', 0);
-    var memB = new MemoryCache('b', 0);
-    var memC = new MemoryCache('c', 0);
+    const memA = new MemoryCache('a', 0);
+    const memB = new MemoryCache('b', 0);
+    const memC = new MemoryCache('c', 0);
 
-    var grids = [];
-    for (var i = 1; i < 10e3; i++) grids.push(Grid.encode({
+    const grids = [];
+    for (let i = 1; i < 10e3; i++) grids.push(Grid.encode({
         id: i,
         x: 0,
         y: 0,
@@ -1238,16 +1278,16 @@ test('coalesce args', function(assert) {
             score: 1
         })
     ]);
-    var rocksA = toRocksCache(memA);
-    var rocksB = toRocksCache(memB);
-    var rocksC = toRocksCache(memC);
+    const rocksA = toRocksCache(memA);
+    const rocksB = toRocksCache(memB);
+    const rocksC = toRocksCache(memC);
 
-    [[memA, memB, memC], [rocksA, rocksB, rocksC], [memA, rocksB, memC]].forEach(function(caches) {
-        var a = caches[0],
+    [[memA, memB, memC], [rocksA, rocksB, rocksC], [memA, rocksB, memC]].forEach((caches) => {
+        const a = caches[0],
             b = caches[1],
             c = caches[2];
 
-        test('coalesceMulti mask safe: ' + a.id + ', ' + b.id + ', ' + c.id, function(assert) {
+        test('coalesceMulti mask safe: ' + a.id + ', ' + b.id + ', ' + c.id, (assert) => {
             assert.comment('start coalesce (mask: 2)');
             coalesce([{
                 cache: a,
@@ -1273,15 +1313,15 @@ test('coalesce args', function(assert) {
                 weight: 0.33,
                 phrase: '1',
                 prefix: false
-            }], {}, function(err, res) {
+            }], {}, (err, res) => {
                 assert.ifError(err);
                 assert.equal(res.length, 1, 'res length = 1');
-                assert.deepEqual(res[0].map(function(f) { return f.id; }), [1, 9999, 1], '0.relev = 0.99');
+                assert.deepEqual(res[0].map((f) => { return f.id; }), [1, 9999, 1], '0.relev = 0.99');
                 assert.end();
             });
         });
 
-        test('coalesceMulti mask overflow: ' + a.id + ', ' + b.id + ', ' + c.id, function(assert) {
+        test('coalesceMulti mask overflow: ' + a.id + ', ' + b.id + ', ' + c.id, (assert) => {
             assert.comment('start coalesce (mask: 18)');
             coalesce([{
                 cache: a,
@@ -1307,13 +1347,12 @@ test('coalesce args', function(assert) {
                 weight: 0.33,
                 phrase: '1',
                 prefix: false
-            }], {}, function(err, res) {
+            }], {}, (err, res) => {
                 assert.ifError(err);
                 assert.equal(res.length, 1, 'res length = 1');
-                assert.deepEqual(res[0].map(function(f) { return f.id; }), [1, 9999, 1], '0.relev = 0.99');
+                assert.deepEqual(res[0].map((f) => { return f.id; }), [1, 9999, 1], '0.relev = 0.99');
                 assert.end();
             });
         });
     });
 })();
-

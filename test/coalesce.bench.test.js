@@ -1,18 +1,17 @@
-var Cache = require('../index.js').MemoryCache;
-var Grid = require('./grid.js');
-var coalesce = require('../index.js').coalesce;
-var test = require('tape');
-var mp36 = Math.pow(2,36);
+'use strict';
+const Cache = require('../index.js').MemoryCache;
+const coalesce = require('../index.js').coalesce;
+const test = require('tape');
 
 (function() {
     // asan makes everything slow, so skip benching
     if (process.env.ASAN_OPTIONS) return;
 
-    var runs = 50;
-    var b = new Cache('b');
+    const runs = 50;
+    const b = new Cache('b');
     b._set('3848571113', require('./fixtures/coalesce-bench-single-3848571113.json'));
-    //console.log('# pack size', b.pack('grid', '3848571113').length);
-    var stacks = [{
+    // console.log('# pack size', b.pack('grid', '3848571113').length);
+    const stacks = [{
         cache: b,
         idx: 0,
         zoom: 14,
@@ -21,21 +20,21 @@ var mp36 = Math.pow(2,36);
         prefix: false,
         mask: 1 << 0
     }];
-    test('coalesceSingle', function(assert) {
-        var time = +new Date;
+    test('coalesceSingle', (assert) => {
+        const time = +new Date;
         function run(remaining) {
             if (!remaining) {
-                var ops = (+new Date-time)/runs;
-                var expected_ops = 30;
-                if (process.env.BUILDTYPE == 'debug') {
-                    expected_ops = 500
+                const ops = (+new Date - time) / runs;
+                let expected_ops = 30;
+                if (process.env.BUILDTYPE === 'debug') {
+                    expected_ops = 500;
                 }
                 assert.equal(ops < expected_ops, true, 'coalesceSingle @ ' + ops + 'ms < ' + expected_ops + 'ms');
                 assert.end();
                 return;
             }
-            coalesce(stacks, {}, function(err, res) {
-                var checks = true;
+            coalesce(stacks, {}, (err, res) => {
+                let checks = true;
                 checks = checks && res.length === 37;
                 checks = checks && res[0][0].tmpid === 129900;
                 if (!checks) {
@@ -48,21 +47,21 @@ var mp36 = Math.pow(2,36);
         }
         run(runs);
     });
-    test('coalesceSingle proximity', function(assert) {
-        var time = +new Date;
+    test('coalesceSingle proximity', (assert) => {
+        const time = +new Date;
         function run(remaining) {
             if (!remaining) {
-                var ops = (+new Date-time)/runs;
-                var expected_ops = 30;
-                if (process.env.BUILDTYPE == 'debug') {
-                    expected_ops = 500
+                const ops = (+new Date - time) / runs;
+                let expected_ops = 30;
+                if (process.env.BUILDTYPE === 'debug') {
+                    expected_ops = 500;
                 }
                 assert.equal(ops < expected_ops, true, 'coalesceSingle + proximity @ ' + ops + 'ms < ' + expected_ops + 'ms');
                 assert.end();
                 return;
             }
-            coalesce(stacks, { centerzxy: [14,4893,6001] }, function(err, res) {
-                var checks = true;
+            coalesce(stacks, { centerzxy: [14,4893,6001] }, (err, res) => {
+                let checks = true;
                 checks = checks && res.length === 38;
                 checks = checks && res[0][0].x === 4893;
                 checks = checks && res[0][0].y === 6001;
@@ -83,19 +82,19 @@ var mp36 = Math.pow(2,36);
     // asan makes everything slow, so skip benching
     if (process.env.ASAN_OPTIONS) return;
 
-    var runs = 50;
-    var a = new Cache('a', 0);
-    var b = new Cache('b', 0);
+    const runs = 50;
+    const a = new Cache('a', 0);
+    const b = new Cache('b', 0);
     a._set('1965155344', require('./fixtures/coalesce-bench-multi-1965155344.json'));
     b._set('3848571113', require('./fixtures/coalesce-bench-multi-3848571113.json'));
-    var stacks = [{
+    const stacks = [{
         cache: a,
         mask: 1 << 0,
         idx: 0,
         zoom: 12,
         weight: 0.25,
         phrase: '1965155344',
-        prefix: false,
+        prefix: false
     }, {
         cache: b,
         mask: 1 << 1,
@@ -103,23 +102,23 @@ var mp36 = Math.pow(2,36);
         zoom: 14,
         weight: 0.75,
         phrase: '3848571113',
-        prefix: false,
+        prefix: false
     }];
-    test('coalesceMulti', function(assert) {
-        var time = +new Date;
+    test('coalesceMulti', (assert) => {
+        const time = +new Date;
         function run(remaining) {
             if (!remaining) {
-                var ops = (+new Date-time)/runs;
-                var expected_ops = 60;
-                if (process.env.BUILDTYPE == 'debug') {
-                    expected_ops = 1000
+                const ops = (+new Date - time) / runs;
+                let expected_ops = 60;
+                if (process.env.BUILDTYPE === 'debug') {
+                    expected_ops = 1000;
                 }
                 assert.equal(ops < expected_ops, true, 'coalesceMulti @ ' + ops + 'ms < ' + expected_ops + 'ms');
                 assert.end();
                 return;
             }
-            coalesce(stacks, {}, function(err, res) {
-                var checks = true;
+            coalesce(stacks, {}, (err, res) => {
+                let checks = true;
                 checks = checks && res.length === 40;
                 checks = checks && res[0][0].tmpid === 33593999;
                 checks = checks && res[0][1].tmpid === 514584;
@@ -133,21 +132,21 @@ var mp36 = Math.pow(2,36);
         }
         run(runs);
     });
-    test('coalesceMulti proximity', function(assert) {
-        var time = +new Date;
+    test('coalesceMulti proximity', (assert) => {
+        const time = +new Date;
         function run(remaining) {
             if (!remaining) {
-                var ops = (+new Date-time)/runs;
-                var expected_ops = 60;
-                if (process.env.BUILDTYPE == 'debug') {
-                    expected_ops = 1000
+                const ops = (+new Date - time) / runs;
+                let expected_ops = 60;
+                if (process.env.BUILDTYPE === 'debug') {
+                    expected_ops = 1000;
                 }
                 assert.equal(ops < expected_ops, true, 'coalesceMulti + proximity @' + ops + 'ms < ' + expected_ops + 'ms');
                 assert.end();
                 return;
             }
-            coalesce(stacks, { centerzxy: [14,4893,6001] }, function(err, res) {
-                var checks = true;
+            coalesce(stacks, { centerzxy: [14,4893,6001] }, (err, res) => {
+                let checks = true;
                 checks = checks && res.length === 40;
                 checks = checks && res[0][0].x === 4893;
                 checks = checks && res[0][0].y === 6001;

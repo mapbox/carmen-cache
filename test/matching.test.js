@@ -1,75 +1,75 @@
-var carmenCache = require('../index.js');
-var tape = require('tape');
-var fs = require('fs');
-var mp53 = Math.pow(2,53);
-var Grid = require('./grid.js');
+'use strict';
+const carmenCache = require('../index.js');
+const tape = require('tape');
+const fs = require('fs');
+const Grid = require('./grid.js');
 
-var tmpdir = "/tmp/temp." + Math.random().toString(36).substr(2, 5);
+const tmpdir = '/tmp/temp.' + Math.random().toString(36).substr(2, 5);
 fs.mkdirSync(tmpdir);
-var tmpidx = 0;
-var tmpfile = function() { return tmpdir + "/" + (tmpidx++) + ".dat"; };
+let tmpidx = 0;
+const tmpfile = function() { return tmpdir + '/' + (tmpidx++) + '.dat'; };
 
-var getIds = function(grids) {
-    return grids.map(function(x) { return x.id; }).sort(function (a, b) { return a - b; });
-}
+const getIds = function(grids) {
+    return grids.map((x) => { return x.id; }).sort((a, b) => { return a - b; });
+};
 
-var getByLanguageMatch = function(grids, match) {
-    return grids.filter(function(x) { return x.matches_language == match; });
-}
+const getByLanguageMatch = function(grids, match) {
+    return grids.filter((x) => { return x.matches_language === match; });
+};
 
-tape('getMatching', function(assert) {
-    var cache = new carmenCache.MemoryCache('mem');
+tape('getMatching', (assert) => {
+    const cache = new carmenCache.MemoryCache('mem');
 
     cache._set('test', [
-        Grid.encode({id: 1, x: 1, y: 1, relev: 1, score: 1}),
-        Grid.encode({id: 2, x: 1, y: 1, relev: 1, score: 1}),
-        Grid.encode({id: 3, x: 1, y: 1, relev: 1, score: 1})
+        Grid.encode({ id: 1, x: 1, y: 1, relev: 1, score: 1 }),
+        Grid.encode({ id: 2, x: 1, y: 1, relev: 1, score: 1 }),
+        Grid.encode({ id: 3, x: 1, y: 1, relev: 1, score: 1 })
     ]);
     cache._set('test', [
-        Grid.encode({id: 11, x: 1, y: 1, relev: 1, score: 1}),
-        Grid.encode({id: 12, x: 1, y: 1, relev: 1, score: 1}),
-        Grid.encode({id: 13, x: 1, y: 1, relev: 1, score: 1})
+        Grid.encode({ id: 11, x: 1, y: 1, relev: 1, score: 1 }),
+        Grid.encode({ id: 12, x: 1, y: 1, relev: 1, score: 1 }),
+        Grid.encode({ id: 13, x: 1, y: 1, relev: 1, score: 1 })
     ], [0]);
     cache._set('test', [
-        Grid.encode({id: 21, x: 1, y: 1, relev: 1, score: 1}),
-        Grid.encode({id: 22, x: 1, y: 1, relev: 1, score: 1}),
-        Grid.encode({id: 23, x: 1, y: 1, relev: 1, score: 1})
+        Grid.encode({ id: 21, x: 1, y: 1, relev: 1, score: 1 }),
+        Grid.encode({ id: 22, x: 1, y: 1, relev: 1, score: 1 }),
+        Grid.encode({ id: 23, x: 1, y: 1, relev: 1, score: 1 })
     ], [1]);
     cache._set('test', [
-        Grid.encode({id: 31, x: 1, y: 1, relev: 1, score: 1}),
-        Grid.encode({id: 32, x: 1, y: 1, relev: 1, score: 1}),
-        Grid.encode({id: 33, x: 1, y: 1, relev: 1, score: 1})
+        Grid.encode({ id: 31, x: 1, y: 1, relev: 1, score: 1 }),
+        Grid.encode({ id: 32, x: 1, y: 1, relev: 1, score: 1 }),
+        Grid.encode({ id: 33, x: 1, y: 1, relev: 1, score: 1 })
     ], [1,2]);
     cache._set('test', [
-        Grid.encode({id: 41, x: 1, y: 1, relev: 1, score: 1}),
-        Grid.encode({id: 42, x: 1, y: 1, relev: 1, score: 1}),
-        Grid.encode({id: 43, x: 1, y: 1, relev: 1, score: 1})
+        Grid.encode({ id: 41, x: 1, y: 1, relev: 1, score: 1 }),
+        Grid.encode({ id: 42, x: 1, y: 1, relev: 1, score: 1 }),
+        Grid.encode({ id: 43, x: 1, y: 1, relev: 1, score: 1 })
     ], [3,4]);
 
     cache._set('testy', [
-        Grid.encode({id: 51, x: 1, y: 1, relev: 1, score: 1}),
-        Grid.encode({id: 52, x: 1, y: 1, relev: 1, score: 1}),
-        Grid.encode({id: 53, x: 1, y: 1, relev: 1, score: 1})
+        Grid.encode({ id: 51, x: 1, y: 1, relev: 1, score: 1 }),
+        Grid.encode({ id: 52, x: 1, y: 1, relev: 1, score: 1 }),
+        Grid.encode({ id: 53, x: 1, y: 1, relev: 1, score: 1 })
     ], [0]);
     cache._set('tentacle', [
-        Grid.encode({id: 61, x: 1, y: 1, relev: 1, score: 1}),
-        Grid.encode({id: 62, x: 1, y: 1, relev: 1, score: 1}),
-        Grid.encode({id: 63, x: 1, y: 1, relev: 1, score: 1})
+        Grid.encode({ id: 61, x: 1, y: 1, relev: 1, score: 1 }),
+        Grid.encode({ id: 62, x: 1, y: 1, relev: 1, score: 1 }),
+        Grid.encode({ id: 63, x: 1, y: 1, relev: 1, score: 1 })
     ], [0]);
 
     cache._set('hello', [
-        Grid.encode({id: 71, x: 1, y: 1, relev: 1, score: 1}),
-        Grid.encode({id: 72, x: 1, y: 1, relev: 1, score: 1}),
-        Grid.encode({id: 73, x: 1, y: 1, relev: 1, score: 1})
+        Grid.encode({ id: 71, x: 1, y: 1, relev: 1, score: 1 }),
+        Grid.encode({ id: 72, x: 1, y: 1, relev: 1, score: 1 }),
+        Grid.encode({ id: 73, x: 1, y: 1, relev: 1, score: 1 })
     ], [0]);
 
     // cache A serializes data, cache B loads serialized data.
-    var pack = tmpfile();
+    const pack = tmpfile();
     cache.pack(pack);
-    var loader = new carmenCache.RocksDBCache('packed', pack);
+    const loader = new carmenCache.RocksDBCache('packed', pack);
 
-    [cache, loader].forEach(function(c) {
-        var test_all_langs_no_prefix = cache._getMatching("test", false);
+    [cache, loader].forEach((c) => {
+        const test_all_langs_no_prefix = c._getMatching('test', false);
         assert.deepEqual(
             getIds(test_all_langs_no_prefix),
             [1, 2, 3, 11, 12, 13, 21, 22, 23, 31, 32, 33, 41, 42, 43],
@@ -81,7 +81,7 @@ tape('getMatching', function(assert) {
             "getMatching for 'test' with no prefix match and no language includes only match_language: true"
         );
 
-        var test_all_langs_with_prefix = cache._getMatching("test", true);
+        const test_all_langs_with_prefix = c._getMatching('test', true);
         assert.deepEqual(
             getIds(test_all_langs_with_prefix),
             [1, 2, 3, 11, 12, 13, 21, 22, 23, 31, 32, 33, 41, 42, 43, 51, 52, 53],
@@ -93,9 +93,9 @@ tape('getMatching', function(assert) {
             "getMatching for 'test' with prefix match and no language includes only match_language: true"
         );
 
-        assert.false(cache._getMatching("te", false), "getMatching for 'te' with no prefix match returns nothing");
+        assert.false(c._getMatching('te', false), "getMatching for 'te' with no prefix match returns nothing");
 
-        var te_all_langs_with_prefix = cache._getMatching("te", true);
+        const te_all_langs_with_prefix = c._getMatching('te', true);
         assert.deepEqual(
             getIds(te_all_langs_with_prefix),
             [1, 2, 3, 11, 12, 13, 21, 22, 23, 31, 32, 33, 41, 42, 43, 51, 52, 53, 61, 62, 63],
@@ -107,9 +107,9 @@ tape('getMatching', function(assert) {
             "getMatching for 'te' with prefix match and no language includes only match_language: true"
         );
 
-        var test_all_langs_with_prefix_0 = cache._getMatching("test", true, [0]);
-        var test_all_langs_with_prefix_0_matched = getByLanguageMatch(test_all_langs_with_prefix_0, true);
-        var test_all_langs_with_prefix_0_unmatched = getByLanguageMatch(test_all_langs_with_prefix_0, false);
+        const test_all_langs_with_prefix_0 = c._getMatching('test', true, [0]);
+        const test_all_langs_with_prefix_0_matched = getByLanguageMatch(test_all_langs_with_prefix_0, true);
+        const test_all_langs_with_prefix_0_unmatched = getByLanguageMatch(test_all_langs_with_prefix_0, false);
         assert.deepEqual(
             getIds(test_all_langs_with_prefix_0),
             [1, 2, 3, 11, 12, 13, 21, 22, 23, 31, 32, 33, 41, 42, 43, 51, 52, 53],
@@ -128,12 +128,12 @@ tape('getMatching', function(assert) {
         assert.deepEqual(
             getIds(test_all_langs_with_prefix_0.slice(0, test_all_langs_with_prefix_0_matched.length)),
             getIds(test_all_langs_with_prefix_0_matched),
-            "all the language-matching results come first"
+            'all the language-matching results come first'
         );
 
-        var te_all_langs_with_prefix_0 = cache._getMatching("te", true, [0]);
-        var te_all_langs_with_prefix_0_matched = getByLanguageMatch(te_all_langs_with_prefix_0, true);
-        var te_all_langs_with_prefix_0_unmatched = getByLanguageMatch(te_all_langs_with_prefix_0, false);
+        const te_all_langs_with_prefix_0 = c._getMatching('te', true, [0]);
+        const te_all_langs_with_prefix_0_matched = getByLanguageMatch(te_all_langs_with_prefix_0, true);
+        const te_all_langs_with_prefix_0_unmatched = getByLanguageMatch(te_all_langs_with_prefix_0, false);
         assert.deepEqual(
             getIds(te_all_langs_with_prefix_0),
             [1, 2, 3, 11, 12, 13, 21, 22, 23, 31, 32, 33, 41, 42, 43, 51, 52, 53, 61, 62, 63],
@@ -152,12 +152,12 @@ tape('getMatching', function(assert) {
         assert.deepEqual(
             getIds(te_all_langs_with_prefix_0.slice(0, te_all_langs_with_prefix_0_matched.length)),
             getIds(te_all_langs_with_prefix_0_matched),
-            "all the language-matching results come first"
+            'all the language-matching results come first'
         );
 
-        var test_all_langs_with_prefix_1 = cache._getMatching("test", true, [1]);
-        var test_all_langs_with_prefix_1_matched = getByLanguageMatch(test_all_langs_with_prefix_1, true);
-        var test_all_langs_with_prefix_1_unmatched = getByLanguageMatch(test_all_langs_with_prefix_1, false);
+        const test_all_langs_with_prefix_1 = c._getMatching('test', true, [1]);
+        const test_all_langs_with_prefix_1_matched = getByLanguageMatch(test_all_langs_with_prefix_1, true);
+        const test_all_langs_with_prefix_1_unmatched = getByLanguageMatch(test_all_langs_with_prefix_1, false);
         assert.deepEqual(
             getIds(test_all_langs_with_prefix_1),
             [1, 2, 3, 11, 12, 13, 21, 22, 23, 31, 32, 33, 41, 42, 43, 51, 52, 53],
@@ -176,12 +176,12 @@ tape('getMatching', function(assert) {
         assert.deepEqual(
             getIds(test_all_langs_with_prefix_1.slice(0, test_all_langs_with_prefix_1_matched.length)),
             getIds(test_all_langs_with_prefix_1_matched),
-            "all the language-matching results come first"
+            'all the language-matching results come first'
         );
 
-        var test_all_langs_with_prefix_7 = cache._getMatching("test", true, [7]);
-        var test_all_langs_with_prefix_7_matched = getByLanguageMatch(test_all_langs_with_prefix_7, true);
-        var test_all_langs_with_prefix_7_unmatched = getByLanguageMatch(test_all_langs_with_prefix_7, false);
+        const test_all_langs_with_prefix_7 = c._getMatching('test', true, [7]);
+        const test_all_langs_with_prefix_7_matched = getByLanguageMatch(test_all_langs_with_prefix_7, true);
+        const test_all_langs_with_prefix_7_unmatched = getByLanguageMatch(test_all_langs_with_prefix_7, false);
         assert.deepEqual(
             getIds(test_all_langs_with_prefix_7),
             [1, 2, 3, 11, 12, 13, 21, 22, 23, 31, 32, 33, 41, 42, 43, 51, 52, 53],
@@ -200,7 +200,7 @@ tape('getMatching', function(assert) {
         assert.deepEqual(
             getIds(test_all_langs_with_prefix_7.slice(0, test_all_langs_with_prefix_7_matched.length)),
             getIds(test_all_langs_with_prefix_7_matched),
-            "all the language-matching results come first"
+            'all the language-matching results come first'
         );
     });
 
