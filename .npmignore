@@ -3,6 +3,6 @@
 /lib/carmen.node
 /mason
 /mason_packages
-/.mason/
-/.toolchain/
+/.mason
+/.toolchain
 /local.env
