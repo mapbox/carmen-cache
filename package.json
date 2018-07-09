@@ -13,9 +13,6 @@
     "node-pre-gyp": "~0.6.32",
     "protozero": "~1.5.1"
   },
-  "bundledDependencies": [
-    "node-pre-gyp"
-  ],
   "scripts": {
     "test": "tape test/*.test.js bench/*.js && eslint *.js test/*.js bench/*.js",
     "lint": "eslint *.js test/*.js bench/*.js",
