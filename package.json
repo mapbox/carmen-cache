@@ -9,9 +9,8 @@
   },
   "version": "0.21.1",
   "dependencies": {
-    "nan": "~2.5.1",
-    "node-pre-gyp": "~0.6.32",
-    "protozero": "~1.5.1"
+    "nan": "~2.10.0",
+    "node-pre-gyp": "~0.10.1"
   },
   "scripts": {
     "test": "tape test/*.test.js bench/*.js && eslint *.js test/*.js bench/*.js",
@@ -21,14 +20,19 @@
     "docs": "documentation build src/*.cpp --polyglot -f md -o API.md"
   },
   "eslintConfig": {
-    "plugins": ["tape"],
+    "plugins": [
+      "tape"
+    ],
     "extends": [
-        "@mapbox/eslint-config-geocoding"
+      "@mapbox/eslint-config-geocoding"
     ],
     "rules": {
-        "tape/assertion-message": ["error", "always"],
-        "tape/use-t": "error",
-        "tape/use-test": "error"
+      "tape/assertion-message": [
+        "error",
+        "always"
+      ],
+      "tape/use-t": "error",
+      "tape/use-test": "error"
     }
   },
   "devDependencies": {
