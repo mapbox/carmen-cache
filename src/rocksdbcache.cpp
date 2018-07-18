@@ -519,11 +519,11 @@ NAN_METHOD(RocksDBCache::merge) {
     if (!info[3]->IsString()) return Nan::ThrowTypeError("argument 4 must be a String (method)");
     if (!info[4]->IsFunction()) return Nan::ThrowTypeError("argument 5 must be a callback function");
 
-    std::string in1 = *String::Utf8Value(info[0]->ToString());
-    std::string in2 = *String::Utf8Value(info[1]->ToString());
-    std::string out = *String::Utf8Value(info[2]->ToString());
+    std::string in1 = *Nan::Utf8String(info[0]->ToString());
+    std::string in2 = *Nan::Utf8String(info[1]->ToString());
+    std::string out = *Nan::Utf8String(info[2]->ToString());
     Local<Value> callback = info[4];
-    std::string method = *String::Utf8Value(info[3]->ToString());
+    std::string method = *Nan::Utf8String(info[3]->ToString());
 
     MergeBaton* baton = new MergeBaton();
     baton->filename1 = in1;

@@ -38,11 +38,37 @@ matrix:
     # linux publishable node v6
     - os: linux
       env: BUILDTYPE=release
+      node_js: 10
+    # linux publishable node v6/debug
+    - os: linux
+      env: BUILDTYPE=debug
+      node_js: 10
+    # linux publishable node v6
+    - os: linux
+      env: BUILDTYPE=release
+      node_js: 8
+    # linux publishable node v6/debug
+    - os: linux
+      env: BUILDTYPE=debug
+      node_js: 8
+    # linux publishable node v6
+    - os: linux
+      env: BUILDTYPE=release
       node_js: 6
     # linux publishable node v6/debug
     - os: linux
       env: BUILDTYPE=debug
       node_js: 6
+    # osx publishable node v6
+    - os: osx
+      osx_image: xcode8.2
+      env: BUILDTYPE=release
+      node_js: 10
+    # osx publishable node v6
+    - os: osx
+      osx_image: xcode8.2
+      env: BUILDTYPE=release
+      node_js: 8
     # osx publishable node v6
     - os: osx
       osx_image: xcode8.2

@@ -27,5 +27,5 @@ fi
 
 mason link bzip2 1.0.6
 mason link rocksdb 4.13
-mason install protozero 1.5.1
-mason link protozero 1.5.1
+mason install protozero 1.6.2
+mason link protozero 1.6.2
