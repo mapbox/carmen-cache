@@ -4,7 +4,7 @@ set -eu
 set -o pipefail
 
 # TODO(springmeyer) currently depends on mason branch: https://github.com/mapbox/mason/issues/566
-export MASON_RELEASE="${MASON_RELEASE:-cxx-override}"
+export MASON_RELEASE="${MASON_RELEASE:-1605622}"
 export MASON_LLVM_RELEASE="${MASON_LLVM_RELEASE:-5.0.1}"
 export BINUTILS_VERSION="${BINUTILS_VERSION:-2.30}"
 

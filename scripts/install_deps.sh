@@ -22,10 +22,10 @@ fi
 
 # only build from source if it does not exist
 if [[ ! -f mason_packages/.link/lib/librocksdb.a ]]; then
-    mason build rocksdb 4.13
+    mason build rocksdb 4.13-dev
 fi
 
 mason link bzip2 1.0.6
-mason link rocksdb 4.13
+mason link rocksdb 4.13-dev
 mason install protozero 1.6.2
 mason link protozero 1.6.2
