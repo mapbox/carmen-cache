@@ -22,6 +22,8 @@ install:
   - which clang
   - clang -O2 -march=native -E -v - </dev/null 2>&1 | grep cc1 || true
   - make ${BUILDTYPE}
+  - ls -lh lib/carmen.node || true
+  - objdump -d lib/carmen.node | grep vbroadcastsd || true
 
 # run tests
 # We use before_script rather than script to ensure fast failure (the script section continues even after an error)
