@@ -9,6 +9,8 @@ addons:
     packages: [ 'libstdc++-4.9-dev' ]
 
 install:
+  - cat /proc/cpuinfo || true
+  - gcc -O2 -march=native -E -v - </dev/null 2>&1 | grep cc1 || true
   # set up the environment by installing mason and clang++
   - ./scripts/setup.sh --config local.env
   # put mason and clang++ on PATH
