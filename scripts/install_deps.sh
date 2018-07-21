@@ -14,6 +14,7 @@ source local.env
 # avoid mis-reporting of CPU due to docker
 # from resulting in OOM killer knocking out g++
 export MASON_CONCURRENCY=2
+export MASON_CXXFLAGS="-D_GLIBCXX_USE_CXX11_ABI=0"
 
 # only build from source if it does not exist
 if [[ ! -f mason_packages/.link/lib/libbz2.a ]]; then
