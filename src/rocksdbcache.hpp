@@ -31,9 +31,9 @@ namespace carmen {
 
 struct sortableGrid {
     sortableGrid(protozero::const_varint_iterator<uint64_t> _it,
-            protozero::const_varint_iterator<uint64_t> _end,
-            value_type _unadjusted_lastval,
-            bool _matches_language)
+                 protozero::const_varint_iterator<uint64_t> _end,
+                 value_type _unadjusted_lastval,
+                 bool _matches_language)
         : it(_it),
           end(_end),
           unadjusted_lastval(_unadjusted_lastval),

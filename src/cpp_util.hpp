@@ -115,7 +115,6 @@ struct Cover {
     Cover& operator=(Cover const& c) = delete;
     Cover& operator=(Cover&& c) = default;
     Cover(Cover&& c) = default;
-
 };
 
 struct Context {
