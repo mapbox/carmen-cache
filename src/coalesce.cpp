@@ -569,7 +569,7 @@ void coalesceMulti(uv_work_t* req) {
                 uint64_t zxy = (z * POW2_28) + (cover.x * POW2_14) + (cover.y);
 
                 std::vector<Cover> covers;
-                covers.push_back(cover);
+                covers.push_back(std::move(cover));
                 uint32_t context_mask = cover.mask;
                 double context_relev = cover.relev;
 
