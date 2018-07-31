@@ -30,10 +30,24 @@ namespace carmen {
 #define PREFIX_MAX_GRID_LENGTH 500000
 
 struct sortableGrid {
+    sortableGrid(protozero::const_varint_iterator<uint64_t> _it,
+                 protozero::const_varint_iterator<uint64_t> _end,
+                 value_type _unadjusted_lastval,
+                 bool _matches_language)
+        : it(_it),
+          end(_end),
+          unadjusted_lastval(_unadjusted_lastval),
+          matches_language(_matches_language) {
+    }
     protozero::const_varint_iterator<uint64_t> it;
     protozero::const_varint_iterator<uint64_t> end;
     value_type unadjusted_lastval;
     bool matches_language;
+    sortableGrid() = delete;
+    sortableGrid(sortableGrid const& c) = delete;
+    sortableGrid& operator=(sortableGrid const& c) = delete;
+    sortableGrid& operator=(sortableGrid&& c) = default;
+    sortableGrid(sortableGrid&& c) = default;
 };
 
 struct MergeBaton : carmen::noncopyable {

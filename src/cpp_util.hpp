@@ -109,6 +109,12 @@ struct Cover {
     double distance;
     double scoredist;
     bool matches_language;
+
+    Cover() = default;
+    Cover(Cover const& c) = default;
+    Cover& operator=(Cover const& c) = delete;
+    Cover& operator=(Cover&& c) = default;
+    Cover(Cover&& c) = default;
 };
 
 struct Context {

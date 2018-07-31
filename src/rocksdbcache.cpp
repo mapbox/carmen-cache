@@ -82,11 +82,11 @@ intarray __getmatching(RocksDBCache const* c, std::string phrase, bool match_pre
 
         if (vals.first != vals.second) {
             value_type unadjusted_lastval = *(vals.first);
-            grids.emplace_back(sortableGrid{
+            grids.emplace_back(
                 vals.first,
                 vals.second,
                 unadjusted_lastval,
-                matches_language});
+                matches_language);
             rh.push(matches_language ? unadjusted_lastval | LANGUAGE_MATCH_BOOST : unadjusted_lastval, grids.size() - 1);
         }
     }

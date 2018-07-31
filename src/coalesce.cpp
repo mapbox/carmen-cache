@@ -388,7 +388,6 @@ void coalesceSingle(uv_work_t* req) {
         unsigned long m = grids.size();
         double relevMax = 0;
         std::vector<Cover> covers;
-        covers.reserve(m);
 
         uint32_t length = 0;
         uint32_t lastId = 0;
@@ -438,7 +437,6 @@ void coalesceSingle(uv_work_t* req) {
         std::size_t added = 0;
         std::vector<Context> contexts;
         std::size_t max_contexts = 40;
-        contexts.reserve(max_contexts);
         for (auto&& cover : covers) {
             // Stop at 40 contexts
             if (added == max_contexts) break;
@@ -453,7 +451,6 @@ void coalesceSingle(uv_work_t* req) {
             uint32_t mask = 0;
             contexts.emplace_back(std::move(cover), mask, relev);
         }
-
         coalesceFinalize(baton, std::move(contexts));
     } catch (std::exception const& ex) {
         baton->error = ex.what();
@@ -473,8 +470,10 @@ void coalesceMulti(uv_work_t* req) {
         // Cache zoom levels to iterate over as coalesce occurs.
         std::vector<intarray> zoomCache;
         zoomCache.reserve(stackSize);
+        double maxrelev = 0;
         for (auto const& subq : stack) {
-            intarray zooms;
+            zoomCache.emplace_back();
+            auto& zooms = zoomCache.back();
             std::vector<bool> zoomUniq(22, false);
             for (auto const& subqB : stack) {
                 if (subq.idx == subqB.idx) continue;
@@ -483,7 +482,6 @@ void coalesceMulti(uv_work_t* req) {
                 zoomUniq[subqB.zoom] = true;
                 zooms.emplace_back(subqB.zoom);
             }
-            zoomCache.push_back(std::move(zooms));
         }
 
         // Coalesce relevs into higher zooms, e.g.
@@ -570,12 +568,8 @@ void coalesceMulti(uv_work_t* req) {
 
                 uint64_t zxy = (z * POW2_28) + (cover.x * POW2_14) + (cover.y);
 
-                // Reserve stackSize for the coverList. The vector
-                // will grow no larger that the size of the input
-                // subqueries that are being coalesced.
                 std::vector<Cover> covers;
-                covers.reserve(stackSize);
-                covers.push_back(cover);
+                covers.push_back(std::move(cover));
                 uint32_t context_mask = cover.mask;
                 double context_relev = cover.relev;
 
@@ -612,7 +606,7 @@ void coalesceMulti(uv_work_t* req) {
                         }
                     }
                 }
-
+                maxrelev = std::max(maxrelev, context_relev);
                 if (last) {
                     // Slightly penalize contexts that have no stacking
                     if (covers.size() == 1) {
@@ -621,7 +615,9 @@ void coalesceMulti(uv_work_t* req) {
                     } else if (covers[0].mask > covers[1].mask) {
                         context_relev -= 0.01;
                     }
-                    contexts.emplace_back(std::move(covers), context_mask, context_relev);
+                    if (maxrelev - context_relev < .25) {
+                        contexts.emplace_back(std::move(covers), context_mask, context_relev);
+                    }
                 } else if (first || covers.size() > 1) {
                     cit = coalesced.find(zxy);
                     if (cit == coalesced.end()) {
@@ -640,7 +636,9 @@ void coalesceMulti(uv_work_t* req) {
         // append coalesced to contexts by moving memory
         for (auto&& matched : coalesced) {
             for (auto&& context : matched.second) {
-                contexts.emplace_back(std::move(context));
+                if (maxrelev - context.relev < .25) {
+                    contexts.emplace_back(std::move(context));
+                }
             }
         }
 
