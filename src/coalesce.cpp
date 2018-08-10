@@ -649,6 +649,53 @@ void coalesceMulti(uv_work_t* req) {
     }
 }
 
+Nan::Persistent<v8::FunctionTemplate> Features::constructor;
+
+void Features::Initialize(v8::Local<v8::Object> target) {
+    Nan::HandleScope scope;
+    v8::Local<v8::FunctionTemplate> lcons = Nan::New<v8::FunctionTemplate>(Features::New);
+    lcons->InstanceTemplate()->SetInternalFieldCount(1);
+    lcons->SetClassName(Nan::New("Context").ToLocalChecked());
+    target->Set(Nan::New("Context").ToLocalChecked(),lcons->GetFunction());
+    constructor.Reset(lcons);
+}
+
+Features::Features(std::vector<Context> && contexts):
+    Nan::ObjectWrap(),
+    contexts_(std::move(contexts)) {}
+
+NAN_METHOD(Features::New)
+{
+    if (!info.IsConstructCall()) {
+        Nan::ThrowError("Cannot call constructor as function, you need to use 'new' keyword");
+        return;
+    }
+
+    if (info[0]->IsExternal())
+    {
+        v8::Local<v8::External> ext = info[0].As<v8::External>();
+        void* ptr = ext->Value();
+        Features* l =  static_cast<Features*>(ptr);
+        l->Wrap(info.This());
+        info.GetReturnValue().Set(info.This());
+        return;
+    }
+    else
+    {
+        Nan::ThrowTypeError("cannot create from JS");
+        return;
+    }
+}
+
+v8::Local<v8::Value> Features::NewInstance(std::vector<Context>&& contexts) {
+    Nan::EscapableHandleScope scope;
+    Features* l = new Features(std::move(contexts));
+    v8::Local<v8::Value> ext = Nan::New<v8::External>(l);
+    Nan::MaybeLocal<v8::Object> maybe_local = Nan::NewInstance(Nan::New(constructor)->GetFunction(), 1, &ext);
+    if (maybe_local.IsEmpty()) Nan::ThrowError("Could not create new Features instance");
+    return scope.Escape(maybe_local.ToLocalChecked());
+}
+
 // we don't use the 'status' parameter, but it's required as part of the uv_after_work_cb
 // function signature, so suppress the warning about it
 #pragma clang diagnostic push
@@ -671,14 +718,7 @@ void coalesceAfter(uv_work_t* req, int status) {
         v8::Local<v8::Value> argv[1] = {Nan::Error(baton->error.c_str())};
         Nan::MakeCallback(Nan::GetCurrentContext()->Global(), Nan::New(baton->callback), 1, argv);
     } else {
-        std::vector<Context> const& features = baton->features;
-
-        Local<Array> jsFeatures = Nan::New<Array>(static_cast<int>(features.size()));
-        for (uint32_t i = 0; i < features.size(); i++) {
-            jsFeatures->Set(i, contextToArray(features[i]));
-        }
-
-        Local<Value> argv[2] = {Nan::Null(), jsFeatures};
+        Local<Value> argv[2] = {Nan::Null(), Features::NewInstance(std::move(baton->features))};
         Nan::MakeCallback(Nan::GetCurrentContext()->Global(), Nan::New(baton->callback), 2, argv);
     }
 

@@ -25,6 +25,19 @@ namespace carmen {
 
 using namespace v8;
 
+class Features: public Nan::ObjectWrap {
+public:
+    static Nan::Persistent<v8::FunctionTemplate> constructor;
+    static void Initialize(v8::Local<v8::Object> target);
+    static NAN_METHOD(New);
+    static v8::Local<v8::Value> NewInstance(std::vector<Context> && contexts);
+    Features(std::vector<Context> && contexts);
+
+private:
+    // TODO - these would need exposed to JS
+    std::vector<Context> contexts_;
+};
+
 Local<Object> coverToObject(Cover const& cover);
 Local<Array> contextToArray(Context const& context);
 

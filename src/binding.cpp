@@ -9,6 +9,7 @@ static void start(Handle<Object> target) {
     MemoryCache::Initialize(target);
     RocksDBCache::Initialize(target);
     NormalizationCache::Initialize(target);
+    Features::Initialize(target);
     Nan::SetMethod(target, "coalesce", coalesce);
 }
 }
