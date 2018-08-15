@@ -7,7 +7,7 @@
     "url": "git://github.com/mapbox/carmen-cache.git",
     "type": "git"
   },
-  "version": "0.21.4-xlang",
+  "version": "0.21.4-xlang-2",
   "dependencies": {
     "nan": "~2.10.0",
     "node-pre-gyp": "~0.10.1"
