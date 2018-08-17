@@ -401,7 +401,7 @@ void coalesceSingle(uv_work_t* req) {
             cover.idx = subq.idx;
             cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
             cover.relev = cover.relev * subq.weight;
-            if (!cover.matches_language) cover.relev *= .9;
+            if (!cover.matches_language) cover.relev *= .96;
             cover.distance = proximity ? tileDist(cx, cy, cover.x, cover.y) : 0;
             cover.scoredist = proximity ? scoredist(cz, cover.distance, cover.score, baton->radius) : cover.score;
 
@@ -550,7 +550,7 @@ void coalesceMulti(uv_work_t* req) {
                 cover.mask = subq.mask;
                 cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
                 cover.relev = cover.relev * subq.weight;
-                if (!cover.matches_language) cover.relev *= .9;
+                if (!cover.matches_language) cover.relev *= .96;
                 if (proximity) {
                     ZXY dxy = pxy2zxy(z, cover.x, cover.y, cz);
                     cover.distance = tileDist(cx, cy, dxy.x, dxy.y);
