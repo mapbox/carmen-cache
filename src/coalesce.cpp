@@ -606,7 +606,6 @@ void coalesceMulti(uv_work_t* req) {
                         }
                     }
                 }
-                maxrelev = std::max(maxrelev, context_relev);
                 if (last) {
                     // Slightly penalize contexts that have no stacking
                     if (covers.size() == 1) {
@@ -615,9 +614,7 @@ void coalesceMulti(uv_work_t* req) {
                     } else if (covers[0].mask > covers[1].mask) {
                         context_relev -= 0.01;
                     }
-                    if (maxrelev - context_relev < .25) {
-                        contexts.emplace_back(std::move(covers), context_mask, context_relev);
-                    }
+                    contexts.emplace_back(std::move(covers), context_mask, context_relev);
                 } else if (first || covers.size() > 1) {
                     cit = coalesced.find(zxy);
                     if (cit == coalesced.end()) {
@@ -636,9 +633,7 @@ void coalesceMulti(uv_work_t* req) {
         // append coalesced to contexts by moving memory
         for (auto&& matched : coalesced) {
             for (auto&& context : matched.second) {
-                if (maxrelev - context.relev < .25) {
-                    contexts.emplace_back(std::move(context));
-                }
+                contexts.emplace_back(std::move(context));
             }
         }
 
