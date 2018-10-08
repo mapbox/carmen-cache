@@ -94,30 +94,48 @@ inline void decodeAndBoostMessage(std::string const& message, intarray& array) {
     }
 }
 
-class RocksDBCache : public node::ObjectWrap {
-  public:
-    ~RocksDBCache();
-    static Nan::Persistent<v8::FunctionTemplate> constructor;
-    static void Initialize(v8::Handle<v8::Object> target);
-    static NAN_METHOD(New);
-    static NAN_METHOD(pack);
-    static NAN_METHOD(merge);
-    static NAN_METHOD(list);
-    static NAN_METHOD(_get);
-    static NAN_METHOD(_getmatching);
-    static NAN_METHOD(_set);
-    static NAN_METHOD(coalesce);
-    explicit RocksDBCache();
-    void _ref() { Ref(); }
-    void _unref() { Unref(); }
-    std::shared_ptr<rocksdb::DB> db;
+class RocksDBCache {
+    public:
+        RocksDBCache(std::string filename);
+        RocksDBCache();
+        ~RocksDBCache();
+
+        bool pack(std::string filename);
+        std::vector<std::pair<std::string, langfield_type>> list();
+        std::vector<uint64_t> _get(std::string phrase, std::vector<uint64_t> languages);
+        std::vector<uint64_t> _getmatching(std::string phrase, bool match_prefixes, std::vector<uint64_t> languages);
+
+        std::vector<uint64_t> __get(std::string phrase, langfield_type langfield);
+        std::vector<uint64_t> __getmatching(std::string phrase, bool match_prefixes, langfield_type langfield);
+
+        std::shared_ptr<rocksdb::DB> db;
+};
+
+class JSRocksDBCache : public node::ObjectWrap {
+    public:
+        ~JSRocksDBCache();
+        static Nan::Persistent<v8::FunctionTemplate> constructor;
+        static void Initialize(v8::Handle<v8::Object> target);
+        static NAN_METHOD(New);
+        static NAN_METHOD(pack);
+        static NAN_METHOD(merge);
+        static NAN_METHOD(list);
+        static NAN_METHOD(_get);
+        static NAN_METHOD(_getmatching);
+        static NAN_METHOD(_set);
+        static NAN_METHOD(coalesce);
+        explicit JSRocksDBCache();
+        void _ref() { Ref(); }
+        void _unref() { Unref(); }
+
+        RocksDBCache cache;
 };
 
 void mergeQueue(uv_work_t* req);
 void mergeAfter(uv_work_t* req, int status);
 
-intarray __get(RocksDBCache const* c, std::string phrase, langfield_type langfield);
-intarray __getmatching(RocksDBCache const* c, std::string phrase, bool match_prefixes, langfield_type langfield);
+intarray __get(JSRocksDBCache* c, std::string phrase, langfield_type langfield);
+intarray __getmatching(JSRocksDBCache* c, std::string phrase, bool match_prefixes, langfield_type langfield);
 
 } // namespace carmen
 

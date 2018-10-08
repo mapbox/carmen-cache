@@ -8,14 +8,14 @@ using namespace v8;
 
 /**
  *
- * @class RocksDBCache
+ * @class JSRocksDBCache
  *
  */
 
-Nan::Persistent<FunctionTemplate> RocksDBCache::constructor;
+Nan::Persistent<FunctionTemplate> JSRocksDBCache::constructor;
 
-intarray __get(RocksDBCache const* c, std::string phrase, langfield_type langfield) {
-    std::shared_ptr<rocksdb::DB> db = c->db;
+intarray RocksDBCache::__get(std::string phrase, langfield_type langfield) {
+    std::shared_ptr<rocksdb::DB> db = this->db;
     intarray array;
 
     add_langfield(phrase, langfield);
@@ -28,7 +28,13 @@ intarray __get(RocksDBCache const* c, std::string phrase, langfield_type langfie
     return array;
 }
 
-intarray __getmatching(RocksDBCache const* c, std::string phrase, bool match_prefixes, langfield_type langfield) {
+// temporary, to make the signatures of the rocksdb and memory cache versions match
+intarray __get(JSRocksDBCache* jsc, std::string phrase, langfield_type langfield) {
+    return jsc->cache.__get(phrase, langfield);
+}
+
+
+intarray RocksDBCache::__getmatching(std::string phrase, bool match_prefixes, langfield_type langfield) {
     intarray array;
 
     if (!match_prefixes) phrase.push_back(LANGFIELD_SEPARATOR);
@@ -49,7 +55,7 @@ intarray __getmatching(RocksDBCache const* c, std::string phrase, bool match_pre
 
     radix_max_heap::pair_radix_max_heap<uint64_t, size_t> rh;
 
-    std::shared_ptr<rocksdb::DB> db = c->db;
+    std::shared_ptr<rocksdb::DB> db = this->db;
 
     std::unique_ptr<rocksdb::Iterator> rit(db->NewIterator(rocksdb::ReadOptions()));
     for (rit->Seek(phrase); rit->Valid() && rit->key().ToString().compare(0, phrase.size(), phrase) == 0; rit->Next()) {
@@ -110,13 +116,18 @@ intarray __getmatching(RocksDBCache const* c, std::string phrase, bool match_pre
     return array;
 }
 
-void RocksDBCache::Initialize(Handle<Object> target) {
+// temporary, to make the signatures of the rocksdb and memory cache versions match
+intarray __getmatching(JSRocksDBCache* jsc, std::string phrase, bool match_prefixes, langfield_type langfield) {
+    return jsc->cache.__getmatching(phrase, match_prefixes, langfield);
+}
+
+void JSRocksDBCache::Initialize(Handle<Object> target) {
     Nan::HandleScope scope;
-    Local<FunctionTemplate> t = Nan::New<FunctionTemplate>(RocksDBCache::New);
+    Local<FunctionTemplate> t = Nan::New<FunctionTemplate>(JSRocksDBCache::New);
     t->InstanceTemplate()->SetInternalFieldCount(1);
-    t->SetClassName(Nan::New("RocksDBCache").ToLocalChecked());
-    Nan::SetPrototypeMethod(t, "pack", RocksDBCache::pack);
-    Nan::SetPrototypeMethod(t, "list", RocksDBCache::list);
+    t->SetClassName(Nan::New("JSRocksDBCache").ToLocalChecked());
+    Nan::SetPrototypeMethod(t, "pack", JSRocksDBCache::pack);
+    Nan::SetPrototypeMethod(t, "list", JSRocksDBCache::list);
     Nan::SetPrototypeMethod(t, "_get", _get);
     Nan::SetPrototypeMethod(t, "_getMatching", _getmatching);
     Nan::SetMethod(t, "merge", merge);
@@ -124,28 +135,33 @@ void RocksDBCache::Initialize(Handle<Object> target) {
     constructor.Reset(t);
 }
 
-RocksDBCache::RocksDBCache()
-    : ObjectWrap(),
+RocksDBCache::RocksDBCache() :
       db() {}
 
 RocksDBCache::~RocksDBCache() {}
 
+JSRocksDBCache::JSRocksDBCache()
+    : ObjectWrap(),
+      cache() {}
+
+JSRocksDBCache::~JSRocksDBCache() {}
+
 /**
- * Writes an identical copy RocksDBCache from another RocksDBCache; not really used
+ * Writes an identical copy JSRocksDBCache from another JSRocksDBCache; not really used
  *
  * @name pack
- * @memberof RocksDBCache
+ * @memberof JSRocksDBCache
  * @param {String}, filename
  * @returns {Boolean}
  * @example
  * const cache = require('@mapbox/carmen-cache');
- * const RocksDBCache = new cache.RocksDBCache('a');
+ * const JSRocksDBCache = new cache.JSRocksDBCache('a');
  *
  * cache.pack('filename');
  *
  */
 
-NAN_METHOD(RocksDBCache::pack) {
+NAN_METHOD(JSRocksDBCache::pack) {
     if (info.Length() < 1) {
         return Nan::ThrowTypeError("expected one info: 'filename'");
     }
@@ -159,34 +175,41 @@ NAN_METHOD(RocksDBCache::pack) {
         }
         std::string filename(*utf8_filename);
 
-        RocksDBCache* c = node::ObjectWrap::Unwrap<RocksDBCache>(info.This());
+        RocksDBCache* c = &(node::ObjectWrap::Unwrap<JSRocksDBCache>(info.This())->cache);
 
         if (c->db && c->db->GetName() == filename) {
             return Nan::ThrowTypeError("rocksdb file is already loaded read-only; unload first");
         } else {
-            std::shared_ptr<rocksdb::DB> existing = c->db;
-
-            std::unique_ptr<rocksdb::DB> db;
-            rocksdb::Options options;
-            options.create_if_missing = true;
-            rocksdb::Status status = OpenDB(options, filename, db);
-
-            if (!status.ok()) {
-                return Nan::ThrowTypeError("unable to open rocksdb file for packing");
-            }
-
-            // if what we have now is already a rocksdb, and it's a different
-            // one from what we're being asked to pack into, copy from one to the other
-            std::unique_ptr<rocksdb::Iterator> existingIt(existing->NewIterator(rocksdb::ReadOptions()));
-            for (existingIt->SeekToFirst(); existingIt->Valid(); existingIt->Next()) {
-                db->Put(rocksdb::WriteOptions(), existingIt->key(), existingIt->value());
-            }
+            c->pack(filename);
         }
         info.GetReturnValue().Set(true);
         return;
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
     }
+}
+
+bool RocksDBCache::pack(std::string filename) {
+    std::shared_ptr<rocksdb::DB> existing = this->db;
+
+    std::unique_ptr<rocksdb::DB> db;
+    rocksdb::Options options;
+    options.create_if_missing = true;
+    rocksdb::Status status = OpenDB(options, filename, db);
+
+    // TODO: figure out how to bubble this
+    // if (!status.ok()) {
+    //     return Nan::ThrowTypeError("unable to open rocksdb file for packing");
+    // }
+
+    // if what we have now is already a rocksdb, and it's a different
+    // one from what we're being asked to pack into, copy from one to the other
+    std::unique_ptr<rocksdb::Iterator> existingIt(existing->NewIterator(rocksdb::ReadOptions()));
+    for (existingIt->SeekToFirst(); existingIt->Valid(); existingIt->Next()) {
+        db->Put(rocksdb::WriteOptions(), existingIt->key(), existingIt->value());
+    }
+
+    return true;
 }
 
 // Used in merge() to queue files for merging; result is undefined
@@ -421,34 +444,34 @@ void mergeAfter(uv_work_t* req, int status) {
  * Retrieves data exactly matching phrase and language settings by id
  *
  * @name get
- * @memberof RocksDBCache
+ * @memberof JSRocksDBCache
  * @param {String} id
  * @param {Boolean} matches_prefixes: T if it matches exactly, F: if it does not
  * @param {Array} optional; array of languages
  * @returns {Array} integers referring to grids
  * @example
  * const cache = require('@mapbox/carmen-cache');
- * const RocksDBCache = new cache.RocksDBCache('a');
+ * const JSRocksDBCache = new cache.JSRocksDBCache('a');
  *
- * RocksDBCache.get(id, languages);
+ * JSRocksDBCache.get(id, languages);
  *  // => [grid, grid, grid, grid... ]
  *
  */
 
-NAN_METHOD(RocksDBCache::_get) {
-    return _genericget<RocksDBCache>(info);
+NAN_METHOD(JSRocksDBCache::_get) {
+    return _genericget<JSRocksDBCache>(info);
 }
 
 /**
- * lists the keys in the RocksDBCache object
+ * lists the keys in the JSRocksDBCache object
  *
  * @name list
- * @memberof RocksDBCache
+ * @memberof JSRocksDBCache
  * @param {String} id
  * @returns {Array} Set of keys/ids
  * @example
  * const cache = require('@mapbox/carmen-cache');
- * const RocksDBCache = new cache.RocksDBCache('a');
+ * const JSRocksDBCache = new cache.JSRocksDBCache('a');
  *
  * cache.list('a', (err, result) => {
  *    if (err) throw err;
@@ -457,23 +480,36 @@ NAN_METHOD(RocksDBCache::_get) {
  *
  */
 
-NAN_METHOD(RocksDBCache::list) {
+std::vector<std::pair<std::string, langfield_type>> RocksDBCache::list() {
+    std::shared_ptr<rocksdb::DB> db = this->db;
+
+    std::unique_ptr<rocksdb::Iterator> it(db->NewIterator(rocksdb::ReadOptions()));
+    std::vector<std::pair<std::string, langfield_type>> out;
+    for (it->SeekToFirst(); it->Valid(); it->Next()) {
+        std::string key_id = it->key().ToString();
+        if (key_id.at(0) == '=') continue;
+
+        std::string phrase = key_id.substr(0, key_id.find(LANGFIELD_SEPARATOR));
+        langfield_type langfield = extract_langfield(key_id);
+
+        out.emplace_back(phrase, langfield);
+    }
+    return out;
+}
+
+NAN_METHOD(JSRocksDBCache::list) {
     try {
-        RocksDBCache* c = node::ObjectWrap::Unwrap<RocksDBCache>(info.This());
+        RocksDBCache* c = &(node::ObjectWrap::Unwrap<JSRocksDBCache>(info.This())->cache);
         Local<Array> ids = Nan::New<Array>();
 
-        std::shared_ptr<rocksdb::DB> db = c->db;
+        std::vector<std::pair<std::string, langfield_type>> results = c->list();
 
-        std::unique_ptr<rocksdb::Iterator> it(db->NewIterator(rocksdb::ReadOptions()));
         unsigned idx = 0;
-        for (it->SeekToFirst(); it->Valid(); it->Next()) {
-            std::string key_id = it->key().ToString();
-            if (key_id.at(0) == '=') continue;
-
+        for (auto const& tuple: results) {
             Local<Array> out = Nan::New<Array>();
-            out->Set(0, Nan::New(key_id.substr(0, key_id.find(LANGFIELD_SEPARATOR))).ToLocalChecked());
+            out->Set(0, Nan::New(tuple.first).ToLocalChecked());
 
-            langfield_type langfield = extract_langfield(key_id);
+            langfield_type langfield = tuple.second;
             if (langfield == ALL_LANGUAGES) {
                 out->Set(1, Nan::Null());
             } else {
@@ -491,19 +527,19 @@ NAN_METHOD(RocksDBCache::list) {
 }
 
 /**
- * merges the contents from 2 RocksDBCaches
+ * merges the contents from 2 JSRocksDBCaches
  *
  * @name merge
- * @memberof RocksDBCache
- * @param {String} RocksDBCache file 1
- * @param {String} RocksDBCache file 2
- * @param {String} result RocksDBCache file
+ * @memberof JSRocksDBCache
+ * @param {String} JSRocksDBCache file 1
+ * @param {String} JSRocksDBCache file 2
+ * @param {String} result JSRocksDBCache file
  * @param {String} method which is either concat or freq
  * @param {Function} callback called from the mergeAfter method
  * @returns {Set} Set of ids
  * @example
  * const cache = require('@mapbox/carmen-cache');
- * const RocksDBCache = new cache.RocksDBCache('a');
+ * const JSRocksDBCache = new cache.JSRocksDBCache('a');
  *
  * cache.merge('file1', 'file2', 'resultFile', 'method', (err, result) => {
  *    if (err) throw err;
@@ -512,7 +548,7 @@ NAN_METHOD(RocksDBCache::list) {
  *
  */
 
-NAN_METHOD(RocksDBCache::merge) {
+NAN_METHOD(JSRocksDBCache::merge) {
     if (!info[0]->IsString()) return Nan::ThrowTypeError("argument 1 must be a String (infile 1)");
     if (!info[1]->IsString()) return Nan::ThrowTypeError("argument 2 must be a String (infile 2)");
     if (!info[2]->IsString()) return Nan::ThrowTypeError("argument 3 must be a String (outfile)");
@@ -541,18 +577,30 @@ NAN_METHOD(RocksDBCache::merge) {
 * Creates an in-memory key-value store mapping phrases  and language IDs
 * to lists of corresponding grids (grids ie are integer representations of occurrences of the phrase within an index)
 *
- * @name RocksDBCache
- * @memberof RocksDBCache
+ * @name JSRocksDBCache
+ * @memberof JSRocksDBCache
  * @param {String} id
  * @param {String} filename
  * @returns {Object}
  * @example
  * const cache = require('@mapbox/carmen-cache');
- * const RocksDBCache = new cache.RocksDBCache('a', 'filename');
+ * const JSRocksDBCache = new cache.JSRocksDBCache('a', 'filename');
  *
  */
 
-NAN_METHOD(RocksDBCache::New) {
+RocksDBCache::RocksDBCache(std::string filename) {
+    std::unique_ptr<rocksdb::DB> db;
+    rocksdb::Options options;
+    options.create_if_missing = true;
+    rocksdb::Status status = OpenForReadOnlyDB(options, filename, db);
+
+    if (!status.ok()) {
+        throw std::invalid_argument("unable to open rocksdb file for loading");
+    }
+    this->db = std::move(db);
+}
+
+NAN_METHOD(JSRocksDBCache::New) {
     if (!info.IsConstructCall()) {
         return Nan::ThrowTypeError("Cannot call constructor as function, you need to use 'new' keyword");
     }
@@ -573,16 +621,8 @@ NAN_METHOD(RocksDBCache::New) {
         }
         std::string filename(*utf8_filename);
 
-        std::unique_ptr<rocksdb::DB> db;
-        rocksdb::Options options;
-        options.create_if_missing = true;
-        rocksdb::Status status = OpenForReadOnlyDB(options, filename, db);
-
-        if (!status.ok()) {
-            return Nan::ThrowTypeError("unable to open rocksdb file for loading");
-        }
-        RocksDBCache* im = new RocksDBCache();
-        im->db = std::move(db);
+        JSRocksDBCache* im = new JSRocksDBCache();
+        im->cache = RocksDBCache(filename);
         im->Wrap(info.This());
         info.This()->Set(Nan::New("id").ToLocalChecked(), info[0]);
         info.GetReturnValue().Set(info.This());
@@ -596,22 +636,22 @@ NAN_METHOD(RocksDBCache::New) {
  * Retrieves grid that at least partially matches phrase and/or language inputs
  *
  * @name get
- * @memberof RocksDBCache
+ * @memberof JSRocksDBCache
  * @param {String} id
  * @param {Boolean} matches_prefixes: T if it matches exactly, F: if it does not
  * @param {Array} optional; array of languages
  * @returns {Array} integers referring to grids
  * @example
  * const cache = require('@mapbox/carmen-cache');
- * const RocksDBCache = new cache.RocksDBCache('a');
+ * const JSRocksDBCache = new cache.JSRocksDBCache('a');
  *
- * RocksDBCache.get(id, languages);
+ * JSRocksDBCache.get(id, languages);
  *  // => [grid, grid, grid, grid... ]
  *
  */
 
-NAN_METHOD(RocksDBCache::_getmatching) {
-    return _genericgetmatching<RocksDBCache>(info);
+NAN_METHOD(JSRocksDBCache::_getmatching) {
+    return _genericgetmatching<JSRocksDBCache>(info);
 }
 
 } // namespace carmen

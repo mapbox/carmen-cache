@@ -220,7 +220,7 @@ NAN_METHOD(coalesce) {
                     return Nan::ThrowTypeError("cache value must be a Cache object");
                 }
                 bool isMemoryCache = Nan::New(MemoryCache::constructor)->HasInstance(prop_val);
-                bool isRocksDBCache = Nan::New(RocksDBCache::constructor)->HasInstance(prop_val);
+                bool isRocksDBCache = Nan::New(JSRocksDBCache::constructor)->HasInstance(prop_val);
                 if (!(isMemoryCache || isRocksDBCache)) {
                     return Nan::ThrowTypeError("cache value must be a MemoryCache or RocksDBCache object");
                 }
@@ -237,7 +237,7 @@ NAN_METHOD(coalesce) {
                         langfield);
                 } else {
                     baton->stack.emplace_back(
-                        static_cast<void*>(node::ObjectWrap::Unwrap<RocksDBCache>(_cache)),
+                        static_cast<void*>(node::ObjectWrap::Unwrap<JSRocksDBCache>(_cache)),
                         TYPE_ROCKSDB,
                         weight,
                         phrase,
@@ -321,7 +321,7 @@ NAN_METHOD(coalesce) {
             if (subq.type == TYPE_MEMORY)
                 reinterpret_cast<MemoryCache*>(subq.cache)->_ref();
             else
-                reinterpret_cast<RocksDBCache*>(subq.cache)->_ref();
+                reinterpret_cast<JSRocksDBCache*>(subq.cache)->_ref();
         }
         // optimization: for stacks of 1, use coalesceSingle
         if (baton->stack.size() == 1) {
@@ -383,7 +383,7 @@ void coalesceSingle(uv_work_t* req) {
 
         // Load and concatenate grids for all ids in `phrases`
         intarray grids;
-        grids = subq.type == TYPE_MEMORY ? __getmatching(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, subq.prefix, subq.langfield) : __getmatching(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, subq.prefix, subq.langfield);
+        grids = subq.type == TYPE_MEMORY ? __getmatching(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, subq.prefix, subq.langfield) : __getmatching(reinterpret_cast<JSRocksDBCache*>(subq.cache), subq.phrase, subq.prefix, subq.langfield);
 
         unsigned long m = grids.size();
         double relevMax = 0;
@@ -534,7 +534,7 @@ void coalesceMulti(uv_work_t* req) {
         for (auto const& subq : stack) {
             // Load and concatenate grids for all ids in `phrases`
             intarray grids;
-            grids = subq.type == TYPE_MEMORY ? __getmatching(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, subq.prefix, subq.langfield) : __getmatching(reinterpret_cast<RocksDBCache*>(subq.cache), subq.phrase, subq.prefix, subq.langfield);
+            grids = subq.type == TYPE_MEMORY ? __getmatching(reinterpret_cast<MemoryCache*>(subq.cache), subq.phrase, subq.prefix, subq.langfield) : __getmatching(reinterpret_cast<JSRocksDBCache*>(subq.cache), subq.phrase, subq.prefix, subq.langfield);
 
             bool first = i == 0;
             bool last = i == (stack.size() - 1);
@@ -664,7 +664,7 @@ void coalesceAfter(uv_work_t* req, int status) {
         if (subq.type == TYPE_MEMORY)
             reinterpret_cast<MemoryCache*>(subq.cache)->_unref();
         else
-            reinterpret_cast<RocksDBCache*>(subq.cache)->_unref();
+            reinterpret_cast<JSRocksDBCache*>(subq.cache)->_unref();
     }
 
     if (!baton->error.empty()) {
