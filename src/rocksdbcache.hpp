@@ -2,7 +2,12 @@
 #define __CARMEN_ROCKSDBCACHE_HPP__
 
 #include "cpp_util.hpp"
-#include "node_util.hpp"
+
+// this is an external library, so squash this warning
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#include "radix_max_heap.h"
+#pragma clang diagnostic pop
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunknown-pragmas"
@@ -111,37 +116,8 @@ class RocksDBCache {
         std::shared_ptr<rocksdb::DB> db;
 };
 
-template <class T>
-class JSCache : public node::ObjectWrap {
-    public:
-        ~JSCache<T>();
-        static Nan::Persistent<v8::FunctionTemplate> constructor;
-        static void Initialize(v8::Handle<v8::Object> target);
-        static NAN_METHOD(New);
-        static NAN_METHOD(pack);
-        static NAN_METHOD(merge);
-        static NAN_METHOD(list);
-        static NAN_METHOD(_get);
-        static NAN_METHOD(_getmatching);
-        static NAN_METHOD(_set);
-        static NAN_METHOD(coalesce);
-        explicit JSCache();
-        void _ref() { Ref(); }
-        void _unref() { Unref(); }
-
-        T cache;
-};
-
-template <>
-NAN_METHOD(JSCache<RocksDBCache>::merge);
-
-using JSRocksDBCache = JSCache<RocksDBCache>;
-
 void mergeQueue(uv_work_t* req);
 void mergeAfter(uv_work_t* req, int status);
-
-intarray __get(JSRocksDBCache* c, std::string phrase, langfield_type langfield);
-intarray __getmatching(JSRocksDBCache* c, std::string phrase, bool match_prefixes, langfield_type langfield);
 
 } // namespace carmen
 
