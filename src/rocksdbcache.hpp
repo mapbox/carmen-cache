@@ -111,9 +111,10 @@ class RocksDBCache {
         std::shared_ptr<rocksdb::DB> db;
 };
 
-class JSRocksDBCache : public node::ObjectWrap {
+template <class T>
+class JSCache : public node::ObjectWrap {
     public:
-        ~JSRocksDBCache();
+        ~JSCache<T>();
         static Nan::Persistent<v8::FunctionTemplate> constructor;
         static void Initialize(v8::Handle<v8::Object> target);
         static NAN_METHOD(New);
@@ -124,12 +125,17 @@ class JSRocksDBCache : public node::ObjectWrap {
         static NAN_METHOD(_getmatching);
         static NAN_METHOD(_set);
         static NAN_METHOD(coalesce);
-        explicit JSRocksDBCache();
+        explicit JSCache();
         void _ref() { Ref(); }
         void _unref() { Unref(); }
 
-        RocksDBCache cache;
+        T cache;
 };
+
+template <>
+NAN_METHOD(JSCache<RocksDBCache>::merge);
+
+using JSRocksDBCache = JSCache<RocksDBCache>;
 
 void mergeQueue(uv_work_t* req);
 void mergeAfter(uv_work_t* req, int status);

@@ -8,11 +8,12 @@ using namespace v8;
 
 /**
  *
- * @class JSRocksDBCache
+ * @class JSCache
  *
  */
 
-Nan::Persistent<FunctionTemplate> JSRocksDBCache::constructor;
+template <class T>
+Nan::Persistent<FunctionTemplate> JSCache<T>::constructor;
 
 intarray RocksDBCache::__get(std::string phrase, langfield_type langfield) {
     std::shared_ptr<rocksdb::DB> db = this->db;
@@ -121,9 +122,10 @@ intarray __getmatching(JSRocksDBCache* jsc, std::string phrase, bool match_prefi
     return jsc->cache.__getmatching(phrase, match_prefixes, langfield);
 }
 
-void JSRocksDBCache::Initialize(Handle<Object> target) {
+template <>
+void JSCache<RocksDBCache>::Initialize(Handle<Object> target) {
     Nan::HandleScope scope;
-    Local<FunctionTemplate> t = Nan::New<FunctionTemplate>(JSRocksDBCache::New);
+    Local<FunctionTemplate> t = Nan::New<FunctionTemplate>(JSCache::New);
     t->InstanceTemplate()->SetInternalFieldCount(1);
     t->SetClassName(Nan::New("JSRocksDBCache").ToLocalChecked());
     Nan::SetPrototypeMethod(t, "pack", JSRocksDBCache::pack);
@@ -140,28 +142,31 @@ RocksDBCache::RocksDBCache() :
 
 RocksDBCache::~RocksDBCache() {}
 
-JSRocksDBCache::JSRocksDBCache()
+template <class T>
+JSCache<T>::JSCache()
     : ObjectWrap(),
       cache() {}
 
-JSRocksDBCache::~JSRocksDBCache() {}
+template <class T>
+JSCache<T>::~JSCache() {}
 
 /**
- * Writes an identical copy JSRocksDBCache from another JSRocksDBCache; not really used
+ * Writes an identical copy JSCache from another JSCache; not really used
  *
  * @name pack
- * @memberof JSRocksDBCache
+ * @memberof JSCache
  * @param {String}, filename
  * @returns {Boolean}
  * @example
  * const cache = require('@mapbox/carmen-cache');
- * const JSRocksDBCache = new cache.JSRocksDBCache('a');
+ * const JSCache = new cache.JSCache('a');
  *
  * cache.pack('filename');
  *
  */
 
-NAN_METHOD(JSRocksDBCache::pack) {
+template <class T>
+NAN_METHOD(JSCache<T>::pack) {
     if (info.Length() < 1) {
         return Nan::ThrowTypeError("expected one info: 'filename'");
     }
@@ -175,7 +180,7 @@ NAN_METHOD(JSRocksDBCache::pack) {
         }
         std::string filename(*utf8_filename);
 
-        RocksDBCache* c = &(node::ObjectWrap::Unwrap<JSRocksDBCache>(info.This())->cache);
+        T* c = &(node::ObjectWrap::Unwrap<JSCache<T>>(info.This())->cache);
 
         if (c->db && c->db->GetName() == filename) {
             return Nan::ThrowTypeError("rocksdb file is already loaded read-only; unload first");
@@ -444,34 +449,35 @@ void mergeAfter(uv_work_t* req, int status) {
  * Retrieves data exactly matching phrase and language settings by id
  *
  * @name get
- * @memberof JSRocksDBCache
+ * @memberof JSCache
  * @param {String} id
  * @param {Boolean} matches_prefixes: T if it matches exactly, F: if it does not
  * @param {Array} optional; array of languages
  * @returns {Array} integers referring to grids
  * @example
  * const cache = require('@mapbox/carmen-cache');
- * const JSRocksDBCache = new cache.JSRocksDBCache('a');
+ * const JSCache = new cache.JSCache('a');
  *
- * JSRocksDBCache.get(id, languages);
+ * JSCache.get(id, languages);
  *  // => [grid, grid, grid, grid... ]
  *
  */
 
-NAN_METHOD(JSRocksDBCache::_get) {
-    return _genericget<JSRocksDBCache>(info);
+template <class T>
+NAN_METHOD(JSCache<T>::_get) {
+    return _genericget<JSCache>(info);
 }
 
 /**
- * lists the keys in the JSRocksDBCache object
+ * lists the keys in the JSCache object
  *
  * @name list
- * @memberof JSRocksDBCache
+ * @memberof JSCache
  * @param {String} id
  * @returns {Array} Set of keys/ids
  * @example
  * const cache = require('@mapbox/carmen-cache');
- * const JSRocksDBCache = new cache.JSRocksDBCache('a');
+ * const JSCache = new cache.JSCache('a');
  *
  * cache.list('a', (err, result) => {
  *    if (err) throw err;
@@ -497,9 +503,10 @@ std::vector<std::pair<std::string, langfield_type>> RocksDBCache::list() {
     return out;
 }
 
-NAN_METHOD(JSRocksDBCache::list) {
+template <class T>
+NAN_METHOD(JSCache<T>::list) {
     try {
-        RocksDBCache* c = &(node::ObjectWrap::Unwrap<JSRocksDBCache>(info.This())->cache);
+        T* c = &(node::ObjectWrap::Unwrap<JSCache<T>>(info.This())->cache);
         Local<Array> ids = Nan::New<Array>();
 
         std::vector<std::pair<std::string, langfield_type>> results = c->list();
@@ -527,19 +534,19 @@ NAN_METHOD(JSRocksDBCache::list) {
 }
 
 /**
- * merges the contents from 2 JSRocksDBCaches
+ * merges the contents from 2 JSCaches
  *
  * @name merge
- * @memberof JSRocksDBCache
- * @param {String} JSRocksDBCache file 1
- * @param {String} JSRocksDBCache file 2
- * @param {String} result JSRocksDBCache file
+ * @memberof JSCache
+ * @param {String} JSCache file 1
+ * @param {String} JSCache file 2
+ * @param {String} result JSCache file
  * @param {String} method which is either concat or freq
  * @param {Function} callback called from the mergeAfter method
  * @returns {Set} Set of ids
  * @example
  * const cache = require('@mapbox/carmen-cache');
- * const JSRocksDBCache = new cache.JSRocksDBCache('a');
+ * const JSCache = new cache.JSCache('a');
  *
  * cache.merge('file1', 'file2', 'resultFile', 'method', (err, result) => {
  *    if (err) throw err;
@@ -548,7 +555,8 @@ NAN_METHOD(JSRocksDBCache::list) {
  *
  */
 
-NAN_METHOD(JSRocksDBCache::merge) {
+template <>
+NAN_METHOD(JSCache<RocksDBCache>::merge) {
     if (!info[0]->IsString()) return Nan::ThrowTypeError("argument 1 must be a String (infile 1)");
     if (!info[1]->IsString()) return Nan::ThrowTypeError("argument 2 must be a String (infile 2)");
     if (!info[2]->IsString()) return Nan::ThrowTypeError("argument 3 must be a String (outfile)");
@@ -577,14 +585,14 @@ NAN_METHOD(JSRocksDBCache::merge) {
 * Creates an in-memory key-value store mapping phrases  and language IDs
 * to lists of corresponding grids (grids ie are integer representations of occurrences of the phrase within an index)
 *
- * @name JSRocksDBCache
- * @memberof JSRocksDBCache
+ * @name JSCache
+ * @memberof JSCache
  * @param {String} id
  * @param {String} filename
  * @returns {Object}
  * @example
  * const cache = require('@mapbox/carmen-cache');
- * const JSRocksDBCache = new cache.JSRocksDBCache('a', 'filename');
+ * const JSCache = new cache.JSCache('a', 'filename');
  *
  */
 
@@ -600,7 +608,8 @@ RocksDBCache::RocksDBCache(std::string filename) {
     this->db = std::move(db);
 }
 
-NAN_METHOD(JSRocksDBCache::New) {
+template <class T>
+NAN_METHOD(JSCache<T>::New) {
     if (!info.IsConstructCall()) {
         return Nan::ThrowTypeError("Cannot call constructor as function, you need to use 'new' keyword");
     }
@@ -621,8 +630,8 @@ NAN_METHOD(JSRocksDBCache::New) {
         }
         std::string filename(*utf8_filename);
 
-        JSRocksDBCache* im = new JSRocksDBCache();
-        im->cache = RocksDBCache(filename);
+        JSCache<T>* im = new JSCache<T>();
+        im->cache = T(filename);
         im->Wrap(info.This());
         info.This()->Set(Nan::New("id").ToLocalChecked(), info[0]);
         info.GetReturnValue().Set(info.This());
@@ -636,22 +645,23 @@ NAN_METHOD(JSRocksDBCache::New) {
  * Retrieves grid that at least partially matches phrase and/or language inputs
  *
  * @name get
- * @memberof JSRocksDBCache
+ * @memberof JSCache
  * @param {String} id
  * @param {Boolean} matches_prefixes: T if it matches exactly, F: if it does not
  * @param {Array} optional; array of languages
  * @returns {Array} integers referring to grids
  * @example
  * const cache = require('@mapbox/carmen-cache');
- * const JSRocksDBCache = new cache.JSRocksDBCache('a');
+ * const JSCache = new cache.JSCache('a');
  *
- * JSRocksDBCache.get(id, languages);
+ * JSCache.get(id, languages);
  *  // => [grid, grid, grid, grid... ]
  *
  */
 
-NAN_METHOD(JSRocksDBCache::_getmatching) {
-    return _genericgetmatching<JSRocksDBCache>(info);
+template <class T>
+NAN_METHOD(JSCache<T>::_getmatching) {
+    return _genericgetmatching<JSCache>(info);
 }
 
 } // namespace carmen
