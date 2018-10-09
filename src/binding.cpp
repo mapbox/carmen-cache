@@ -31,7 +31,6 @@ void JSCache<RocksDBCache>::Initialize(Handle<Object> target) {
     Nan::SetPrototypeMethod(t, "list", JSRocksDBCache::list);
     Nan::SetPrototypeMethod(t, "_get", _get);
     Nan::SetPrototypeMethod(t, "_getMatching", _getmatching);
-    Nan::SetMethod(t, "merge", merge);
     target->Set(Nan::New("RocksDBCache").ToLocalChecked(), t->GetFunction());
     constructor.Reset(t);
 }
@@ -149,54 +148,6 @@ NAN_METHOD(JSCache<T>::list) {
     } catch (std::exception const& ex) {
         return Nan::ThrowTypeError(ex.what());
     }
-}
-
-/**
- * merges the contents from 2 JSCaches
- *
- * @name merge
- * @memberof JSCache
- * @param {String} JSCache file 1
- * @param {String} JSCache file 2
- * @param {String} result JSCache file
- * @param {String} method which is either concat or freq
- * @param {Function} callback called from the mergeAfter method
- * @returns {Set} Set of ids
- * @example
- * const cache = require('@mapbox/carmen-cache');
- * const JSCache = new cache.JSCache('a');
- *
- * cache.merge('file1', 'file2', 'resultFile', 'method', (err, result) => {
- *    if (err) throw err;
- *    console.log(result);
- * });
- *
- */
-
-template <>
-NAN_METHOD(JSCache<RocksDBCache>::merge) {
-    if (!info[0]->IsString()) return Nan::ThrowTypeError("argument 1 must be a String (infile 1)");
-    if (!info[1]->IsString()) return Nan::ThrowTypeError("argument 2 must be a String (infile 2)");
-    if (!info[2]->IsString()) return Nan::ThrowTypeError("argument 3 must be a String (outfile)");
-    if (!info[3]->IsString()) return Nan::ThrowTypeError("argument 4 must be a String (method)");
-    if (!info[4]->IsFunction()) return Nan::ThrowTypeError("argument 5 must be a callback function");
-
-    std::string in1 = *Nan::Utf8String(info[0]->ToString());
-    std::string in2 = *Nan::Utf8String(info[1]->ToString());
-    std::string out = *Nan::Utf8String(info[2]->ToString());
-    Local<Value> callback = info[4];
-    std::string method = *Nan::Utf8String(info[3]->ToString());
-
-    MergeBaton* baton = new MergeBaton();
-    baton->filename1 = in1;
-    baton->filename2 = in2;
-    baton->filename3 = out;
-    baton->method = method;
-    baton->callback.Reset(callback.As<Function>());
-    baton->request.data = baton;
-    uv_queue_work(uv_default_loop(), &baton->request, mergeQueue, static_cast<uv_after_work_cb>(mergeAfter));
-    info.GetReturnValue().Set(Nan::Undefined());
-    return;
 }
 
 /**

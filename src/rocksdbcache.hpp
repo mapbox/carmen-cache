@@ -48,16 +48,6 @@ struct sortableGrid {
     sortableGrid(sortableGrid&& c) = default;
 };
 
-struct MergeBaton : carmen::noncopyable {
-    uv_work_t request;
-    std::string filename1;
-    std::string filename2;
-    std::string filename3;
-    std::string method;
-    std::string error;
-    Nan::Persistent<v8::Function> callback;
-};
-
 inline void decodeMessage(std::string const& message, intarray& array) {
     protozero::pbf_reader item(message);
     item.next(CACHE_ITEM);
@@ -108,9 +98,6 @@ class RocksDBCache {
 
         std::shared_ptr<rocksdb::DB> db;
 };
-
-void mergeQueue(uv_work_t* req);
-void mergeAfter(uv_work_t* req, int status);
 
 } // namespace carmen
 

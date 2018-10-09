@@ -19,7 +19,6 @@ class JSCache : public node::ObjectWrap {
         static void Initialize(v8::Handle<v8::Object> target);
         static NAN_METHOD(New);
         static NAN_METHOD(pack);
-        static NAN_METHOD(merge);
         static NAN_METHOD(list);
         static NAN_METHOD(_get);
         static NAN_METHOD(_getmatching);
@@ -39,9 +38,6 @@ template <>
 NAN_METHOD(JSCache<carmen::RocksDBCache>::New);
 template <>
 NAN_METHOD(JSCache<carmen::MemoryCache>::New);
-
-template <>
-NAN_METHOD(JSCache<carmen::RocksDBCache>::merge);
 
 template <>
 NAN_METHOD(JSCache<carmen::MemoryCache>::_set);
