@@ -129,7 +129,7 @@ NAN_METHOD(JSCache<T>::list) {
         std::vector<std::pair<std::string, langfield_type>> results = c->list();
 
         unsigned idx = 0;
-        for (auto const& tuple: results) {
+        for (auto const& tuple : results) {
             Local<Array> out = Nan::New<Array>();
             out->Set(0, Nan::New(tuple.first).ToLocalChecked());
 
@@ -198,7 +198,6 @@ NAN_METHOD(JSCache<RocksDBCache>::New) {
     }
 }
 
-
 /**
  * Creates an in-memory key-value store mapping phrases  and language IDs
  * to lists of corresponding grids (grids ie are integer representations of occurrences of the phrase within an index)
@@ -237,7 +236,7 @@ NAN_METHOD(JSCache<MemoryCache>::New) {
     }
 }
 
- /**
+/**
   * Retrieves data exactly matching phrase and language settings by id
   *
   * @name get
@@ -255,49 +254,49 @@ NAN_METHOD(JSCache<MemoryCache>::New) {
   *
   */
 
- template <class T>
- NAN_METHOD(JSCache<T>::_get) {
-     if (info.Length() < 1) {
-         return Nan::ThrowTypeError("expected at least one info: id, [languages]");
-     }
-     if (!info[0]->IsString()) {
-         return Nan::ThrowTypeError("first arg must be a String");
-     }
-     try {
-         Nan::Utf8String utf8_id(info[0]);
-         if (utf8_id.length() < 1) {
-             return Nan::ThrowTypeError("first arg must be a String");
-         }
-         std::string id(*utf8_id);
+template <class T>
+NAN_METHOD(JSCache<T>::_get) {
+    if (info.Length() < 1) {
+        return Nan::ThrowTypeError("expected at least one info: id, [languages]");
+    }
+    if (!info[0]->IsString()) {
+        return Nan::ThrowTypeError("first arg must be a String");
+    }
+    try {
+        Nan::Utf8String utf8_id(info[0]);
+        if (utf8_id.length() < 1) {
+            return Nan::ThrowTypeError("first arg must be a String");
+        }
+        std::string id(*utf8_id);
 
-         langfield_type langfield;
-         if (info.Length() > 1 && !(info[1]->IsNull() || info[1]->IsUndefined())) {
-             if (!info[1]->IsArray()) {
-                 return Nan::ThrowTypeError("second arg, if supplied must be an Array");
-             }
-             langfield = langarrayToLangfield(Local<Array>::Cast(info[1]));
-         } else {
-             langfield = ALL_LANGUAGES;
-         }
+        langfield_type langfield;
+        if (info.Length() > 1 && !(info[1]->IsNull() || info[1]->IsUndefined())) {
+            if (!info[1]->IsArray()) {
+                return Nan::ThrowTypeError("second arg, if supplied must be an Array");
+            }
+            langfield = langarrayToLangfield(Local<Array>::Cast(info[1]));
+        } else {
+            langfield = ALL_LANGUAGES;
+        }
 
-         T* c = &(node::ObjectWrap::Unwrap<JSCache<T>>(info.This())->cache);
-         intarray vector = c->__get(id, langfield);
-         if (!vector.empty()) {
-             std::size_t size = vector.size();
-             Local<Array> array = Nan::New<Array>(static_cast<int>(size));
-             for (uint32_t i = 0; i < size; ++i) {
-                 array->Set(i, Nan::New<Number>(vector[i]));
-             }
-             info.GetReturnValue().Set(array);
-             return;
-         } else {
-             info.GetReturnValue().Set(Nan::Undefined());
-             return;
-         }
-     } catch (std::exception const& ex) {
-         return Nan::ThrowTypeError(ex.what());
-     }
- }
+        T* c = &(node::ObjectWrap::Unwrap<JSCache<T>>(info.This())->cache);
+        intarray vector = c->__get(id, langfield);
+        if (!vector.empty()) {
+            std::size_t size = vector.size();
+            Local<Array> array = Nan::New<Array>(static_cast<int>(size));
+            for (uint32_t i = 0; i < size; ++i) {
+                array->Set(i, Nan::New<Number>(vector[i]));
+            }
+            info.GetReturnValue().Set(array);
+            return;
+        } else {
+            info.GetReturnValue().Set(Nan::Undefined());
+            return;
+        }
+    } catch (std::exception const& ex) {
+        return Nan::ThrowTypeError(ex.what());
+    }
+}
 
 /**
  * Retrieves grid that at least partially matches phrase and/or language inputs

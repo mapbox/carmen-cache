@@ -83,20 +83,20 @@ inline void decodeAndBoostMessage(std::string const& message, intarray& array) {
 }
 
 class RocksDBCache {
-    public:
-        RocksDBCache(std::string filename);
-        RocksDBCache();
-        ~RocksDBCache();
+  public:
+    RocksDBCache(std::string filename);
+    RocksDBCache();
+    ~RocksDBCache();
 
-        bool pack(std::string filename);
-        std::vector<std::pair<std::string, langfield_type>> list();
-        std::vector<uint64_t> _get(std::string phrase, std::vector<uint64_t> languages);
-        std::vector<uint64_t> _getmatching(std::string phrase, bool match_prefixes, std::vector<uint64_t> languages);
+    bool pack(std::string filename);
+    std::vector<std::pair<std::string, langfield_type>> list();
+    std::vector<uint64_t> _get(std::string phrase, std::vector<uint64_t> languages);
+    std::vector<uint64_t> _getmatching(std::string phrase, bool match_prefixes, std::vector<uint64_t> languages);
 
-        std::vector<uint64_t> __get(std::string phrase, langfield_type langfield);
-        std::vector<uint64_t> __getmatching(std::string phrase, bool match_prefixes, langfield_type langfield);
+    std::vector<uint64_t> __get(std::string phrase, langfield_type langfield);
+    std::vector<uint64_t> __getmatching(std::string phrase, bool match_prefixes, langfield_type langfield);
 
-        std::shared_ptr<rocksdb::DB> db;
+    std::shared_ptr<rocksdb::DB> db;
 };
 
 } // namespace carmen

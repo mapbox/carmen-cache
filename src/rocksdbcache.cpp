@@ -102,8 +102,7 @@ intarray RocksDBCache::__getmatching(std::string phrase, bool match_prefixes, la
     return array;
 }
 
-RocksDBCache::RocksDBCache() :
-      db() {}
+RocksDBCache::RocksDBCache() : db() {}
 
 RocksDBCache::~RocksDBCache() {}
 

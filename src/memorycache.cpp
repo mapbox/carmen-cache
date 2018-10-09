@@ -51,8 +51,7 @@ intarray MemoryCache::__getmatching(std::string phrase, bool match_prefixes, lan
     return array;
 }
 
-MemoryCache::MemoryCache() :
-      cache_() {}
+MemoryCache::MemoryCache() : cache_() {}
 
 MemoryCache::~MemoryCache() {}
 
