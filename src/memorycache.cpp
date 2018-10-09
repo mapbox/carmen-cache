@@ -62,10 +62,9 @@ bool MemoryCache::pack(std::string filename) {
     options.create_if_missing = true;
     rocksdb::Status status = OpenDB(options, filename, db);
 
-    // TODO: fix
-    // if (!status.ok()) {
-    //     return Nan::ThrowTypeError("unable to open rocksdb file for packing");
-    // }
+    if (!status.ok()) {
+        throw std::invalid_argument("unable to open rocksdb file for packing");
+    }
 
     std::map<key_type, std::deque<value_type>> memoized_prefixes;
 

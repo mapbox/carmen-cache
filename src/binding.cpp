@@ -91,13 +91,11 @@ NAN_METHOD(JSCache<T>::pack) {
 
         T* c = &(node::ObjectWrap::Unwrap<JSCache<T>>(info.This())->cache);
 
-        // TODO: move into wrapped class and throw a c++-style exception, to be
-        // caught here
-        // if (c->db && c->db->GetName() == filename) {
-        //     return Nan::ThrowTypeError("rocksdb file is already loaded read-only; unload first");
-        // } else {
+        try {
             c->pack(filename);
-        // }
+        } catch (std::exception const& ex) {
+            return Nan::ThrowTypeError(ex.what());
+        }
         info.GetReturnValue().Set(true);
         return;
     } catch (std::exception const& ex) {

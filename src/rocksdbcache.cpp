@@ -111,15 +111,18 @@ RocksDBCache::~RocksDBCache() {}
 bool RocksDBCache::pack(std::string filename) {
     std::shared_ptr<rocksdb::DB> existing = this->db;
 
+    if (existing && existing->GetName() == filename) {
+        throw std::invalid_argument("rocksdb file is already loaded read-only; unload first");
+    }
+
     std::unique_ptr<rocksdb::DB> db;
     rocksdb::Options options;
     options.create_if_missing = true;
     rocksdb::Status status = OpenDB(options, filename, db);
 
-    // TODO: figure out how to bubble this
-    // if (!status.ok()) {
-    //     return Nan::ThrowTypeError("unable to open rocksdb file for packing");
-    // }
+    if (!status.ok()) {
+        throw std::invalid_argument("unable to open rocksdb file for packing");
+    }
 
     // if what we have now is already a rocksdb, and it's a different
     // one from what we're being asked to pack into, copy from one to the other
