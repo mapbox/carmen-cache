@@ -18,7 +18,6 @@
 #include <cmath>
 #include <cstdint>
 #include <map>
-#include <nan.h>
 #include <protozero/pbf_reader.hpp>
 #include <protozero/pbf_writer.hpp>
 #include <string>

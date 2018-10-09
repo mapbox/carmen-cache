@@ -4,8 +4,6 @@
 
 namespace carmen {
 
-using namespace v8;
-
 intarray MemoryCache::__get(std::string phrase, langfield_type langfield) {
     arraycache const& cache = this->cache_;
     intarray array;

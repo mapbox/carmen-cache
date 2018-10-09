@@ -4,8 +4,6 @@
 
 namespace carmen {
 
-using namespace v8;
-
 intarray RocksDBCache::__get(std::string phrase, langfield_type langfield) {
     std::shared_ptr<rocksdb::DB> db = this->db;
     intarray array;
