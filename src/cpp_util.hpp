@@ -296,6 +296,13 @@ rocksdb::Status OpenForReadOnlyDB(const rocksdb::Options& options, const std::st
 #define TYPE_MEMORY 1
 #define TYPE_ROCKSDB 2
 
+#define CACHE_MESSAGE 1
+#define CACHE_ITEM 1
+
+#define MEMO_PREFIX_LENGTH_T1 3
+#define MEMO_PREFIX_LENGTH_T2 6
+#define PREFIX_MAX_GRID_LENGTH 500000
+
 } // namespace carmen
 
 #endif // __CARMEN_CPP_UTIL_HPP__

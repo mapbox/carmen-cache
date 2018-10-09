@@ -32,13 +32,27 @@ class JSCache : public node::ObjectWrap {
         T cache;
 };
 
+template <class T>
+Nan::Persistent<v8::FunctionTemplate> JSCache<T>::constructor;
+
+template <>
+NAN_METHOD(JSCache<carmen::RocksDBCache>::New);
+template <>
+NAN_METHOD(JSCache<carmen::MemoryCache>::New);
+
 template <>
 NAN_METHOD(JSCache<carmen::RocksDBCache>::merge);
 
-using JSRocksDBCache = JSCache<carmen::RocksDBCache>;
+template <>
+NAN_METHOD(JSCache<carmen::MemoryCache>::_set);
 
-intarray __get(JSRocksDBCache* c, std::string phrase, langfield_type langfield);
-intarray __getmatching(JSRocksDBCache* c, std::string phrase, bool match_prefixes, langfield_type langfield);
+using JSRocksDBCache = JSCache<carmen::RocksDBCache>;
+using JSMemoryCache = JSCache<carmen::MemoryCache>;
+
+template <class T>
+intarray __get(JSCache<T>* c, std::string phrase, langfield_type langfield);
+template <class T>
+intarray __getmatching(JSCache<T>* c, std::string phrase, bool match_prefixes, langfield_type langfield);
 
 } // namespace carmen
 

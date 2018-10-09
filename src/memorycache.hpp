@@ -2,7 +2,6 @@
 #define __CARMEN_MEMORYCACHE_HPP__
 
 #include "cpp_util.hpp"
-#include "node_util.hpp"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunknown-pragmas"
@@ -22,26 +21,24 @@
 
 namespace carmen {
 
-class MemoryCache : public node::ObjectWrap {
-  public:
-    ~MemoryCache();
-    static Nan::Persistent<v8::FunctionTemplate> constructor;
-    static void Initialize(v8::Handle<v8::Object> target);
-    static NAN_METHOD(New);
-    static NAN_METHOD(pack);
-    static NAN_METHOD(list);
-    static NAN_METHOD(_get);
-    static NAN_METHOD(_getmatching);
-    static NAN_METHOD(_set);
-    static NAN_METHOD(coalesce);
-    explicit MemoryCache();
-    void _ref() { Ref(); }
-    void _unref() { Unref(); }
-    arraycache cache_;
-};
+class MemoryCache {
+    public:
+        MemoryCache();
+        ~MemoryCache();
 
-intarray __get(MemoryCache const* c, std::string phrase, langfield_type langfield);
-intarray __getmatching(MemoryCache const* c, std::string phrase, bool match_prefixes, langfield_type langfield);
+        bool pack(std::string filename);
+        std::vector<std::pair<std::string, langfield_type>> list();
+
+        void _set(std::string id, std::vector<uint64_t>, langfield_type langfield, bool append);
+
+        std::vector<uint64_t> _get(std::string phrase, std::vector<uint64_t> languages);
+        std::vector<uint64_t> _getmatching(std::string phrase, bool match_prefixes, std::vector<uint64_t> languages);
+
+        std::vector<uint64_t> __get(std::string phrase, langfield_type langfield);
+        std::vector<uint64_t> __getmatching(std::string phrase, bool match_prefixes, langfield_type langfield);
+
+        arraycache cache_;
+};
 
 } // namespace carmen
 

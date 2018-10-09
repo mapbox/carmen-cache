@@ -27,13 +27,6 @@
 
 namespace carmen {
 
-#define CACHE_MESSAGE 1
-#define CACHE_ITEM 1
-
-#define MEMO_PREFIX_LENGTH_T1 3
-#define MEMO_PREFIX_LENGTH_T2 6
-#define PREFIX_MAX_GRID_LENGTH 500000
-
 struct sortableGrid {
     sortableGrid(protozero::const_varint_iterator<uint64_t> _it,
                  protozero::const_varint_iterator<uint64_t> _end,
