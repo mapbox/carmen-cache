@@ -1,7 +1,7 @@
 
 #include "coalesce.hpp"
-#include "rocksdbcache.hpp"
 #include "memorycache.hpp"
+#include "rocksdbcache.hpp"
 
 namespace carmen {
 
@@ -47,7 +47,7 @@ std::vector<Context> coalesce(std::vector<PhrasematchSubq>& stack, const std::ve
 // it's actually trying to stack multiple matches or whether it's considering a
 // single match that consumes the entire query; this function handles the latter case
 // and takes as a parameter the libuv task that contains info about the job it's supposed to do
-inline std::vector<Context> coalesceSingle(std::vector<PhrasematchSubq>& stack, const std::vector<uint64_t>& centerzxy, const std::vector<uint64_t> & bboxzxy, double radius) {
+inline std::vector<Context> coalesceSingle(std::vector<PhrasematchSubq>& stack, const std::vector<uint64_t>& centerzxy, const std::vector<uint64_t>& bboxzxy, double radius) {
     PhrasematchSubq const& subq = stack[0];
 
     // proximity (optional)
@@ -158,7 +158,7 @@ inline std::vector<Context> coalesceSingle(std::vector<PhrasematchSubq>& stack, 
 
 // this function handles the case where stacking is occurring between multiple subqueries
 // again, it takes a libuv task as a parameter
-inline std::vector<Context> coalesceMulti(std::vector<PhrasematchSubq>& stack, const std::vector<uint64_t>& centerzxy, const std::vector<uint64_t> & bboxzxy, double radius) {
+inline std::vector<Context> coalesceMulti(std::vector<PhrasematchSubq>& stack, const std::vector<uint64_t>& centerzxy, const std::vector<uint64_t>& bboxzxy, double radius) {
     std::sort(stack.begin(), stack.end(), subqSortByZoom);
     std::size_t stackSize = stack.size();
 
