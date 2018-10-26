@@ -36,11 +36,13 @@ struct CoalesceBaton : carmen::noncopyable {
     std::string error;
 };
 
-NAN_METHOD(coalesce);
-void coalesceSingle(uv_work_t* req);
-void coalesceMulti(uv_work_t* req);
-void coalesceAfter(uv_work_t* req, int status);
-void coalesceFinalize(CoalesceBaton* baton, std::vector<Context>&& contexts);
+inline std::vector<Context> coalesce(std::vector<PhrasematchSubq>& stack, const std::vector<uint64_t>& centerzxy, const std::vector<uint64_t>& bboxzxy, double radius);
+inline std::vector<Context> coalesceSingle(std::vector<PhrasematchSubq>& stack, const std::vector<uint64_t>& centerzxy, const std::vector<uint64_t> & bboxzxy, double radius);
+inline std::vector<Context> coalesceMulti(std::vector<PhrasematchSubq>& stack, const std::vector<uint64_t>& centerzxy, const std::vector<uint64_t> & bboxzxy, double radius);
+
+NAN_METHOD(JSCoalesce);
+void jsCoalesceTask(uv_work_t* req);
+void jsCoalesceAfter(uv_work_t* req, int status);
 
 } // namespace carmen
 

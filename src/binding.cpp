@@ -431,7 +431,7 @@ static void start(Handle<Object> target) {
     JSMemoryCache::Initialize(target);
     JSRocksDBCache::Initialize(target);
     NormalizationCache::Initialize(target);
-    Nan::SetMethod(target, "coalesce", coalesce);
+    Nan::SetMethod(target, "coalesce", JSCoalesce);
 }
 }
 
