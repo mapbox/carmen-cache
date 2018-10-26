@@ -151,7 +151,9 @@ inline std::vector<Context> coalesceSingle(std::vector<PhrasematchSubq>& stack, 
 
         double relev = cover.relev;
         uint32_t mask = 0;
-        contexts.emplace_back(cover, mask, relev);
+        // have clang-tidy ignore the following line: it insists on stripping
+        // the move, but that makes compilation fail
+        contexts.emplace_back(std::move(cover), mask, relev); // NOLINT
     }
     return contexts;
 }

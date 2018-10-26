@@ -49,7 +49,7 @@ intarray MemoryCache::__getmatching(std::string phrase, bool match_prefixes, lan
     return array;
 }
 
-MemoryCache::MemoryCache() : {}
+MemoryCache::MemoryCache() = default;
 
 MemoryCache::~MemoryCache() = default;
 

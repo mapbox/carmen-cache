@@ -89,17 +89,16 @@ ZXY bxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z, bool max) {
         return zxy;
     }
     // zoom out
-    else {
-        auto mod = static_cast<unsigned>(std::pow(2, target_z));
-        unsigned xDiff = x % mod;
-        unsigned yDiff = y % mod;
-        unsigned newX = x - xDiff;
-        unsigned newY = y - yDiff;
 
-        zxy.x = static_cast<unsigned>(static_cast<float>(newX) * mult);
-        zxy.y = static_cast<unsigned>(static_cast<float>(newY) * mult);
-        return zxy;
-    }
+    auto mod = static_cast<unsigned>(std::pow(2, target_z));
+    unsigned xDiff = x % mod;
+    unsigned yDiff = y % mod;
+    unsigned newX = x - xDiff;
+    unsigned newY = y - yDiff;
+
+    zxy.x = static_cast<unsigned>(static_cast<float>(newX) * mult);
+    zxy.y = static_cast<unsigned>(static_cast<float>(newY) * mult);
+    return zxy;
 }
 
 // Equivalent of scoredist() function in carmen
