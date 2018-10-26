@@ -68,11 +68,11 @@ inline void decodeAndBoostMessage(std::string const& message, intarray& array) {
 
 class RocksDBCache {
   public:
-    RocksDBCache(std::string filename);
+    RocksDBCache(const std::string& filename);
     RocksDBCache();
     ~RocksDBCache();
 
-    bool pack(std::string filename);
+    bool pack(const std::string& filename);
     std::vector<std::pair<std::string, langfield_type>> list();
     std::vector<uint64_t> _get(std::string phrase, std::vector<uint64_t> languages);
     std::vector<uint64_t> _getmatching(std::string phrase, bool match_prefixes, std::vector<uint64_t> languages);

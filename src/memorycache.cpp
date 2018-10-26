@@ -9,7 +9,7 @@ intarray MemoryCache::__get(std::string phrase, langfield_type langfield) {
     intarray array;
 
     add_langfield(phrase, langfield);
-    arraycache::const_iterator aitr = cache.find(phrase);
+    auto aitr = cache.find(phrase);
     if (aitr != cache.end()) {
         array = aitr->second;
     }
@@ -35,7 +35,7 @@ intarray MemoryCache::__getmatching(std::string phrase, bool match_prefixes, lan
         if (memcmp(phrase_data, item_data, phrase_length) == 0) {
             langfield_type message_langfield = extract_langfield(item.first);
 
-            if (message_langfield & langfield) {
+            if ((message_langfield & langfield) != 0u) {
                 array.reserve(array.size() + item.second.size());
                 for (auto const& grid : item.second) {
                     array.emplace_back(grid | LANGUAGE_MATCH_BOOST);
@@ -49,11 +49,11 @@ intarray MemoryCache::__getmatching(std::string phrase, bool match_prefixes, lan
     return array;
 }
 
-MemoryCache::MemoryCache() : cache_() {}
+MemoryCache::MemoryCache() : {}
 
-MemoryCache::~MemoryCache() {}
+MemoryCache::~MemoryCache() = default;
 
-bool MemoryCache::pack(std::string filename) {
+bool MemoryCache::pack(const std::string& filename) {
     std::unique_ptr<rocksdb::DB> db;
     rocksdb::Options options;
     options.create_if_missing = true;
@@ -77,8 +77,8 @@ bool MemoryCache::pack(std::string filename) {
 
             packVec(varr, db, item.first);
 
-            std::string prefix_t1 = "";
-            std::string prefix_t2 = "";
+            std::string prefix_t1;
+            std::string prefix_t2;
 
             // add this to the memoized prefix array too, maybe
             auto phrase_length = item.first.find(LANGFIELD_SEPARATOR);
@@ -101,7 +101,7 @@ bool MemoryCache::pack(std::string filename) {
                 }
             }
 
-            if (prefix_t1 != "") {
+            if (!prefix_t1.empty()) {
                 std::map<key_type, std::deque<value_type>>::const_iterator mitr = memoized_prefixes.find(prefix_t1);
                 if (mitr == memoized_prefixes.end()) {
                     memoized_prefixes.emplace(prefix_t1, std::deque<value_type>());
@@ -110,7 +110,7 @@ bool MemoryCache::pack(std::string filename) {
 
                 buf.insert(buf.end(), varr.begin(), varr.end());
             }
-            if (prefix_t2 != "") {
+            if (!prefix_t2.empty()) {
                 std::map<key_type, std::deque<value_type>>::const_iterator mitr = memoized_prefixes.find(prefix_t2);
                 if (mitr == memoized_prefixes.end()) {
                     memoized_prefixes.emplace(prefix_t2, std::deque<value_type>());
@@ -179,7 +179,7 @@ void MemoryCache::_set(std::string key_id, std::vector<uint64_t> data, langfield
     arraycache& arrc = this->cache_;
     add_langfield(key_id, langfield);
 
-    arraycache::iterator itr2 = arrc.find(key_id);
+    auto itr2 = arrc.find(key_id);
     if (itr2 == arrc.end()) {
         arrc.emplace(key_id, intarray());
     }

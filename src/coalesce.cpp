@@ -151,7 +151,7 @@ inline std::vector<Context> coalesceSingle(std::vector<PhrasematchSubq>& stack, 
 
         double relev = cover.relev;
         uint32_t mask = 0;
-        contexts.emplace_back(std::move(cover), mask, relev);
+        contexts.emplace_back(cover, mask, relev);
     }
     return contexts;
 }
@@ -189,7 +189,7 @@ inline std::vector<Context> coalesceMulti(std::vector<PhrasematchSubq>& stack, c
     std::map<uint64_t, bool>::iterator dit;
 
     // proximity (optional)
-    bool proximity = centerzxy.size() > 0;
+    bool proximity = !centerzxy.empty();
     unsigned cz;
     unsigned cx;
     unsigned cy;
@@ -264,13 +264,13 @@ inline std::vector<Context> coalesceMulti(std::vector<PhrasematchSubq>& stack, c
             uint64_t zxy = (z * POW2_28) + (cover.x * POW2_14) + (cover.y);
 
             std::vector<Cover> covers;
-            covers.push_back(std::move(cover));
+            covers.push_back(cover);
             uint32_t context_mask = cover.mask;
             double context_relev = cover.relev;
 
             for (unsigned a = 0; a < zCacheSize; a++) {
                 uint64_t p = zCache[a];
-                double s = static_cast<double>(1 << (z - p));
+                auto s = static_cast<double>(1 << (z - p));
                 uint64_t pxy = static_cast<uint64_t>(p * POW2_28) +
                                static_cast<uint64_t>(std::floor(cover.x / s) * POW2_14) +
                                static_cast<uint64_t>(std::floor(cover.y / s));
@@ -290,7 +290,7 @@ inline std::vector<Context> coalesceMulti(std::vector<PhrasematchSubq>& stack, c
                                 lastMask = parent.mask;
                                 lastRelev = parent.relev;
                                 // this cover doesn't overlap with used mask.
-                            } else if (!(context_mask & parent.mask)) {
+                            } else if ((context_mask & parent.mask) == 0u) {
                                 covers.emplace_back(parent);
                                 context_relev += parent.relev;
                                 context_mask = context_mask | parent.mask;

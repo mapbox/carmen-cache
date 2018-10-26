@@ -10,10 +10,10 @@ class MemoryCache {
     MemoryCache();
     ~MemoryCache();
 
-    bool pack(std::string filename);
+    bool pack(const std::string& filename);
     std::vector<std::pair<std::string, langfield_type>> list();
 
-    void _set(std::string id, std::vector<uint64_t>, langfield_type langfield, bool append);
+    void _set(std::string key_id, std::vector<uint64_t>, langfield_type langfield, bool append);
 
     std::vector<uint64_t> _get(std::string phrase, std::vector<uint64_t> languages);
     std::vector<uint64_t> _getmatching(std::string phrase, bool match_prefixes, std::vector<uint64_t> languages);

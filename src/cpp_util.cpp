@@ -5,18 +5,18 @@ namespace carmen {
 
 // Converts from the packed integer into (relev, score, x, y, feature_id)
 Cover numToCover(uint64_t num) {
-    Cover cover;
+    Cover cover{};
     assert(((num >> 34) % POW2_14) <= static_cast<double>(std::numeric_limits<unsigned short>::max()));
     assert(((num >> 34) % POW2_14) >= static_cast<double>(std::numeric_limits<unsigned short>::min()));
-    unsigned short y = static_cast<unsigned short>((num >> 34) % POW2_14);
+    auto y = static_cast<unsigned short>((num >> 34) % POW2_14);
     assert(((num >> 20) % POW2_14) <= static_cast<double>(std::numeric_limits<unsigned short>::max()));
     assert(((num >> 20) % POW2_14) >= static_cast<double>(std::numeric_limits<unsigned short>::min()));
-    unsigned short x = static_cast<unsigned short>((num >> 20) % POW2_14);
+    auto x = static_cast<unsigned short>((num >> 20) % POW2_14);
     assert(((num >> 48) % POW2_3) <= static_cast<double>(std::numeric_limits<unsigned short>::max()));
     assert(((num >> 48) % POW2_3) >= static_cast<double>(std::numeric_limits<unsigned short>::min()));
-    unsigned short score = static_cast<unsigned short>((num >> 48) % POW2_3);
-    uint32_t id = static_cast<uint32_t>(num % POW2_20);
-    bool matches_language = static_cast<bool>(num & LANGUAGE_MATCH_BOOST);
+    auto score = static_cast<unsigned short>((num >> 48) % POW2_3);
+    auto id = static_cast<uint32_t>(num % POW2_20);
+    auto matches_language = static_cast<bool>(num & LANGUAGE_MATCH_BOOST);
     cover.x = x;
     cover.y = y;
     double relev = 0.4 + (0.2 * static_cast<double>((num >> 51) % POW2_2));
@@ -38,7 +38,7 @@ Cover numToCover(uint64_t num) {
 // Converts the ZXY coordinates of the tile that contains a proximity point to a
 // ZXY at the appropriate zoom level necessary for a given coalesce operation
 ZXY pxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z) {
-    ZXY zxy;
+    ZXY zxy{};
     zxy.z = target_z;
 
     // Interval between parent and target zoom level
@@ -51,10 +51,10 @@ ZXY pxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z) {
     }
 
     // Midpoint length @ z for a tile at parent zoom level
-    double pMid_d = static_cast<double>(std::pow(2, zDist) / 2);
+    auto pMid_d = static_cast<double>(std::pow(2, zDist) / 2);
     assert(pMid_d <= static_cast<double>(std::numeric_limits<unsigned>::max()));
     assert(pMid_d >= static_cast<double>(std::numeric_limits<unsigned>::min()));
-    signed pMid = static_cast<signed>(pMid_d);
+    auto pMid = static_cast<signed>(pMid_d);
     zxy.x = static_cast<unsigned>((static_cast<signed>(x) * zMult) + pMid);
     zxy.y = static_cast<unsigned>((static_cast<signed>(y) * zMult) + pMid);
     return zxy;
@@ -62,7 +62,7 @@ ZXY pxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z) {
 
 // Calculates a ZXY for appropriate for a given coalesce operation out of the supplied bbox ZXY coordinates.
 ZXY bxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z, bool max) {
-    ZXY zxy;
+    ZXY zxy{};
     zxy.z = target_z;
 
     // Interval between parent and target zoom level
@@ -74,7 +74,7 @@ ZXY bxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z, bool max) {
     }
 
     // zoom conversion multiplier
-    float mult = static_cast<float>(std::pow(2, zDist));
+    auto mult = static_cast<float>(std::pow(2, zDist));
 
     // zoom in min
     if (zDist > 0 && !max) {
@@ -83,14 +83,14 @@ ZXY bxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z, bool max) {
         return zxy;
     }
     // zoom in max
-    else if (zDist > 0 && max) {
+    if (zDist > 0 && max) {
         zxy.x = static_cast<unsigned>(static_cast<float>(x) * mult + (mult - 1));
         zxy.y = static_cast<unsigned>(static_cast<float>(y) * mult + (mult - 1));
         return zxy;
     }
     // zoom out
     else {
-        unsigned mod = static_cast<unsigned>(std::pow(2, target_z));
+        auto mod = static_cast<unsigned>(std::pow(2, target_z));
         unsigned xDiff = x % mod;
         unsigned yDiff = y % mod;
         unsigned newX = x - xDiff;

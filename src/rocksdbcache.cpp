@@ -44,7 +44,7 @@ intarray RocksDBCache::__getmatching(std::string phrase, bool match_prefixes, la
 
         // grab the langfield from the end of the key
         langfield_type message_langfield = extract_langfield(key);
-        bool matches_language = static_cast<bool>(message_langfield & langfield);
+        auto matches_language = static_cast<bool>(message_langfield & langfield);
 
         messages.emplace_back(std::make_tuple(rit->value().ToString(), matches_language));
     }
@@ -97,11 +97,11 @@ intarray RocksDBCache::__getmatching(std::string phrase, bool match_prefixes, la
     return array;
 }
 
-RocksDBCache::RocksDBCache() : db() {}
+RocksDBCache::RocksDBCache() : {}
 
-RocksDBCache::~RocksDBCache() {}
+RocksDBCache::~RocksDBCache() = default;
 
-bool RocksDBCache::pack(std::string filename) {
+bool RocksDBCache::pack(const std::string& filename) {
     std::shared_ptr<rocksdb::DB> existing = this->db;
 
     if (existing && existing->GetName() == filename) {
@@ -142,7 +142,7 @@ std::vector<std::pair<std::string, langfield_type>> RocksDBCache::list() {
     return out;
 }
 
-RocksDBCache::RocksDBCache(std::string filename) {
+RocksDBCache::RocksDBCache(const std::string& filename) {
     std::unique_ptr<rocksdb::DB> _db;
     rocksdb::Options options;
     options.create_if_missing = true;
