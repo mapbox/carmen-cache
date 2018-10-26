@@ -65,6 +65,26 @@ intarray __get(JSCache<T>* c, std::string phrase, langfield_type langfield);
 template <class T>
 intarray __getmatching(JSCache<T>* c, std::string phrase, bool match_prefixes, langfield_type langfield);
 
+struct CoalesceBaton : carmen::noncopyable {
+    uv_work_t request;
+    // params
+    std::vector<PhrasematchSubq> stack;
+    std::vector<uint64_t> centerzxy;
+    std::vector<uint64_t> bboxzxy;
+    double radius;
+    Nan::Persistent<v8::Function> callback;
+    // ref tracking
+    std::vector<std::pair<char, void*>> refs;
+    // return
+    std::vector<Context> features;
+    // error
+    std::string error;
+};
+
+NAN_METHOD(JSCoalesce);
+void jsCoalesceTask(uv_work_t* req);
+void jsCoalesceAfter(uv_work_t* req, int status);
+
 } // namespace carmen
 
 #endif // __CARMEN_BINDING_HPP__
