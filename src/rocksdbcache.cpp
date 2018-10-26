@@ -5,7 +5,6 @@
 namespace carmen {
 
 intarray RocksDBCache::__get(std::string phrase, langfield_type langfield) {
-    std::shared_ptr<rocksdb::DB> db = this->db;
     intarray array;
 
     add_langfield(phrase, langfield);
@@ -38,8 +37,6 @@ intarray RocksDBCache::__getmatching(std::string phrase, bool match_prefixes, la
     }
 
     radix_max_heap::pair_radix_max_heap<uint64_t, size_t> rh;
-
-    std::shared_ptr<rocksdb::DB> db = this->db;
 
     std::unique_ptr<rocksdb::Iterator> rit(db->NewIterator(rocksdb::ReadOptions()));
     for (rit->Seek(phrase); rit->Valid() && rit->key().ToString().compare(0, phrase.size(), phrase) == 0; rit->Next()) {
@@ -111,10 +108,10 @@ bool RocksDBCache::pack(std::string filename) {
         throw std::invalid_argument("rocksdb file is already loaded read-only; unload first");
     }
 
-    std::unique_ptr<rocksdb::DB> db;
+    std::unique_ptr<rocksdb::DB> clone;
     rocksdb::Options options;
     options.create_if_missing = true;
-    rocksdb::Status status = OpenDB(options, filename, db);
+    rocksdb::Status status = OpenDB(options, filename, clone);
 
     if (!status.ok()) {
         throw std::invalid_argument("unable to open rocksdb file for packing");
@@ -124,15 +121,13 @@ bool RocksDBCache::pack(std::string filename) {
     // one from what we're being asked to pack into, copy from one to the other
     std::unique_ptr<rocksdb::Iterator> existingIt(existing->NewIterator(rocksdb::ReadOptions()));
     for (existingIt->SeekToFirst(); existingIt->Valid(); existingIt->Next()) {
-        db->Put(rocksdb::WriteOptions(), existingIt->key(), existingIt->value());
+        clone->Put(rocksdb::WriteOptions(), existingIt->key(), existingIt->value());
     }
 
     return true;
 }
 
 std::vector<std::pair<std::string, langfield_type>> RocksDBCache::list() {
-    std::shared_ptr<rocksdb::DB> db = this->db;
-
     std::unique_ptr<rocksdb::Iterator> it(db->NewIterator(rocksdb::ReadOptions()));
     std::vector<std::pair<std::string, langfield_type>> out;
     for (it->SeekToFirst(); it->Valid(); it->Next()) {
@@ -148,15 +143,15 @@ std::vector<std::pair<std::string, langfield_type>> RocksDBCache::list() {
 }
 
 RocksDBCache::RocksDBCache(std::string filename) {
-    std::unique_ptr<rocksdb::DB> db;
+    std::unique_ptr<rocksdb::DB> _db;
     rocksdb::Options options;
     options.create_if_missing = true;
-    rocksdb::Status status = OpenForReadOnlyDB(options, filename, db);
+    rocksdb::Status status = OpenForReadOnlyDB(options, filename, _db);
 
     if (!status.ok()) {
         throw std::invalid_argument("unable to open rocksdb file for loading");
     }
-    this->db = std::move(db);
+    this->db = std::move(_db);
 }
 
 } // namespace carmen

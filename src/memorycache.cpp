@@ -185,7 +185,7 @@ void MemoryCache::_set(std::string key_id, std::vector<uint64_t> data, langfield
     }
     intarray& vv = arrc[key_id];
 
-    unsigned array_size = data.size();
+    size_t array_size = data.size();
 
     if (append) {
         vv.reserve(vv.size() + array_size);
