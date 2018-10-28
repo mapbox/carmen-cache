@@ -4,7 +4,6 @@
 #include "coalesce.hpp"
 #include "memorycache.hpp"
 #include "node_util.hpp"
-#include "normalizationcache.hpp"
 #include "rocksdbcache.hpp"
 
 #pragma clang diagnostic push
