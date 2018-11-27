@@ -18,20 +18,13 @@ intarray MemoryCache::__get(const std::string& phrase, langfield_type langfield)
     return array;
 }
 
-intarray MemoryCache::__getmatching(const std::string& phrase, bool match_prefixes, langfield_type langfield) {
+intarray MemoryCache::__getmatching(const std::string& phrase_ref, bool match_prefixes, langfield_type langfield) {
     intarray array;
-    const char* phrase_data;
-    size_t phrase_length;
+    std::string phrase = phrase_ref;
 
-    if (!match_prefixes) {
-        std::string phrase_with_separator = phrase;
-        phrase_with_separator.push_back(LANGFIELD_SEPARATOR);
-        phrase_length = phrase_with_separator.length();
-        phrase_data = phrase_with_separator.data();
-    } else {
-        phrase_length = phrase.length();
-        phrase_data = phrase.data();
-    }
+    if (!match_prefixes) phrase.push_back(LANGFIELD_SEPARATOR);
+    size_t phrase_length = phrase.length();
+    const char* phrase_data = phrase.data();
     // Load values from memory cache
 
     for (auto const& item : this->cache_) {
