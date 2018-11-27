@@ -74,11 +74,9 @@ class RocksDBCache {
 
     bool pack(const std::string& filename);
     std::vector<std::pair<std::string, langfield_type>> list();
-    std::vector<uint64_t> _get(std::string phrase, std::vector<uint64_t> languages);
-    std::vector<uint64_t> _getmatching(std::string phrase, bool match_prefixes, std::vector<uint64_t> languages);
 
-    std::vector<uint64_t> __get(std::string phrase, langfield_type langfield);
-    std::vector<uint64_t> __getmatching(std::string phrase, bool match_prefixes, langfield_type langfield);
+    std::vector<uint64_t> __get(const std::string& phrase, langfield_type langfield);
+    std::vector<uint64_t> __getmatching(const std::string& phrase, bool match_prefixes, langfield_type langfield);
 
     std::shared_ptr<rocksdb::DB> db;
 };

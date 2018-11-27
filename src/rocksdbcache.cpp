@@ -4,12 +4,13 @@
 
 namespace carmen {
 
-intarray RocksDBCache::__get(std::string phrase, langfield_type langfield) {
+intarray RocksDBCache::__get(const std::string& phrase, langfield_type langfield) {
     intarray array;
+    std::string phrase_with_langfield = phrase;
 
-    add_langfield(phrase, langfield);
+    add_langfield(phrase_with_langfield, langfield);
     std::string message;
-    rocksdb::Status s = db->Get(rocksdb::ReadOptions(), phrase, &message);
+    rocksdb::Status s = db->Get(rocksdb::ReadOptions(), phrase_with_langfield, &message);
     if (s.ok()) {
         decodeMessage(message, array);
     }
@@ -17,10 +18,13 @@ intarray RocksDBCache::__get(std::string phrase, langfield_type langfield) {
     return array;
 }
 
-intarray RocksDBCache::__getmatching(std::string phrase, bool match_prefixes, langfield_type langfield) {
+intarray RocksDBCache::__getmatching(const std::string& phrase_ref, bool match_prefixes, langfield_type langfield) {
     intarray array;
+    std::string phrase = phrase_ref;
 
-    if (!match_prefixes) phrase.push_back(LANGFIELD_SEPARATOR);
+    if (!match_prefixes) {
+        phrase.push_back(LANGFIELD_SEPARATOR);
+    }
     size_t phrase_length = phrase.length();
 
     // Load values from message cache

@@ -60,9 +60,9 @@ using JSRocksDBCache = JSCache<carmen::RocksDBCache>;
 using JSMemoryCache = JSCache<carmen::MemoryCache>;
 
 template <class T>
-intarray __get(JSCache<T>* c, std::string& phrase, langfield_type langfield);
+intarray __get(JSCache<T>* c, const std::string& phrase, langfield_type langfield);
 template <class T>
-intarray __getmatching(JSCache<T>* c, std::string& phrase, bool match_prefixes, langfield_type langfield);
+intarray __getmatching(JSCache<T>* c, const std::string& phrase, bool match_prefixes, langfield_type langfield);
 
 struct CoalesceBaton : carmen::noncopyable {
     uv_work_t request;
