@@ -19,7 +19,7 @@ class MemoryCache {
     std::vector<uint64_t> _getmatching(std::string phrase, bool match_prefixes, std::vector<uint64_t> languages);
 
     std::vector<uint64_t> __get(const std::string& phrase, langfield_type langfield);
-    std::vector<uint64_t> __getmatching(const std::string& phrase, bool match_prefixes, langfield_type langfield);
+    std::vector<uint64_t> __getmatching(const std::string& phrase_ref, bool match_prefixes, langfield_type langfield);
 
     arraycache cache_;
 };
