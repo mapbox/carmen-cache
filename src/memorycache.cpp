@@ -4,12 +4,13 @@
 
 namespace carmen {
 
-intarray MemoryCache::__get(std::string phrase, langfield_type langfield) {
+intarray MemoryCache::__get(const std::string& phrase, langfield_type langfield) {
     arraycache const& cache = this->cache_;
     intarray array;
+    std::string phrase_with_langfield = phrase;
 
-    add_langfield(phrase, langfield);
-    auto aitr = cache.find(phrase);
+    add_langfield(phrase_with_langfield, langfield);
+    auto aitr = cache.find(phrase_with_langfield);
     if (aitr != cache.end()) {
         array = aitr->second;
     }
@@ -17,13 +18,13 @@ intarray MemoryCache::__get(std::string phrase, langfield_type langfield) {
     return array;
 }
 
-intarray MemoryCache::__getmatching(std::string phrase, bool match_prefixes, langfield_type langfield) {
+intarray MemoryCache::__getmatching(const std::string& phrase_ref, bool match_prefixes, langfield_type langfield) {
     intarray array;
+    std::string phrase = phrase_ref;
 
     if (!match_prefixes) phrase.push_back(LANGFIELD_SEPARATOR);
     size_t phrase_length = phrase.length();
     const char* phrase_data = phrase.data();
-
     // Load values from memory cache
 
     for (auto const& item : this->cache_) {

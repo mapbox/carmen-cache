@@ -288,7 +288,7 @@ inline void packVec(intarray const& varr, std::unique_ptr<rocksdb::DB> const& db
     db->Put(rocksdb::WriteOptions(), key, message);
 }
 
-// rocksdb is also used in memorycache, and normalizationcache
+// rocksdb is also used in memorycache
 rocksdb::Status OpenDB(const rocksdb::Options& options, const std::string& name, std::unique_ptr<rocksdb::DB>& dbptr);
 rocksdb::Status OpenForReadOnlyDB(const rocksdb::Options& options, const std::string& name, std::unique_ptr<rocksdb::DB>& dbptr);
 

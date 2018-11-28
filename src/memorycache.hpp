@@ -15,11 +15,11 @@ class MemoryCache {
 
     void _set(std::string key_id, std::vector<uint64_t>, langfield_type langfield, bool append);
 
-    std::vector<uint64_t> _get(std::string phrase, std::vector<uint64_t> languages);
+    std::vector<uint64_t> _get(std::string& phrase, std::vector<uint64_t> languages);
     std::vector<uint64_t> _getmatching(std::string phrase, bool match_prefixes, std::vector<uint64_t> languages);
 
-    std::vector<uint64_t> __get(std::string phrase, langfield_type langfield);
-    std::vector<uint64_t> __getmatching(std::string phrase, bool match_prefixes, langfield_type langfield);
+    std::vector<uint64_t> __get(const std::string& phrase, langfield_type langfield);
+    std::vector<uint64_t> __getmatching(const std::string& phrase_ref, bool match_prefixes, langfield_type langfield);
 
     arraycache cache_;
 };
