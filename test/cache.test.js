@@ -46,6 +46,7 @@ test('get / set / list / pack / load (simple)', (t) => {
 
     t.deepEqual(sorted(cache.list().map((x) => { return x[0]; })), sorted(ids), 'mem ids match');
 
+    // test packing from a memory cache to a rocks cache
     const pack = tmpfile();
     cache.pack(pack);
     const loader = new carmenCache.RocksDBCache('b', pack);
@@ -53,10 +54,28 @@ test('get / set / list / pack / load (simple)', (t) => {
     for (let i = 0; i < 5; i++) {
         const id = ids[i];
 
-        t.deepEqual(cache._get(id), sortedDescending([3, 4, 5, 6, 7, 8]), id + ' set to 3,4,5,6,7,8');
+        t.deepEqual(loader._get(id), sortedDescending([3, 4, 5, 6, 7, 8]), id + ' set to 3,4,5,6,7,8');
     }
 
     t.deepEqual(sorted(loader.list().map((x) => { return x[0]; })), sorted(ids), 'rocks ids match');
+
+    t.throws(() => { cache.pack('/dev/illegal_file'); }, 'packing to someplace illegal throws');
+
+    // test packing from a rocks cache to another rocks cache (essentially a clone)
+    const pack2 = tmpfile();
+    loader.pack(pack2);
+    const loader2 = new carmenCache.RocksDBCache('c', pack2);
+
+    for (let i = 0; i < 5; i++) {
+        const id = ids[i];
+
+        t.deepEqual(loader2._get(id), sortedDescending([3, 4, 5, 6, 7, 8]), id + ' set to 3,4,5,6,7,8');
+    }
+
+    t.deepEqual(sorted(loader2.list().map((x) => { return x[0]; })), sorted(ids), 'rocks ids match');
+
+    t.throws(() => { loader.pack('/dev/illegal_file'); }, 'packing to someplace illegal throws');
+
     t.end();
 });
 
@@ -133,6 +152,7 @@ test('pack', (t) => {
     t.throws(() => { new carmenCache.RocksDBCache('a', null); }, 'throws on invalid arguments');
     t.throws(() => { new carmenCache.RocksDBCache('a', {}); }, 'throws on invalid arguments');
     t.throws(() => { new carmenCache.RocksDBCache('a', new Buffer('a')); }, 'throws on invalid arguments');
+    t.throws(() => { new carmenCache.RocksDBCache('c', '/dev/illegal_file'); }, 'throws on perm error');
 
     // grab data right back out
     const directLoad = tmpfile();

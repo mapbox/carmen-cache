@@ -18,7 +18,6 @@
 #include <cmath>
 #include <cstdint>
 #include <map>
-#include <nan.h>
 #include <protozero/pbf_reader.hpp>
 #include <protozero/pbf_writer.hpp>
 #include <string>
@@ -289,12 +288,19 @@ inline void packVec(intarray const& varr, std::unique_ptr<rocksdb::DB> const& db
     db->Put(rocksdb::WriteOptions(), key, message);
 }
 
-// rocksdb is also used in memorycache, and normalizationcache
+// rocksdb is also used in memorycache
 rocksdb::Status OpenDB(const rocksdb::Options& options, const std::string& name, std::unique_ptr<rocksdb::DB>& dbptr);
 rocksdb::Status OpenForReadOnlyDB(const rocksdb::Options& options, const std::string& name, std::unique_ptr<rocksdb::DB>& dbptr);
 
 #define TYPE_MEMORY 1
 #define TYPE_ROCKSDB 2
+
+#define CACHE_MESSAGE 1
+#define CACHE_ITEM 1
+
+#define MEMO_PREFIX_LENGTH_T1 3
+#define MEMO_PREFIX_LENGTH_T2 6
+#define PREFIX_MAX_GRID_LENGTH 500000
 
 } // namespace carmen
 
