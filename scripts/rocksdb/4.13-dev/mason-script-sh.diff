@@ -1,0 +1,11 @@
+--- 4.13-dev/script.sh	2018-11-28 16:31:29.147702479 -0500
++++ 4.13-dev-2018/script.sh	2018-11-28 16:31:23.879662354 -0500
+@@ -13,6 +13,8 @@
+ 
+     mason_extract_tar_gz
+ 
++    patch -d ./rocksdb-4.13/ -p1 < ../../scripts/rocksdb/4.13-dev/patch.diff
++
+     export MASON_BUILD_PATH=${MASON_ROOT}/.build/${MASON_NAME}-4.13
+ }
+ 

@@ -1,0 +1,111 @@
+diff --git a/build_tools/build_detect_platform b/build_tools/build_detect_platform
+index 8adc3cf..07cffe1 100755
+--- a/build_tools/build_detect_platform
++++ b/build_tools/build_detect_platform
+@@ -203,17 +203,17 @@ EOF
+         fi
+     fi
+ 
+-    # Test whether Snappy library is installed
+-    # http://code.google.com/p/snappy/
+-    $CXX $CFLAGS -x c++ - -o /dev/null 2>/dev/null  <<EOF
+-      #include <snappy.h>
+-      int main() {}
+-EOF
+-    if [ "$?" = 0 ]; then
+-        COMMON_FLAGS="$COMMON_FLAGS -DSNAPPY"
+-        PLATFORM_LDFLAGS="$PLATFORM_LDFLAGS -lsnappy"
+-        JAVA_LDFLAGS="$JAVA_LDFLAGS -lsnappy"
+-    fi
++#    # Test whether Snappy library is installed
++#    # http://code.google.com/p/snappy/
++#    $CXX $CFLAGS -x c++ - -o /dev/null 2>/dev/null  <<EOF
++#      #include <snappy.h>
++#      int main() {}
++#EOF
++#    if [ "$?" = 0 ]; then
++#        COMMON_FLAGS="$COMMON_FLAGS -DSNAPPY"
++#        PLATFORM_LDFLAGS="$PLATFORM_LDFLAGS -lsnappy"
++#        JAVA_LDFLAGS="$JAVA_LDFLAGS -lsnappy"
++#    fi
+ 
+     # Test whether gflags library is installed
+     # http://gflags.github.io/gflags/
+@@ -239,16 +239,16 @@ EOF
+       fi
+     fi
+ 
+-    # Test whether zlib library is installed
+-    $CXX $CFLAGS $COMMON_FLAGS -x c++ - -o /dev/null 2>/dev/null  <<EOF
+-      #include <zlib.h>
+-      int main() {}
+-EOF
+-    if [ "$?" = 0 ]; then
+-        COMMON_FLAGS="$COMMON_FLAGS -DZLIB"
+-        PLATFORM_LDFLAGS="$PLATFORM_LDFLAGS -lz"
+-        JAVA_LDFLAGS="$JAVA_LDFLAGS -lz"
+-    fi
++#    # Test whether zlib library is installed
++#    $CXX $CFLAGS $COMMON_FLAGS -x c++ - -o /dev/null 2>/dev/null  <<EOF
++#      #include <zlib.h>
++#      int main() {}
++#EOF
++#    if [ "$?" = 0 ]; then
++#        COMMON_FLAGS="$COMMON_FLAGS -DZLIB"
++#        PLATFORM_LDFLAGS="$PLATFORM_LDFLAGS -lz"
++#        JAVA_LDFLAGS="$JAVA_LDFLAGS -lz"
++#    fi
+ 
+     # Test whether bzip library is installed
+     $CXX $CFLAGS $COMMON_FLAGS -x c++ - -o /dev/null 2>/dev/null  <<EOF
+@@ -261,28 +261,28 @@ EOF
+         JAVA_LDFLAGS="$JAVA_LDFLAGS -lbz2"
+     fi
+ 
+-    # Test whether lz4 library is installed
+-    $CXX $CFLAGS $COMMON_FLAGS -x c++ - -o /dev/null 2>/dev/null  <<EOF
+-      #include <lz4.h>
+-      #include <lz4hc.h>
+-      int main() {}
+-EOF
+-    if [ "$?" = 0 ]; then
+-        COMMON_FLAGS="$COMMON_FLAGS -DLZ4"
+-        PLATFORM_LDFLAGS="$PLATFORM_LDFLAGS -llz4"
+-        JAVA_LDFLAGS="$JAVA_LDFLAGS -llz4"
+-    fi
+-
+-    # Test whether zstd library is installed
+-    $CXX $CFLAGS $COMMON_FLAGS -x c++ - -o /dev/null 2>/dev/null  <<EOF
+-      #include <zstd.h>
+-      int main() {}
+-EOF
+-    if [ "$?" = 0 ]; then
+-        COMMON_FLAGS="$COMMON_FLAGS -DZSTD"
+-        PLATFORM_LDFLAGS="$PLATFORM_LDFLAGS -lzstd"
+-        JAVA_LDFLAGS="$JAVA_LDFLAGS -lzstd"
+-    fi
++#    # Test whether lz4 library is installed
++#    $CXX $CFLAGS $COMMON_FLAGS -x c++ - -o /dev/null 2>/dev/null  <<EOF
++#      #include <lz4.h>
++#      #include <lz4hc.h>
++#      int main() {}
++#EOF
++#    if [ "$?" = 0 ]; then
++#        COMMON_FLAGS="$COMMON_FLAGS -DLZ4"
++#        PLATFORM_LDFLAGS="$PLATFORM_LDFLAGS -llz4"
++#        JAVA_LDFLAGS="$JAVA_LDFLAGS -llz4"
++#    fi
++#
++#    # Test whether zstd library is installed
++#    $CXX $CFLAGS $COMMON_FLAGS -x c++ - -o /dev/null 2>/dev/null  <<EOF
++#      #include <zstd.h>
++#      int main() {}
++#EOF
++#    if [ "$?" = 0 ]; then
++#        COMMON_FLAGS="$COMMON_FLAGS -DZSTD"
++#        PLATFORM_LDFLAGS="$PLATFORM_LDFLAGS -lzstd"
++#        JAVA_LDFLAGS="$JAVA_LDFLAGS -lzstd"
++#    fi
+ 
+     # Test whether numa is available
+     $CXX $CFLAGS -x c++ - -o /dev/null -lnuma 2>/dev/null  <<EOF

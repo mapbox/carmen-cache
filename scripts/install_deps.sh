@@ -22,6 +22,7 @@ fi
 
 # only build from source if it does not exist
 if [[ ! -f mason_packages/.link/lib/librocksdb.a ]]; then
+    patch -d ./.mason/scripts/rocksdb/4.13-dev/ -p1 < ./scripts/rocksdb/4.13-dev/mason-script-sh.diff
     mason build rocksdb 4.13-dev
 fi
 
