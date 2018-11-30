@@ -28,7 +28,7 @@ intarray __get(RocksDBCache const* c, std::string phrase, langfield_type langfie
     return array;
 }
 
-intarray __getmatching(RocksDBCache const* c, std::string phrase, bool match_prefixes, langfield_type langfield) {
+intarray __getmatching(RocksDBCache const* c, std::string phrase, PrefixMatch match_prefixes, langfield_type langfield) {
     intarray array;
 
     if (!match_prefixes) phrase.push_back(LANGFIELD_SEPARATOR);

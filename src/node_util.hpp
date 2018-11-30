@@ -124,7 +124,7 @@ inline NAN_METHOD(_genericgetmatching) {
         }
         std::string id(*utf8_id);
 
-        bool match_prefixes = info[1]->BooleanValue();
+        PrefixMatch match_prefixes = static_cast<PrefixMatch>(info[1]->Int32Value());
 
         langfield_type langfield;
         if (info.Length() > 2 && !(info[2]->IsNull() || info[2]->IsUndefined())) {

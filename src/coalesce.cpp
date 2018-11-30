@@ -16,7 +16,7 @@ using namespace v8;
  * @type {Object}
  * @property {String} phrase - The matched string
  * @property {Number} weight - A float between 0 and 1 representing how much of the query this string covers
- * @property {Boolean} prefix - whether or not to do a prefix scan (as opposed to an exact match scan); used for autocomplete
+ * @property {Number} prefix - whether or do an exact match (0), prefix scan(1), or word boundry scan(2); used for autocomplete
  * @property {Number} idx - an identifier of the index the match came from; opaque to carmen-cache but returned in results
  * @property {Number} zoom - the configured tile zoom level for the index
  * @property {Number} mask - a bitmask representing which tokens in the original query the subquery covers
@@ -111,7 +111,7 @@ NAN_METHOD(coalesce) {
 
             double weight;
             std::string phrase;
-            bool prefix;
+            PrefixMatch prefix;
             unsigned short idx;
             unsigned short zoom;
             uint32_t mask;
@@ -178,10 +178,12 @@ NAN_METHOD(coalesce) {
                 return Nan::ThrowTypeError("missing prefix property");
             } else {
                 Local<Value> prop_val = jsStack->Get(Nan::New("prefix").ToLocalChecked());
-                if (!prop_val->IsBoolean()) {
-                    return Nan::ThrowTypeError("prefix value must be a boolean");
+                if (!prop_val->IsNumber()) {
+                    // TODO check value is 0-2
+                    return Nan::ThrowTypeError("prefix value must be a integer between 0 - 2");
                 }
-                prefix = prop_val->BooleanValue();
+                prefix = static_cast<PrefixMatch>(prop_val->Int32Value());
+
             }
 
             if (!jsStack->Has(Nan::New("mask").ToLocalChecked())) {

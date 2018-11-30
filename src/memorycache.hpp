@@ -41,7 +41,7 @@ class MemoryCache : public node::ObjectWrap {
 };
 
 intarray __get(MemoryCache const* c, std::string phrase, langfield_type langfield);
-intarray __getmatching(MemoryCache const* c, std::string phrase, bool match_prefixes, langfield_type langfield);
+intarray __getmatching(MemoryCache const* c, std::string phrase, PrefixMatch match_prefixes, langfield_type langfield);
 
 } // namespace carmen
 

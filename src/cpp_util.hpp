@@ -44,6 +44,8 @@ class noncopyable {
     noncopyable& operator=(noncopyable const&) = delete;
 };
 
+typedef enum { disabled, enabled, word_boundry } PrefixMatch;
+
 typedef unsigned __int128 langfield_type;
 constexpr uint64_t LANGUAGE_MATCH_BOOST = static_cast<const uint64_t>(1) << 63;
 
@@ -71,7 +73,7 @@ struct PhrasematchSubq {
                     char t,
                     double w,
                     std::string p,
-                    bool pf,
+                    PrefixMatch pf,
                     unsigned short i,
                     unsigned short z,
                     uint32_t m,
@@ -88,7 +90,7 @@ struct PhrasematchSubq {
     char type;
     double weight;
     std::string phrase;
-    bool prefix;
+    PrefixMatch prefix;
     unsigned short idx;
     unsigned short zoom;
     uint32_t mask;

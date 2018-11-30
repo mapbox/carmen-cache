@@ -25,7 +25,7 @@ intarray __get(MemoryCache const* c, std::string phrase, langfield_type langfiel
     return array;
 }
 
-intarray __getmatching(MemoryCache const* c, std::string phrase, bool match_prefixes, langfield_type langfield) {
+intarray __getmatching(MemoryCache const* c, std::string phrase, PrefixMatch match_prefixes, langfield_type langfield) {
     intarray array;
 
     if (!match_prefixes) phrase.push_back(LANGFIELD_SEPARATOR);

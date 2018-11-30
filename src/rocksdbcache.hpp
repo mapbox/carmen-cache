@@ -117,7 +117,7 @@ void mergeQueue(uv_work_t* req);
 void mergeAfter(uv_work_t* req, int status);
 
 intarray __get(RocksDBCache const* c, std::string phrase, langfield_type langfield);
-intarray __getmatching(RocksDBCache const* c, std::string phrase, bool match_prefixes, langfield_type langfield);
+intarray __getmatching(RocksDBCache const* c, std::string phrase, PrefixMatch match_prefixes, langfield_type langfield);
 
 } // namespace carmen
 
