@@ -114,8 +114,9 @@ inline NAN_METHOD(_genericgetmatching) {
     if (!info[0]->IsString()) {
         return Nan::ThrowTypeError("first arg must be a String");
     }
-    if (!info[1]->IsBoolean()) {
-        return Nan::ThrowTypeError("second arg must be a Bool");
+    if (!info[1]->IsNumber()) {
+        // TODO check value is 0-2
+        return Nan::ThrowTypeError("second arg must be a integer between 0 - 2");
     }
     try {
         Nan::Utf8String utf8_id(info[0]);

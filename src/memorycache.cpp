@@ -28,7 +28,7 @@ intarray __get(MemoryCache const* c, std::string phrase, langfield_type langfiel
 intarray __getmatching(MemoryCache const* c, std::string phrase, PrefixMatch match_prefixes, langfield_type langfield) {
     intarray array;
 
-    if (!match_prefixes) phrase.push_back(LANGFIELD_SEPARATOR);
+    if (match_prefixes == PrefixMatch::disabled) phrase.push_back(LANGFIELD_SEPARATOR);
     size_t phrase_length = phrase.length();
     const char* phrase_data = phrase.data();
 
@@ -41,6 +41,12 @@ intarray __getmatching(MemoryCache const* c, std::string phrase, PrefixMatch mat
         if (item_length < phrase_length) continue;
 
         if (memcmp(phrase_data, item_data, phrase_length) == 0) {
+            if (match_prefixes == PrefixMatch::word_boundry) {
+                size_t end = phrase_length; // Unsure about this, assumes it's save to read that one more position into the string
+                if (item_data[end] != LANGFIELD_SEPARATOR && item_data[end] != ' ') {
+                    continue;
+                }
+            }
             langfield_type message_langfield = extract_langfield(item.first);
 
             if (message_langfield & langfield) {

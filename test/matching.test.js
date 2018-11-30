@@ -66,13 +66,19 @@ test('getMatching', (t) => {
         Grid.encode({ id: 73, x: 1, y: 1, relev: 1, score: 1 })
     ], [0]);
 
+    cache._set('word boundry', [
+        Grid.encode({ id: 81, x: 1, y: 1, relev: 1, score: 1 }),
+        Grid.encode({ id: 82, x: 1, y: 1, relev: 1, score: 1 }),
+        Grid.encode({ id: 83, x: 1, y: 1, relev: 1, score: 1 })
+    ], [0]);
+
     // cache A serializes data, cache B loads serialized data.
     const pack = tmpfile();
     cache.pack(pack);
     const loader = new carmenCache.RocksDBCache('packed', pack);
 
     [cache, loader].forEach((c) => {
-        const test_all_langs_no_prefix = c._getMatching('test', false);
+        const test_all_langs_no_prefix = c._getMatching('test', 0);
         t.deepEqual(
             getIds(test_all_langs_no_prefix),
             [1, 2, 3, 11, 12, 13, 21, 22, 23, 31, 32, 33, 41, 42, 43],
@@ -84,7 +90,7 @@ test('getMatching', (t) => {
             "getMatching for 'test' with no prefix match and no language includes only match_language: true"
         );
 
-        const test_all_langs_with_prefix = c._getMatching('test', true);
+        const test_all_langs_with_prefix = c._getMatching('test', 1);
         t.deepEqual(
             getIds(test_all_langs_with_prefix),
             [1, 2, 3, 11, 12, 13, 21, 22, 23, 31, 32, 33, 41, 42, 43, 51, 52, 53],
@@ -96,9 +102,9 @@ test('getMatching', (t) => {
             "getMatching for 'test' with prefix match and no language includes only match_language: true"
         );
 
-        t.false(c._getMatching('te', false), "getMatching for 'te' with no prefix match returns nothing");
+        t.false(c._getMatching('te', 0), "getMatching for 'te' with no prefix match returns nothing");
 
-        const te_all_langs_with_prefix = c._getMatching('te', true);
+        const te_all_langs_with_prefix = c._getMatching('te', 1);
         t.deepEqual(
             getIds(te_all_langs_with_prefix),
             [1, 2, 3, 11, 12, 13, 21, 22, 23, 31, 32, 33, 41, 42, 43, 51, 52, 53, 61, 62, 63],
@@ -110,7 +116,7 @@ test('getMatching', (t) => {
             "getMatching for 'te' with prefix match and no language includes only match_language: true"
         );
 
-        const test_all_langs_with_prefix_0 = c._getMatching('test', true, [0]);
+        const test_all_langs_with_prefix_0 = c._getMatching('test', 1, [0]);
         const test_all_langs_with_prefix_0_matched = getByLanguageMatch(test_all_langs_with_prefix_0, true);
         const test_all_langs_with_prefix_0_unmatched = getByLanguageMatch(test_all_langs_with_prefix_0, false);
         t.deepEqual(
@@ -134,7 +140,7 @@ test('getMatching', (t) => {
             'all the language-matching results come first'
         );
 
-        const te_all_langs_with_prefix_0 = c._getMatching('te', true, [0]);
+        const te_all_langs_with_prefix_0 = c._getMatching('te', 1, [0]);
         const te_all_langs_with_prefix_0_matched = getByLanguageMatch(te_all_langs_with_prefix_0, true);
         const te_all_langs_with_prefix_0_unmatched = getByLanguageMatch(te_all_langs_with_prefix_0, false);
         t.deepEqual(
@@ -158,7 +164,7 @@ test('getMatching', (t) => {
             'all the language-matching results come first'
         );
 
-        const test_all_langs_with_prefix_1 = c._getMatching('test', true, [1]);
+        const test_all_langs_with_prefix_1 = c._getMatching('test', 1, [1]);
         const test_all_langs_with_prefix_1_matched = getByLanguageMatch(test_all_langs_with_prefix_1, true);
         const test_all_langs_with_prefix_1_unmatched = getByLanguageMatch(test_all_langs_with_prefix_1, false);
         t.deepEqual(
@@ -182,7 +188,7 @@ test('getMatching', (t) => {
             'all the language-matching results come first'
         );
 
-        const test_all_langs_with_prefix_7 = c._getMatching('test', true, [7]);
+        const test_all_langs_with_prefix_7 = c._getMatching('test', 1, [7]);
         const test_all_langs_with_prefix_7_matched = getByLanguageMatch(test_all_langs_with_prefix_7, true);
         const test_all_langs_with_prefix_7_unmatched = getByLanguageMatch(test_all_langs_with_prefix_7, false);
         t.deepEqual(
@@ -205,6 +211,35 @@ test('getMatching', (t) => {
             getIds(test_all_langs_with_prefix_7_matched),
             'all the language-matching results come first'
         );
+
+
+        t.false(c._getMatching('word', 0), "getMatching for 'word' with no prefix match returns nothing");
+        // TODO fix me, at the case where we're right at the memo prefix lenghts weird things can happen
+        // t.false(c._getMatching('wor', 2), "getMatching for 'wor' with word boundary prefix match returns nothing");
+        t.false(c._getMatching('word boun', 2), "getMatching for 'word boun' with word boundary prefix match returns nothing");
+
+        const test_all_langs_prefix_8 = c._getMatching('wor', 1);
+        t.deepEqual(
+            getIds(test_all_langs_prefix_8),
+            [81, 82, 83],
+            "getMatching for 'wor' with prefix match and no language includes all IDs for 'word boundary'"
+        );
+
+        const test_all_langs_at_boundary_prefix_8 = c._getMatching('word', 2);
+        t.deepEqual(
+            getIds(test_all_langs_at_boundary_prefix_8),
+            [81, 82, 83],
+            "getMatching for 'word' with word boundary prefix match and no language includes all IDs for 'word boundary'"
+        );
+
+        // TODO fix...
+        // also test longer than 6 chars b/c of prefix cache.
+        // const test_all_langs_at_boundary_prefix_8_full = c._getMatching('word boundary', 2);
+        // t.deepEqual(
+        //    getIds(test_all_langs_at_boundary_prefix_8_full),
+        //    [81, 82, 83],
+        //    "getMatching for 'word boundary' with word boundary prefix match and no language includes all IDs for 'word boundary'"
+        // );
     });
 
     // t.deepEqual(loader.list('grid'), [ 'else.', 'something', 'test', 'test.' ], 'keys in shard');

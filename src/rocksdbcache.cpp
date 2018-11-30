@@ -31,14 +31,15 @@ intarray __get(RocksDBCache const* c, std::string phrase, langfield_type langfie
 intarray __getmatching(RocksDBCache const* c, std::string phrase, PrefixMatch match_prefixes, langfield_type langfield) {
     intarray array;
 
-    if (!match_prefixes) phrase.push_back(LANGFIELD_SEPARATOR);
+    if (match_prefixes == PrefixMatch::disabled) phrase.push_back(LANGFIELD_SEPARATOR);
+
     size_t phrase_length = phrase.length();
 
     // Load values from message cache
     std::vector<std::tuple<std::string, bool>> messages;
     std::vector<sortableGrid> grids;
 
-    if (match_prefixes) {
+    if (match_prefixes != PrefixMatch::disabled) {
         // if this is an autocomplete scan, use the prefix cache
         if (phrase_length <= MEMO_PREFIX_LENGTH_T1) {
             phrase = "=1" + phrase.substr(0, MEMO_PREFIX_LENGTH_T1);
@@ -54,6 +55,17 @@ intarray __getmatching(RocksDBCache const* c, std::string phrase, PrefixMatch ma
     std::unique_ptr<rocksdb::Iterator> rit(db->NewIterator(rocksdb::ReadOptions()));
     for (rit->Seek(phrase); rit->Valid() && rit->key().ToString().compare(0, phrase.size(), phrase) == 0; rit->Next()) {
         std::string key = rit->key().ToString();
+
+        if (match_prefixes == PrefixMatch::word_boundry) {
+            // Unsure about this b/c we mutate the phrase above
+            size_t end = phrase_length;
+            if (phrase_length <= MEMO_PREFIX_LENGTH_T2) end += 2;
+
+            char endChar = key.at(end);
+            if (endChar != LANGFIELD_SEPARATOR && endChar != ' ') {
+                continue;
+            }
+        }
 
         // grab the langfield from the end of the key
         langfield_type message_langfield = extract_langfield(key);
