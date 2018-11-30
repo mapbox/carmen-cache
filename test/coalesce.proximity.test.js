@@ -56,7 +56,7 @@ const test = require('tape');
             zoom: 14,
             weight: 1,
             phrase: '1',
-            prefix: false
+            prefix: 0
         }], {
             radius: 200,
             centerzxy: [14, 100 + 10, 100 + 15]
@@ -76,7 +76,7 @@ const test = require('tape');
             zoom: 14,
             weight: 1,
             phrase: '1',
-            prefix: false
+            prefix: 0
         }], {
             radius: 200,
             centerzxy: [14, 100 + 10, 100 - 15]
@@ -96,7 +96,7 @@ const test = require('tape');
             zoom: 14,
             weight: 1,
             phrase: '1',
-            prefix: false
+            prefix: 0
         }], {
             radius: 200,
             centerzxy: [14, 100 - 10, 100 - 15]
@@ -116,7 +116,7 @@ const test = require('tape');
             zoom: 14,
             weight: 1,
             phrase: '1',
-            prefix: false
+            prefix: 0
         }], {
             radius: 200,
             centerzxy: [14, 100 - 10, 100 + 15]

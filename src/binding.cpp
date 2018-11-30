@@ -225,7 +225,6 @@ NAN_METHOD(JSCache<MemoryCache>::New) {
   * @name get
   * @memberof JSCache
   * @param {String} id
-  * @param {Boolean} matches_prefixes: T if it matches exactly, F: if it does not
   * @param {Array} optional; array of languages
   * @returns {Array} integers referring to grids
   * @example
@@ -287,7 +286,7 @@ NAN_METHOD(JSCache<T>::_get) {
  * @name get
  * @memberof JSCache
  * @param {String} id
- * @param {Boolean} matches_prefixes: T if it matches exactly, F: if it does not
+ * @param {Number} matches_prefix - whether or do an exact match (0), prefix scan(1), or word boundary scan(2); used for autocomplete 
  * @param {Array} optional; array of languages
  * @returns {Array} integers referring to grids
  * @example
@@ -307,8 +306,8 @@ NAN_METHOD(JSCache<T>::_getmatching) {
     if (!info[0]->IsString()) {
         return Nan::ThrowTypeError("first arg must be a String");
     }
-    if (!info[1]->IsBoolean()) {
-        return Nan::ThrowTypeError("second arg must be a Bool");
+    if (!info[1]->IsNumber()) {
+        return Nan::ThrowTypeError("second arg must be a integer between 0 - 2");
     }
     try {
         Nan::Utf8String utf8_id(info[0]);
@@ -317,7 +316,11 @@ NAN_METHOD(JSCache<T>::_getmatching) {
         }
         std::string id(*utf8_id);
 
-        bool match_prefixes = info[1]->BooleanValue();
+        int32_t int32_prefix = info[1]->Int32Value();
+        if (int32_prefix < 0 || int32_prefix > 2) {
+            return Nan::ThrowTypeError("prefix value must be a integer between 0 - 2");
+        }
+        PrefixMatch match_prefixes = static_cast<PrefixMatch>(int32_prefix);
 
         langfield_type langfield;
         if (info.Length() > 2 && !(info[2]->IsNull() || info[2]->IsUndefined())) {
@@ -419,7 +422,7 @@ NAN_METHOD(JSCache<MemoryCache>::_set) {
  * @type {Object}
  * @property {String} phrase - The matched string
  * @property {Number} weight - A float between 0 and 1 representing how much of the query this string covers
- * @property {Boolean} prefix - whether or not to do a prefix scan (as opposed to an exact match scan); used for autocomplete
+ * @property {Number} prefix - whether or do an exact match (0), prefix scan(1), or word boundary scan(2); used for autocomplete
  * @property {Number} idx - an identifier of the index the match came from; opaque to carmen-cache but returned in results
  * @property {Number} zoom - the configured tile zoom level for the index
  * @property {Number} mask - a bitmask representing which tokens in the original query the subquery covers
@@ -514,7 +517,7 @@ NAN_METHOD(JSCoalesce) {
 
             double weight;
             std::string phrase;
-            bool prefix;
+            PrefixMatch prefix;
             unsigned short idx;
             unsigned short zoom;
             uint32_t mask;
@@ -581,10 +584,15 @@ NAN_METHOD(JSCoalesce) {
                 return Nan::ThrowTypeError("missing prefix property");
             } else {
                 Local<Value> prop_val = jsStack->Get(Nan::New("prefix").ToLocalChecked());
-                if (!prop_val->IsBoolean()) {
-                    return Nan::ThrowTypeError("prefix value must be a boolean");
+                if (!prop_val->IsNumber()) {
+                    return Nan::ThrowTypeError("prefix value must be a integer between 0 - 2");
                 }
-                prefix = prop_val->BooleanValue();
+
+                int32_t int32_prefix = prop_val->Int32Value();
+                if (int32_prefix < 0 || int32_prefix > 2) {
+                    return Nan::ThrowTypeError("prefix value must be a integer between 0 - 2");
+                }
+                prefix = static_cast<PrefixMatch>(int32_prefix);
             }
 
             if (!jsStack->Has(Nan::New("mask").ToLocalChecked())) {
