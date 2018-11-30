@@ -18,20 +18,27 @@ intarray RocksDBCache::__get(const std::string& phrase, langfield_type langfield
     return array;
 }
 
-intarray RocksDBCache::__getmatching(const std::string& phrase_ref, bool match_prefixes, langfield_type langfield) {
+intarray RocksDBCache::__getmatching(const std::string& phrase_ref, PrefixMatch match_prefixes, langfield_type langfield) {
     intarray array;
     std::string phrase = phrase_ref;
 
-    if (!match_prefixes) {
+    if (match_prefixes == PrefixMatch::disabled) {
         phrase.push_back(LANGFIELD_SEPARATOR);
     }
+
     size_t phrase_length = phrase.length();
+    if (match_prefixes == PrefixMatch::word_boundary) {
+        // If we're looking for a word boundary we need have one more character
+        // available than the phrase is long. Incrementing this lengh ensures we
+        // don't use a prefix cache that could cut off the word break.
+        phrase_length++;
+    }
 
     // Load values from message cache
     std::vector<std::tuple<std::string, bool>> messages;
     std::vector<sortableGrid> grids;
 
-    if (match_prefixes) {
+    if (match_prefixes != PrefixMatch::disabled) {
         // if this is an autocomplete scan, use the prefix cache
         if (phrase_length <= MEMO_PREFIX_LENGTH_T1) {
             phrase = "=1" + phrase.substr(0, MEMO_PREFIX_LENGTH_T1);
@@ -45,6 +52,15 @@ intarray RocksDBCache::__getmatching(const std::string& phrase_ref, bool match_p
     std::unique_ptr<rocksdb::Iterator> rit(db->NewIterator(rocksdb::ReadOptions()));
     for (rit->Seek(phrase); rit->Valid() && rit->key().ToString().compare(0, phrase.size(), phrase) == 0; rit->Next()) {
         std::string key = rit->key().ToString();
+
+        if (match_prefixes == PrefixMatch::word_boundary) {
+            // Read one character beyond the input prefix length, should always
+            // be safe because of the LANGFIELD_SEPARATOR
+            char endChar = key.at(phrase.length());
+            if (endChar != LANGFIELD_SEPARATOR && endChar != ' ') {
+                continue;
+            }
+        }
 
         // grab the langfield from the end of the key
         langfield_type message_langfield = extract_langfield(key);

@@ -18,11 +18,11 @@ intarray MemoryCache::__get(const std::string& phrase, langfield_type langfield)
     return array;
 }
 
-intarray MemoryCache::__getmatching(const std::string& phrase_ref, bool match_prefixes, langfield_type langfield) {
+intarray MemoryCache::__getmatching(const std::string& phrase_ref, PrefixMatch match_prefixes, langfield_type langfield) {
     intarray array;
     std::string phrase = phrase_ref;
 
-    if (!match_prefixes) phrase.push_back(LANGFIELD_SEPARATOR);
+    if (match_prefixes == PrefixMatch::disabled) phrase.push_back(LANGFIELD_SEPARATOR);
     size_t phrase_length = phrase.length();
     const char* phrase_data = phrase.data();
     // Load values from memory cache
@@ -34,6 +34,12 @@ intarray MemoryCache::__getmatching(const std::string& phrase_ref, bool match_pr
         if (item_length < phrase_length) continue;
 
         if (memcmp(phrase_data, item_data, phrase_length) == 0) {
+            if (match_prefixes == PrefixMatch::word_boundary) {
+                size_t end = phrase_length;
+                if (item_data[end] != LANGFIELD_SEPARATOR && item_data[end] != ' ') {
+                    continue;
+                }
+            }
             langfield_type message_langfield = extract_langfield(item.first);
 
             if ((message_langfield & langfield) != 0u) {
