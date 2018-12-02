@@ -66,7 +66,7 @@ test('getMatching', (t) => {
         Grid.encode({ id: 73, x: 1, y: 1, relev: 1, score: 1 })
     ], [0]);
 
-    cache._set('word boundry', [
+    cache._set('word boundary', [
         Grid.encode({ id: 81, x: 1, y: 1, relev: 1, score: 1 }),
         Grid.encode({ id: 82, x: 1, y: 1, relev: 1, score: 1 }),
         Grid.encode({ id: 83, x: 1, y: 1, relev: 1, score: 1 })
@@ -214,8 +214,7 @@ test('getMatching', (t) => {
 
 
         t.false(c._getMatching('word', 0), "getMatching for 'word' with no prefix match returns nothing");
-        // TODO fix me, at the case where we're right at the memo prefix lenghts weird things can happen
-        // t.false(c._getMatching('wor', 2), "getMatching for 'wor' with word boundary prefix match returns nothing");
+        t.false(c._getMatching('wor', 2), "getMatching for 'wor' with word boundary prefix match returns nothing");
         t.false(c._getMatching('word boun', 2), "getMatching for 'word boun' with word boundary prefix match returns nothing");
 
         const test_all_langs_prefix_8 = c._getMatching('wor', 1);
@@ -232,14 +231,13 @@ test('getMatching', (t) => {
             "getMatching for 'word' with word boundary prefix match and no language includes all IDs for 'word boundary'"
         );
 
-        // TODO fix...
         // also test longer than 6 chars b/c of prefix cache.
-        // const test_all_langs_at_boundary_prefix_8_full = c._getMatching('word boundary', 2);
-        // t.deepEqual(
-        //    getIds(test_all_langs_at_boundary_prefix_8_full),
-        //    [81, 82, 83],
-        //    "getMatching for 'word boundary' with word boundary prefix match and no language includes all IDs for 'word boundary'"
-        // );
+        const test_all_langs_at_boundary_prefix_8_full = c._getMatching('word boundary', 2);
+        t.deepEqual(
+            getIds(test_all_langs_at_boundary_prefix_8_full),
+            [81, 82, 83],
+            "getMatching for 'word boundary' with word boundary prefix match and no language includes all IDs for 'word boundary'"
+        );
     });
 
     // t.deepEqual(loader.list('grid'), [ 'else.', 'something', 'test', 'test.' ], 'keys in shard');

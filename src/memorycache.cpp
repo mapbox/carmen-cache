@@ -41,7 +41,7 @@ intarray __getmatching(MemoryCache const* c, std::string phrase, PrefixMatch mat
         if (item_length < phrase_length) continue;
 
         if (memcmp(phrase_data, item_data, phrase_length) == 0) {
-            if (match_prefixes == PrefixMatch::word_boundry) {
+            if (match_prefixes == PrefixMatch::word_boundary) {
                 size_t end = phrase_length; // Unsure about this, assumes it's save to read that one more position into the string
                 if (item_data[end] != LANGFIELD_SEPARATOR && item_data[end] != ' ') {
                     continue;

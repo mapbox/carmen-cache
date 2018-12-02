@@ -34,6 +34,9 @@ intarray __getmatching(RocksDBCache const* c, std::string phrase, PrefixMatch ma
     if (match_prefixes == PrefixMatch::disabled) phrase.push_back(LANGFIELD_SEPARATOR);
 
     size_t phrase_length = phrase.length();
+    if (match_prefixes == PrefixMatch::word_boundary) {
+        phrase_length++;
+    }
 
     // Load values from message cache
     std::vector<std::tuple<std::string, bool>> messages;
@@ -56,12 +59,10 @@ intarray __getmatching(RocksDBCache const* c, std::string phrase, PrefixMatch ma
     for (rit->Seek(phrase); rit->Valid() && rit->key().ToString().compare(0, phrase.size(), phrase) == 0; rit->Next()) {
         std::string key = rit->key().ToString();
 
-        if (match_prefixes == PrefixMatch::word_boundry) {
-            // Unsure about this b/c we mutate the phrase above
-            size_t end = phrase_length;
-            if (phrase_length <= MEMO_PREFIX_LENGTH_T2) end += 2;
-
-            char endChar = key.at(end);
+        if (match_prefixes == PrefixMatch::word_boundary) {
+            // Read one character beyond the input prefix length, should always
+            // be safe because of the LANGFIELD_SEPARATOR
+            char endChar = key.at(phrase.length());
             if (endChar != LANGFIELD_SEPARATOR && endChar != ' ') {
                 continue;
             }

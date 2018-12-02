@@ -16,7 +16,7 @@ using namespace v8;
  * @type {Object}
  * @property {String} phrase - The matched string
  * @property {Number} weight - A float between 0 and 1 representing how much of the query this string covers
- * @property {Number} prefix - whether or do an exact match (0), prefix scan(1), or word boundry scan(2); used for autocomplete
+ * @property {Number} prefix - whether or do an exact match (0), prefix scan(1), or word boundary scan(2); used for autocomplete
  * @property {Number} idx - an identifier of the index the match came from; opaque to carmen-cache but returned in results
  * @property {Number} zoom - the configured tile zoom level for the index
  * @property {Number} mask - a bitmask representing which tokens in the original query the subquery covers

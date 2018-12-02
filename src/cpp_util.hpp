@@ -44,7 +44,10 @@ class noncopyable {
     noncopyable& operator=(noncopyable const&) = delete;
 };
 
-typedef enum { disabled, enabled, word_boundry } PrefixMatch;
+typedef enum {
+    disabled,
+    enabled,
+    word_boundary } PrefixMatch;
 
 typedef unsigned __int128 langfield_type;
 constexpr uint64_t LANGUAGE_MATCH_BOOST = static_cast<const uint64_t>(1) << 63;
