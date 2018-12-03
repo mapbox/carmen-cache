@@ -115,7 +115,6 @@ inline NAN_METHOD(_genericgetmatching) {
         return Nan::ThrowTypeError("first arg must be a String");
     }
     if (!info[1]->IsNumber()) {
-        // TODO check value is 0-2
         return Nan::ThrowTypeError("second arg must be a integer between 0 - 2");
     }
     try {
@@ -125,7 +124,11 @@ inline NAN_METHOD(_genericgetmatching) {
         }
         std::string id(*utf8_id);
 
-        PrefixMatch match_prefixes = static_cast<PrefixMatch>(info[1]->Int32Value());
+        int32_t int32_prefix = info[1]->Int32Value();
+        if (int32_prefix < 0 || int32_prefix > 2) {
+            return Nan::ThrowTypeError("second arg must be a integer between 0 - 2");
+        }
+        PrefixMatch match_prefixes = static_cast<PrefixMatch>(int32_prefix);
 
         langfield_type langfield;
         if (info.Length() > 2 && !(info[2]->IsNull() || info[2]->IsUndefined())) {

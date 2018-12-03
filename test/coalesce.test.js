@@ -253,6 +253,15 @@ test('coalesce args', (t) => {
     }, /prefix value must be a integer between 0 - 2/, 'throws');
 
     t.throws(() => {
+        coalesce([{ cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, weight: 0.5, zoom: 1, phrase: '1', prefix: 3 }],{},() => {});
+    }, /prefix value must be a integer between 0 - 2/, 'throws on 3');
+
+    t.throws(() => {
+        coalesce([{ cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, weight: 0.5, zoom: 1, phrase: '1', prefix: -1 }],{},() => {});
+    }, /prefix value must be a integer between 0 - 2/, 'throws on 3');
+
+
+    t.throws(() => {
         coalesce([{ cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, weight: .5, zoom: 1, phrase: '' }],{},() => {});
     }, /encountered invalid phrase/, 'throws');
 

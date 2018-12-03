@@ -179,10 +179,14 @@ NAN_METHOD(coalesce) {
             } else {
                 Local<Value> prop_val = jsStack->Get(Nan::New("prefix").ToLocalChecked());
                 if (!prop_val->IsNumber()) {
-                    // TODO check value is 0-2
                     return Nan::ThrowTypeError("prefix value must be a integer between 0 - 2");
                 }
-                prefix = static_cast<PrefixMatch>(prop_val->Int32Value());
+
+                int32_t int32_prefix = prop_val->Int32Value();
+                if (int32_prefix < 0 || int32_prefix > 2) {
+                    return Nan::ThrowTypeError("prefix value must be a integer between 0 - 2");
+                }
+                prefix = static_cast<PrefixMatch>(int32_prefix);
             }
 
             if (!jsStack->Has(Nan::New("mask").ToLocalChecked())) {

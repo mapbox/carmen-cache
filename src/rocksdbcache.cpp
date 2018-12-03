@@ -35,6 +35,9 @@ intarray __getmatching(RocksDBCache const* c, std::string phrase, PrefixMatch ma
 
     size_t phrase_length = phrase.length();
     if (match_prefixes == PrefixMatch::word_boundary) {
+        // If we're looking for a word boundary we need have one more character
+        // available than the phrase is long. Incrementing this lengh ensures we
+        // don't use a prefix cache that could cut off the word break.
         phrase_length++;
     }
 
