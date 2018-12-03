@@ -183,7 +183,6 @@ NAN_METHOD(coalesce) {
                     return Nan::ThrowTypeError("prefix value must be a integer between 0 - 2");
                 }
                 prefix = static_cast<PrefixMatch>(prop_val->Int32Value());
-
             }
 
             if (!jsStack->Has(Nan::New("mask").ToLocalChecked())) {

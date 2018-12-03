@@ -47,7 +47,8 @@ class noncopyable {
 typedef enum {
     disabled,
     enabled,
-    word_boundary } PrefixMatch;
+    word_boundary
+} PrefixMatch;
 
 typedef unsigned __int128 langfield_type;
 constexpr uint64_t LANGUAGE_MATCH_BOOST = static_cast<const uint64_t>(1) << 63;
