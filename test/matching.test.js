@@ -213,9 +213,9 @@ test('getMatching', (t) => {
         );
 
 
+        t.false(c._getMatching('wor', 0), "getMatching for 'wor' with no prefix match returns nothing");
         t.false(c._getMatching('word', 0), "getMatching for 'word' with no prefix match returns nothing");
-        t.false(c._getMatching('wor', 2), "getMatching for 'wor' with word boundary prefix match returns nothing");
-        t.false(c._getMatching('word boun', 2), "getMatching for 'word boun' with word boundary prefix match returns nothing");
+        t.false(c._getMatching('word boun', 0), "getMatching for 'word bound' with no prefix match returns nothing");
 
         const test_all_langs_prefix_8 = c._getMatching('wor', 1);
         t.deepEqual(
@@ -224,6 +224,9 @@ test('getMatching', (t) => {
             "getMatching for 'wor' with prefix match and no language includes all IDs for 'word boundary'"
         );
 
+        // Extra checks around 3 & 6 char thresholds b/c of prefix cache.
+        t.false(c._getMatching('wor', 2), "getMatching for 'wor' with word boundary prefix match returns nothing");
+
         const test_all_langs_at_boundary_prefix_8 = c._getMatching('word', 2);
         t.deepEqual(
             getIds(test_all_langs_at_boundary_prefix_8),
@@ -231,7 +234,10 @@ test('getMatching', (t) => {
             "getMatching for 'word' with word boundary prefix match and no language includes all IDs for 'word boundary'"
         );
 
-        // also test longer than 6 chars b/c of prefix cache.
+        t.false(c._getMatching('word b', 2), "getMatching for 'wor' with word boundary prefix match returns nothing");
+
+        t.false(c._getMatching('word boun', 2), "getMatching for 'word boun' with word boundary prefix match returns nothing");
+
         const test_all_langs_at_boundary_prefix_8_full = c._getMatching('word boundary', 2);
         t.deepEqual(
             getIds(test_all_langs_at_boundary_prefix_8_full),
