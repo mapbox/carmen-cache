@@ -7,6 +7,7 @@
 const MemoryCache = require('../index.js').MemoryCache;
 const Grid = require('./grid.js');
 const coalesce = require('../index.js').coalesce;
+const scan = require('../index.js').PREFIX_SCAN;
 const test = require('tape');
 
 (function() {
@@ -56,7 +57,7 @@ const test = require('tape');
             zoom: 14,
             weight: 1,
             phrase: '1',
-            prefix: 0
+            prefix: scan.disabled
         }], {
             radius: 200,
             centerzxy: [14, 100 + 10, 100 + 15]
@@ -76,7 +77,7 @@ const test = require('tape');
             zoom: 14,
             weight: 1,
             phrase: '1',
-            prefix: 0
+            prefix: scan.disabled
         }], {
             radius: 200,
             centerzxy: [14, 100 + 10, 100 - 15]
@@ -96,7 +97,7 @@ const test = require('tape');
             zoom: 14,
             weight: 1,
             phrase: '1',
-            prefix: 0
+            prefix: scan.disabled
         }], {
             radius: 200,
             centerzxy: [14, 100 - 10, 100 - 15]
@@ -116,7 +117,7 @@ const test = require('tape');
             zoom: 14,
             weight: 1,
             phrase: '1',
-            prefix: 0
+            prefix: scan.disabled
         }], {
             radius: 200,
             centerzxy: [14, 100 - 10, 100 + 15]
