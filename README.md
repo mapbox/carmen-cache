@@ -12,7 +12,7 @@ carmen-cache
 To install `carmen-cache` run:
 
 ```
-npm install
+yarn install
 ```
 
 By default, binaries are provided for `64 bit OS X >= 10.8` and `64 bit Linux (>= Ubuntu Trusty)`. On those platforms no external dependencies are needed.
@@ -25,6 +25,7 @@ To build from source run:
 
 ```
 make
+yarn test
 ```
 
 This will automatically:
