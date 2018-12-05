@@ -7,7 +7,7 @@
     "url": "git://github.com/mapbox/carmen-cache.git",
     "type": "git"
   },
-  "version": "0.22.0-rocksdb-update",
+  "version": "0.23.0",
   "dependencies": {
     "nan": "~2.10.0",
     "node-pre-gyp": "~0.10.1"
