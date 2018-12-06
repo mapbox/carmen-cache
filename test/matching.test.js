@@ -21,6 +21,33 @@ const getByLanguageMatch = function(grids, match) {
     return grids.filter((x) => { return x.matches_language === match; });
 };
 
+test('getMatching args', (t) => {
+    const c = new carmenCache.MemoryCache('mem');
+
+    t.throws(() => {
+        c._getMatching();
+    }, /expected two or three info: id, match_prefixes, \[languages\]/, 'require args');
+
+    t.throws(() => {
+        c._getMatching(false, false);
+    }, /first arg must be a String/, 'require string as first arg');
+
+    t.throws(() => {
+        c._getMatching('1', false);
+    }, /second arg must be an integer between 0 - 2/, 'require number as second args');
+
+    t.throws(() => {
+        c._getMatching('1', 3);
+    }, /second arg must be an integer between 0 - 2/, 'require integer between 0-2 as second arg');
+
+
+    t.throws(() => {
+        c._getMatching('1', 0, false);
+    }, /third arg, if supplied, must be an Array/, 'require array as third arg');
+
+    t.end();
+});
+
 test('getMatching', (t) => {
     const cache = new carmenCache.MemoryCache('mem');
 

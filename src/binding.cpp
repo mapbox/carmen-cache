@@ -307,7 +307,7 @@ NAN_METHOD(JSCache<T>::_getmatching) {
         return Nan::ThrowTypeError("first arg must be a String");
     }
     if (!info[1]->IsNumber()) {
-        return Nan::ThrowTypeError("second arg must be a integer between 0 - 2");
+        return Nan::ThrowTypeError("second arg must be an integer between 0 - 2");
     }
     try {
         Nan::Utf8String utf8_id(info[0]);
@@ -318,14 +318,14 @@ NAN_METHOD(JSCache<T>::_getmatching) {
 
         int32_t int32_prefix = info[1]->Int32Value();
         if (int32_prefix < 0 || int32_prefix > 2) {
-            return Nan::ThrowTypeError("prefix value must be a integer between 0 - 2");
+            return Nan::ThrowTypeError("second arg must be an integer between 0 - 2");
         }
         PrefixMatch match_prefixes = static_cast<PrefixMatch>(int32_prefix);
 
         langfield_type langfield;
         if (info.Length() > 2 && !(info[2]->IsNull() || info[2]->IsUndefined())) {
             if (!info[2]->IsArray()) {
-                return Nan::ThrowTypeError("third arg, if supplied must be an Array");
+                return Nan::ThrowTypeError("third arg, if supplied, must be an Array");
             }
             langfield = langarrayToLangfield(Local<Array>::Cast(info[2]));
         } else {
