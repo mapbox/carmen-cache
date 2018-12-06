@@ -79,7 +79,7 @@ slightly in specific field names and types.
 
 -   `phrase` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** The matched string
 -   `weight` **[Number](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Number)** A float between 0 and 1 representing how much of the query this string covers
--   `prefix` **[Boolean](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Boolean)** whether or not to do a prefix scan (as opposed to an exact match scan); used for autocomplete
+-   `prefix` **[Number](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Number)** whether or do an exact match (0), prefix scan(1), or word boundary scan(2); used for autocomplete
 -   `idx` **[Number](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Number)** an identifier of the index the match came from; opaque to carmen-cache but returned in results
 -   `zoom` **[Number](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Number)** the configured tile zoom level for the index
 -   `mask` **[Number](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Number)** a bitmask representing which tokens in the original query the subquery covers
@@ -142,7 +142,7 @@ Retrieves data exactly matching phrase and language settings by id
 **Parameters**
 
 -   `id` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** 
--   `matches_prefixes` **[Boolean](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Boolean)** : T if it matches exactly, F: if it does not
+-   `matches_prefixes` **[Number](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Number)** whether or do an exact match (0), prefix scan(1), or word boundary scan(2); used for autocomplete
 -   `optional` **[Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array)** ; array of languages
 
 **Examples**
@@ -185,7 +185,7 @@ and with a relevance penalty applied to languages that don't match those request
 **Parameters**
 
 -   `id` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** 
--   `matches_prefixes` **[Boolean](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Boolean)** : T if it matches exactly, F: if it does not
+-   `matches_prefixes` **[Number](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Number)** whether or do an exact match (0), prefix scan(1), or word boundary scan(2); used for autocomplete
 -   `optional` **[Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array)** ; array of languages
 
 **Examples**
@@ -368,7 +368,7 @@ Retrieves data exactly matching phrase and language settings by id
 **Parameters**
 
 -   `id` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** 
--   `matches_prefixes` **[Boolean](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Boolean)** : T if it matches exactly, F: if it does not
+-   `matches_prefixes` **[Number](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Number)** whether or do an exact match (0), prefix scan(1), or word boundary scan(2); used for autocomplete
 -   `optional` **[Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array)** ; array of languages
 
 **Examples**
@@ -390,7 +390,7 @@ Retrieves grid that at least partially matches phrase and/or language inputs
 **Parameters**
 
 -   `id` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** 
--   `matches_prefixes` **[Boolean](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Boolean)** : T if it matches exactly, F: if it does not
+-   `matches_prefixes` **[Number](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Number)** whether or do an exact match (0), prefix scan(1), or word boundary scan(2); used for autocomplete
 -   `optional` **[Array](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Array)** ; array of languages
 
 **Examples**

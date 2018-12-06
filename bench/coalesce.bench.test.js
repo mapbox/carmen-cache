@@ -14,7 +14,7 @@ const test = require('tape');
         zoom: 14,
         weight: 1,
         phrase: '3848571113',
-        prefix: false,
+        prefix: 0,
         mask: 1 << 0
     }];
     test('coalesceSingle', (t) => {
@@ -84,7 +84,7 @@ const test = require('tape');
         zoom: 12,
         weight: 0.25,
         phrase: '1965155344',
-        prefix: false
+        prefix: 0
     }, {
         cache: b,
         mask: 1 << 1,
@@ -92,7 +92,7 @@ const test = require('tape');
         zoom: 14,
         weight: 0.75,
         phrase: '3848571113',
-        prefix: false
+        prefix: 0
     }];
     test('coalesceMulti', (t) => {
         const time = +new Date;

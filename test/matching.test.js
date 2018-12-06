@@ -1,5 +1,6 @@
 'use strict';
 const carmenCache = require('../index.js');
+const scan = carmenCache.PREFIX_SCAN;
 const test = require('tape');
 const fs = require('fs');
 const Grid = require('./grid.js');
@@ -19,6 +20,33 @@ const getIds = function(grids) {
 const getByLanguageMatch = function(grids, match) {
     return grids.filter((x) => { return x.matches_language === match; });
 };
+
+test('getMatching args', (t) => {
+    const c = new carmenCache.MemoryCache('mem');
+
+    t.throws(() => {
+        c._getMatching();
+    }, /expected two or three info: id, match_prefixes, \[languages\]/, 'require args');
+
+    t.throws(() => {
+        c._getMatching(false, false);
+    }, /first arg must be a String/, 'require string as first arg');
+
+    t.throws(() => {
+        c._getMatching('1', false);
+    }, /second arg must be an integer between 0 - 2/, 'require number as second args');
+
+    t.throws(() => {
+        c._getMatching('1', 3);
+    }, /second arg must be an integer between 0 - 2/, 'require integer between 0-2 as second arg');
+
+
+    t.throws(() => {
+        c._getMatching('1', 0, false);
+    }, /third arg, if supplied, must be an Array/, 'require array as third arg');
+
+    t.end();
+});
 
 test('getMatching', (t) => {
     const cache = new carmenCache.MemoryCache('mem');
@@ -66,13 +94,19 @@ test('getMatching', (t) => {
         Grid.encode({ id: 73, x: 1, y: 1, relev: 1, score: 1 })
     ], [0]);
 
+    cache._set('word boundary', [
+        Grid.encode({ id: 81, x: 1, y: 1, relev: 1, score: 1 }),
+        Grid.encode({ id: 82, x: 1, y: 1, relev: 1, score: 1 }),
+        Grid.encode({ id: 83, x: 1, y: 1, relev: 1, score: 1 })
+    ], [0]);
+
     // cache A serializes data, cache B loads serialized data.
     const pack = tmpfile();
     cache.pack(pack);
     const loader = new carmenCache.RocksDBCache('packed', pack);
 
     [cache, loader].forEach((c) => {
-        const test_all_langs_no_prefix = c._getMatching('test', false);
+        const test_all_langs_no_prefix = c._getMatching('test', scan.disabled);
         t.deepEqual(
             getIds(test_all_langs_no_prefix),
             [1, 2, 3, 11, 12, 13, 21, 22, 23, 31, 32, 33, 41, 42, 43],
@@ -84,7 +118,7 @@ test('getMatching', (t) => {
             "getMatching for 'test' with no prefix match and no language includes only match_language: true"
         );
 
-        const test_all_langs_with_prefix = c._getMatching('test', true);
+        const test_all_langs_with_prefix = c._getMatching('test', scan.enabled);
         t.deepEqual(
             getIds(test_all_langs_with_prefix),
             [1, 2, 3, 11, 12, 13, 21, 22, 23, 31, 32, 33, 41, 42, 43, 51, 52, 53],
@@ -96,9 +130,9 @@ test('getMatching', (t) => {
             "getMatching for 'test' with prefix match and no language includes only match_language: true"
         );
 
-        t.false(c._getMatching('te', false), "getMatching for 'te' with no prefix match returns nothing");
+        t.false(c._getMatching('te', scan.disabled), "getMatching for 'te' with no prefix match returns nothing");
 
-        const te_all_langs_with_prefix = c._getMatching('te', true);
+        const te_all_langs_with_prefix = c._getMatching('te', scan.enabled);
         t.deepEqual(
             getIds(te_all_langs_with_prefix),
             [1, 2, 3, 11, 12, 13, 21, 22, 23, 31, 32, 33, 41, 42, 43, 51, 52, 53, 61, 62, 63],
@@ -110,7 +144,7 @@ test('getMatching', (t) => {
             "getMatching for 'te' with prefix match and no language includes only match_language: true"
         );
 
-        const test_all_langs_with_prefix_0 = c._getMatching('test', true, [0]);
+        const test_all_langs_with_prefix_0 = c._getMatching('test', scan.enabled, [0]);
         const test_all_langs_with_prefix_0_matched = getByLanguageMatch(test_all_langs_with_prefix_0, true);
         const test_all_langs_with_prefix_0_unmatched = getByLanguageMatch(test_all_langs_with_prefix_0, false);
         t.deepEqual(
@@ -134,7 +168,7 @@ test('getMatching', (t) => {
             'all the language-matching results come first'
         );
 
-        const te_all_langs_with_prefix_0 = c._getMatching('te', true, [0]);
+        const te_all_langs_with_prefix_0 = c._getMatching('te', scan.enabled, [0]);
         const te_all_langs_with_prefix_0_matched = getByLanguageMatch(te_all_langs_with_prefix_0, true);
         const te_all_langs_with_prefix_0_unmatched = getByLanguageMatch(te_all_langs_with_prefix_0, false);
         t.deepEqual(
@@ -158,7 +192,7 @@ test('getMatching', (t) => {
             'all the language-matching results come first'
         );
 
-        const test_all_langs_with_prefix_1 = c._getMatching('test', true, [1]);
+        const test_all_langs_with_prefix_1 = c._getMatching('test', scan.enabled, [1]);
         const test_all_langs_with_prefix_1_matched = getByLanguageMatch(test_all_langs_with_prefix_1, true);
         const test_all_langs_with_prefix_1_unmatched = getByLanguageMatch(test_all_langs_with_prefix_1, false);
         t.deepEqual(
@@ -182,7 +216,7 @@ test('getMatching', (t) => {
             'all the language-matching results come first'
         );
 
-        const test_all_langs_with_prefix_7 = c._getMatching('test', true, [7]);
+        const test_all_langs_with_prefix_7 = c._getMatching('test', scan.enabled, [7]);
         const test_all_langs_with_prefix_7_matched = getByLanguageMatch(test_all_langs_with_prefix_7, true);
         const test_all_langs_with_prefix_7_unmatched = getByLanguageMatch(test_all_langs_with_prefix_7, false);
         t.deepEqual(
@@ -204,6 +238,39 @@ test('getMatching', (t) => {
             getIds(test_all_langs_with_prefix_7.slice(0, test_all_langs_with_prefix_7_matched.length)),
             getIds(test_all_langs_with_prefix_7_matched),
             'all the language-matching results come first'
+        );
+
+
+        t.false(c._getMatching('wor', scan.disabled), "getMatching for 'wor' with no prefix match returns nothing");
+        t.false(c._getMatching('word', scan.disabled), "getMatching for 'word' with no prefix match returns nothing");
+        t.false(c._getMatching('word boun', scan.disabled), "getMatching for 'word bound' with no prefix match returns nothing");
+
+        const test_all_langs_prefix_8 = c._getMatching('wor', scan.enabled);
+        t.deepEqual(
+            getIds(test_all_langs_prefix_8),
+            [81, 82, 83],
+            "getMatching for 'wor' with prefix match and no language includes all IDs for 'word boundary'"
+        );
+
+        // Extra checks around 3 & 6 char thresholds b/c of prefix cache.
+        t.false(c._getMatching('wor', 2), "getMatching for 'wor' with word boundary prefix match returns nothing");
+
+        const test_all_langs_at_boundary_prefix_8 = c._getMatching('word', scan.word_boundary);
+        t.deepEqual(
+            getIds(test_all_langs_at_boundary_prefix_8),
+            [81, 82, 83],
+            "getMatching for 'word' with word boundary prefix match and no language includes all IDs for 'word boundary'"
+        );
+
+        t.false(c._getMatching('word b', scan.word_boundary), "getMatching for 'wor' with word boundary prefix match returns nothing");
+
+        t.false(c._getMatching('word boun', scan.word_boundary), "getMatching for 'word boun' with word boundary prefix match returns nothing");
+
+        const test_all_langs_at_boundary_prefix_8_full = c._getMatching('word boundary', scan.word_boundary);
+        t.deepEqual(
+            getIds(test_all_langs_at_boundary_prefix_8_full),
+            [81, 82, 83],
+            "getMatching for 'word boundary' with word boundary prefix match and no language includes all IDs for 'word boundary'"
         );
     });
 

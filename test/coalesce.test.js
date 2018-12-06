@@ -3,6 +3,7 @@ const MemoryCache = require('../index.js').MemoryCache;
 const RocksDBCache = require('../index.js').RocksDBCache;
 const Grid = require('./grid.js');
 const coalesce = require('../index.js').coalesce;
+const scan = require('../index.js').PREFIX_SCAN;
 const test = require('tape');
 const fs = require('fs');
 
@@ -61,7 +62,7 @@ test('coalesce args', (t) => {
         zoom: 2,
         weight: 1,
         phrase: 'a',
-        prefix: false
+        prefix: scan.disabled
     };
 
     t.throws(() => {
@@ -133,7 +134,7 @@ test('coalesce args', (t) => {
                 zoom: 0,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false
+                prefix: 0
             },
             {
                 cache: new MemoryCache('b'),
@@ -142,7 +143,7 @@ test('coalesce args', (t) => {
                 zoom: 1,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false
+                prefix: 0
             }
         ];
 
@@ -205,48 +206,61 @@ test('coalesce args', (t) => {
     }, /Arg 3 must be a callback/, 'throws');
 
     t.throws(() => {
-        coalesce([{ mask: 1 << 0, idx: 1, zoom: 1, weight: .5, phrase: '1', prefix: false }],{},() => {});
+        coalesce([{ mask: 1 << 0, idx: 1, zoom: 1, weight: .5, phrase: '1', prefix: 0 }],{},() => {});
     }, /missing/, 'throws');
 
     t.throws(() => {
-        coalesce([{ cache: new MemoryCache('b'), idx: 1, zoom: 1, weight: .5, phrase: '1', prefix: false }],{},() => {});
+        coalesce([{ cache: new MemoryCache('b'), idx: 1, zoom: 1, weight: .5, phrase: '1', prefix: 0 }],{},() => {});
     }, /missing/, 'throws');
 
     t.throws(() => {
-        coalesce([{ cache: new MemoryCache('b'), mask: 1 << 0, zoom: 1, weight: .5, phrase: '1', prefix: false }],{},() => {});
+        coalesce([{ cache: new MemoryCache('b'), mask: 1 << 0, zoom: 1, weight: .5, phrase: '1', prefix: 0 }],{},() => {});
     }, /missing/, 'throws');
 
     t.throws(() => {
-        coalesce([{ cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, weight: .5, phrase: '1', prefix: false }],{},() => {});
+        coalesce([{ cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, weight: .5, phrase: '1', prefix: 0 }],{},() => {});
     }, /missing/, 'throws');
 
     t.throws(() => {
-        coalesce([{ cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, zoom: 1, phrase: '1', prefix: false }],{},() => {});
+        coalesce([{ cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, zoom: 1, phrase: '1', prefix: 0 }],{},() => {});
     }, /missing/, 'throws');
 
     t.throws(() => {
-        coalesce([{ cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, zoom: 1, weight: .5, prefix: false }],{},() => {});
+        coalesce([{ cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, zoom: 1, weight: .5, prefix: 0 }],{},() => {});
     }, /missing/, 'throws');
 
     t.throws(() => {
-        coalesce([{ cache: '', mask: 1 << 0, idx: 1, weight: .5,  zoom: 1, phrase: '1', prefix: false }],{},() => {});
+        coalesce([{ cache: '', mask: 1 << 0, idx: 1, weight: .5,  zoom: 1, phrase: '1', prefix: 0 }],{},() => {});
     }, /cache value must be a Cache object/, 'throws');
 
     t.throws(() => {
-        coalesce([{ cache: new MemoryCache('b'), mask: '', idx: 1, zoom: 1, weight: .5, phrase: '1', prefix: false }],{},() => {});
+        coalesce([{ cache: new MemoryCache('b'), mask: '', idx: 1, zoom: 1, weight: .5, phrase: '1', prefix: 0 }],{},() => {});
     }, /mask value must be a number/, 'throws');
 
     t.throws(() => {
-        coalesce([{ cache: new MemoryCache('b'), mask: 1 << 0, idx: '', weight: .5, zoom: 1, phrase: '1', prefix: false }],{},() => {});
+        coalesce([{ cache: new MemoryCache('b'), mask: 1 << 0, idx: '', weight: .5, zoom: 1, phrase: '1', prefix: 0 }],{},() => {});
     }, /idx value must be a number/, 'throws');
 
     t.throws(() => {
-        coalesce([{ cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, weight: .5, zoom: '', phrase: '1', prefix: false }],{},() => {});
+        coalesce([{ cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, weight: .5, zoom: '', phrase: '1', prefix: 0 }],{},() => {});
     }, /zoom value must be a number/, 'throws');
 
     t.throws(() => {
-        coalesce([{ cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, weight: '', zoom: 1, phrase: '1', prefix: false }],{},() => {});
+        coalesce([{ cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, weight: '', zoom: 1, phrase: '1', prefix: 0 }],{},() => {});
     }, /weight value must be a number/, 'throws');
+
+    t.throws(() => {
+        coalesce([{ cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, weight: 0.5, zoom: 1, phrase: '1', prefix: false }],{},() => {});
+    }, /prefix value must be a integer between 0 - 2/, 'throws');
+
+    t.throws(() => {
+        coalesce([{ cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, weight: 0.5, zoom: 1, phrase: '1', prefix: 3 }],{},() => {});
+    }, /prefix value must be a integer between 0 - 2/, 'throws on 3');
+
+    t.throws(() => {
+        coalesce([{ cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, weight: 0.5, zoom: 1, phrase: '1', prefix: -1 }],{},() => {});
+    }, /prefix value must be a integer between 0 - 2/, 'throws on 3');
+
 
     t.throws(() => {
         coalesce([{ cache: new MemoryCache('b'), mask: 1 << 0, idx: 1, weight: .5, zoom: 1, phrase: '' }],{},() => {});
@@ -291,7 +305,7 @@ test('coalesce args', (t) => {
                 zoom: 2,
                 weight: 1,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }], {}, (err, res) => {
                 t.ifError(err, 'no errors');
                 t.deepEqual(res[0].relev, 1, '0.relev');
@@ -311,7 +325,7 @@ test('coalesce args', (t) => {
                 zoom: 2,
                 weight: 1,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }], {
                 centerzxy: [3,3,3]
             }, (err, res) => {
@@ -333,7 +347,7 @@ test('coalesce args', (t) => {
                 zoom: 2,
                 weight: 1,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }], {
                 bboxzxy: [2, 1, 1, 1, 1]
             }, (err, res) => {
@@ -380,7 +394,7 @@ test('coalesce args', (t) => {
                 zoom: 2,
                 weight: 1,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }], {}, (err, res) => {
                 t.ifError(err, 'no errors');
                 t.ok(res, 'got back a result');
@@ -420,7 +434,7 @@ test('coalesce args', (t) => {
                 zoom: 2,
                 weight: 1,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }], {}, (err, res) => {
                 t.ifError(err, 'no errors');
                 t.equal(res.length, 2, 'got back 2 results');
@@ -475,7 +489,7 @@ test('coalesce args', (t) => {
                 zoom: 2,
                 weight: 1,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }], {}, (err, res) => {
                 t.ifError(err, 'no errors');
                 t.equal(res.length, 4, 'got back 4 results');
@@ -498,7 +512,7 @@ test('coalesce args', (t) => {
                 zoom: 2,
                 weight: 1,
                 phrase: '1',
-                prefix: false,
+                prefix: scan.disabled,
                 languages: [0]
             }], {}, (err, res) => {
                 t.ifError(err, 'no errors');
@@ -522,7 +536,7 @@ test('coalesce args', (t) => {
                 zoom: 2,
                 weight: 1,
                 phrase: '1',
-                prefix: false,
+                prefix: scan.disabled,
                 languages: [3]
             }], {}, (err, res) => {
                 t.ifError(err, 'no errors');
@@ -598,7 +612,7 @@ test('coalesce args', (t) => {
                 zoom: 1,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }, {
                 cache: b,
                 mask: 1 << 0,
@@ -606,7 +620,7 @@ test('coalesce args', (t) => {
                 zoom: 2,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }], {}, (err, res) => {
                 t.ifError(err, 'no errors');
                 // sorts by relev, score
@@ -627,7 +641,7 @@ test('coalesce args', (t) => {
                 zoom: 1,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }, {
                 cache: b,
                 mask: 1 << 0,
@@ -635,7 +649,7 @@ test('coalesce args', (t) => {
                 zoom: 2,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }], {
                 centerzxy: [2,3,3]
             }, (err, res) => {
@@ -698,7 +712,7 @@ test('coalesce args', (t) => {
                 zoom: 1,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }, {
                 cache: b,
                 mask: 1 << 0,
@@ -706,7 +720,7 @@ test('coalesce args', (t) => {
                 zoom: 1,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }], {}, (err, res) => {
                 t.ifError(err, 'no errors');
                 // sorts by relev, score
@@ -727,7 +741,7 @@ test('coalesce args', (t) => {
                 zoom: 1,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }, {
                 cache: b,
                 mask: 1 << 0,
@@ -735,7 +749,7 @@ test('coalesce args', (t) => {
                 zoom: 1,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
+                prefix: scan.disabled,
                 languages: [0]
             }], {}, (err, res) => {
                 t.ifError(err, 'no errors');
@@ -758,7 +772,7 @@ test('coalesce args', (t) => {
                 zoom: 1,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }, {
                 cache: b,
                 mask: 1 << 0,
@@ -766,7 +780,7 @@ test('coalesce args', (t) => {
                 zoom: 1,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false,
+                prefix: scan.disabled,
                 languages: [3]
             }], {}, (err, res) => {
                 t.ifError(err, 'no errors');
@@ -827,7 +841,7 @@ test('coalesce args', (t) => {
                 zoom: 0,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }, {
                 cache: b,
                 mask: 1 << 0,
@@ -835,7 +849,7 @@ test('coalesce args', (t) => {
                 zoom: 14,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }], {
                 centerzxy: [14,4601,6200]
             }, (err, res) => {
@@ -854,7 +868,7 @@ test('coalesce args', (t) => {
                 zoom: 0,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }, {
                 cache: b,
                 mask: 1 << 0,
@@ -862,7 +876,7 @@ test('coalesce args', (t) => {
                 zoom: 14,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }], {
                 centerzxy: [14,4610,6200]
             }, (err, res) => {
@@ -920,7 +934,7 @@ test('coalesce args', (t) => {
                 zoom: 1,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }, {
                 cache: b,
                 mask: 1 << 0,
@@ -928,7 +942,7 @@ test('coalesce args', (t) => {
                 zoom: 2,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }], {}, (err, res) => {
                 t.ifError(err, 'no errors');
                 // sorts by relev, score
@@ -1014,7 +1028,7 @@ test('coalesce args', (t) => {
                 zoom: 1,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }, {
                 cache: b,
                 mask: 1 << 0,
@@ -1022,7 +1036,7 @@ test('coalesce args', (t) => {
                 zoom: 2,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }], {
                 bboxzxy: [1, 0, 0, 1, 0]
             }, (err, res) => {
@@ -1039,7 +1053,7 @@ test('coalesce args', (t) => {
                 zoom: 1,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }, {
                 cache: b,
                 mask: 1 << 0,
@@ -1047,7 +1061,7 @@ test('coalesce args', (t) => {
                 zoom: 2,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }], {
                 bboxzxy: [2, 0, 0, 1, 3]
             }, (err, res) => {
@@ -1064,7 +1078,7 @@ test('coalesce args', (t) => {
                 zoom: 1,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }, {
                 cache: b,
                 mask: 1 << 0,
@@ -1072,7 +1086,7 @@ test('coalesce args', (t) => {
                 zoom: 2,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }], {
                 bboxzxy: [6, 14, 30, 15, 64]
             }, (err, res) => {
@@ -1089,7 +1103,7 @@ test('coalesce args', (t) => {
                 zoom: 2,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }, {
                 cache: c,
                 mask: 1 << 0,
@@ -1097,7 +1111,7 @@ test('coalesce args', (t) => {
                 zoom: 5,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }], {
                 bboxzxy: [1, 0, 0, 1, 0]
             }, (err, res) => {
@@ -1160,7 +1174,7 @@ test('coalesce args', (t) => {
                 zoom: 0,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }, {
                 cache: b,
                 mask: 1 << 0,
@@ -1168,7 +1182,7 @@ test('coalesce args', (t) => {
                 zoom: 1,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }], {}, (err, res) => {
                 t.ifError(err, 'no errors');
                 t.equal(res.length, 2, 'res length = 2');
@@ -1226,7 +1240,7 @@ test('coalesce args', (t) => {
                 zoom: 0,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }, {
                 cache: b,
                 mask: 1 << 0,
@@ -1234,7 +1248,7 @@ test('coalesce args', (t) => {
                 zoom: 0,
                 weight: 0.5,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }], {}, (err, res) => {
                 t.ifError(err, 'no errors');
                 t.equal(res.length, 2, 'res length = 2');
@@ -1298,7 +1312,7 @@ test('coalesce args', (t) => {
                 zoom: 0,
                 weight: 0.33,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }, {
                 cache: b,
                 mask: 1 << 0,
@@ -1306,7 +1320,7 @@ test('coalesce args', (t) => {
                 zoom: 0,
                 weight: 0.33,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }, {
                 cache: c,
                 mask: 1 << 1,
@@ -1314,7 +1328,7 @@ test('coalesce args', (t) => {
                 zoom: 0,
                 weight: 0.33,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }], {}, (err, res) => {
                 t.ifError(err, 'no errors');
                 t.equal(res.length, 1, 'res length = 1');
@@ -1332,7 +1346,7 @@ test('coalesce args', (t) => {
                 zoom: 0,
                 weight: 0.33,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }, {
                 cache: b,
                 mask: 1 << 0,
@@ -1340,7 +1354,7 @@ test('coalesce args', (t) => {
                 zoom: 0,
                 weight: 0.33,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }, {
                 cache: c,
                 mask: 1 << 1,
@@ -1348,7 +1362,7 @@ test('coalesce args', (t) => {
                 zoom: 0,
                 weight: 0.33,
                 phrase: '1',
-                prefix: false
+                prefix: scan.disabled
             }], {}, (err, res) => {
                 t.ifError(err, 'no errors');
                 t.equal(res.length, 1, 'res length = 1');
