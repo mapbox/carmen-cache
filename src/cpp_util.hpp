@@ -166,7 +166,7 @@ struct ZXY {
 Cover numToCover(uint64_t num);
 ZXY pxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z);
 ZXY bxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z, bool max = false);
-double scoredist(unsigned zoom, double distance, double score, double radius);
+double scoredist(unsigned zoom, double distance, unsigned short score, double radius);
 
 inline bool coverSortByRelev(Cover const& a, Cover const& b) noexcept {
     if (b.relev > a.relev)
