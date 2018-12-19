@@ -7,7 +7,6 @@ set -o pipefail
 ./scripts/setup.sh --config local.env
 source local.env
 
-mason install clang++ 3.9.1
 mason install bzip2 1.0.6
 mason install rocksdb 5.4.6
 mason install protozero 1.6.2
