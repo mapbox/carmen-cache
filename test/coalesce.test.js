@@ -331,11 +331,11 @@ test('coalesce args', (t) => {
             }, (err, res) => {
                 t.ifError(err, 'no errors');
                 t.deepEqual(res[0].relev, 1, '0.relev');
-                t.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 3, idx: 0, relev: 1.0, score: 1, scoredist: 124.85901539399482, tmpid: 3, x: 3, y: 3 }, '0.0');
+                t.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 3, idx: 0, relev: 1.0, score: 1, scoredist: 202.97450261199964, tmpid: 3, x: 3, y: 3 }, '0.0');
                 t.deepEqual(res[1].relev, 1, '1.relev');
                 t.deepEqual(res[1][0], { matches_language: true, distance: 2.8284271247461903, id: 1, idx: 0, relev: 1.0, score: 7, scoredist: 7, tmpid: 1, x: 1, y: 1 }, '1.0');
                 t.deepEqual(res[2].relev, 0.8, '2.relev');
-                t.deepEqual(res[2][0], { matches_language: true, distance: 1.4142135623730951, id: 2, idx: 0, relev: 0.8, score: 3, scoredist: 3, tmpid: 2, x: 2, y: 2 }, '2.0');
+                t.deepEqual(res[2][0], { matches_language: true, distance: 1.4142135623730951, id: 2, idx: 0, relev: 0.8, score: 3, scoredist: 1.109893833332405, tmpid: 2, x: 2, y: 2 }, '2.0');
                 t.end();
             });
         });
@@ -656,11 +656,11 @@ test('coalesce args', (t) => {
                 t.ifError(err, 'no errors');
                 // sorts by relev, score
                 t.deepEqual(res[0].relev, 1, '0.relev');
-                t.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 3, idx: 1, relev: 0.5, score: 1, scoredist: 124.85901539399482, tmpid: 33554435, x: 3, y: 3 }, '0.0');
-                t.deepEqual(res[0][1], { matches_language: true, distance: 2.8284271247461903, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 1, x: 1, y: 1 }, '0.1');
+                t.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 3, idx: 1, relev: 0.5, score: 1, scoredist: 202.97450261199964, tmpid: 33554435, x: 3, y: 3 }, '1.0');
+                t.deepEqual(res[0][1], { matches_language: true, distance: 2.8284271247461903, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1.0148725130599983, tmpid: 1, x: 1, y: 1 }, '0.1');
+                t.deepEqual(res[1][0], { matches_language: true, distance: 1.4142135623730951, id: 2, idx: 1, relev: 0.5, score: 7, scoredist: 7, tmpid: 33554434, x: 2, y: 2 }, '0.0');
+                t.deepEqual(res[1][1], { matches_language: true, distance: 2.8284271247461903, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1.0148725130599983, tmpid: 1, x: 1, y: 1 }, '1.1');
                 t.deepEqual(res[1].relev, 1, '1.relev');
-                t.deepEqual(res[1][0], { matches_language: true, distance: 1.4142135623730951, id: 2, idx: 1, relev: 0.5, score: 7, scoredist: 7, tmpid: 33554434, x: 2, y: 2 }, '1.0');
-                t.deepEqual(res[1][1], { matches_language: true, distance: 2.8284271247461903, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 1, x: 1, y: 1 }, '1.1');
                 t.end();
             });
         });
@@ -856,7 +856,7 @@ test('coalesce args', (t) => {
                 t.ifError(err, 'no errors');
                 t.deepEqual(res[0][0].id, 3, 'matches feat 3');
                 t.deepEqual(res[1][0].id, 2, 'matches feat 2');
-                t.deepEqual(res[0][0].distance < res[1][0].distance, true, 'feat 3 is closer than feat2');
+                t.deepEqual(res[0][0].distance < res[1][0].distance, true, 'feat 3 is closer than feat 2');
                 t.end();
             });
         });

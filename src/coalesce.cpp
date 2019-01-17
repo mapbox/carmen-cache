@@ -103,9 +103,17 @@ inline std::vector<Context> coalesceSingle(std::vector<PhrasematchSubq>& stack, 
         cover.idx = subq.idx;
         cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
         cover.relev = cover.relev * subq.weight;
-        if (!cover.matches_language) cover.relev *= .96;
-        cover.distance = proximity ? tileDist(cx, cy, cover.x, cover.y) : 0;
-        cover.scoredist = proximity ? scoredist(cz, cover.distance, cover.score, radius) : cover.score;
+        if (proximity) {
+            cover.distance = tileDist(cx, cy, cover.x, cover.y);
+            cover.scoredist = scoredist(cz, cover.distance, cover.score, radius);
+            if (!cover.matches_language && cover.distance > proximityRadius(cz, radius)) {
+                cover.relev *= .96;
+            }
+        } else {
+            cover.distance = 0;
+            cover.scoredist = cover.score;
+            if (!cover.matches_language) cover.relev *= .96;
+        }
 
         // only add cover id if it's got a higer scoredist
         if (lastId == cover.id && cover.scoredist <= lastScoredist) continue;
@@ -247,14 +255,17 @@ inline std::vector<Context> coalesceMulti(std::vector<PhrasematchSubq>& stack, c
             cover.mask = subq.mask;
             cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
             cover.relev = cover.relev * subq.weight;
-            if (!cover.matches_language) cover.relev *= .96;
             if (proximity) {
                 ZXY dxy = pxy2zxy(z, cover.x, cover.y, cz);
                 cover.distance = tileDist(cx, cy, dxy.x, dxy.y);
                 cover.scoredist = scoredist(cz, cover.distance, cover.score, radius);
+                if (!cover.matches_language && cover.distance > proximityRadius(cz, radius)) {
+                    cover.relev *= .96;
+                }
             } else {
                 cover.distance = 0;
                 cover.scoredist = cover.score;
+                if (!cover.matches_language) cover.relev *= .96;
             }
 
             if (bbox) {

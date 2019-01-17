@@ -55,7 +55,7 @@ const test = require('tape');
             }
             coalesce(stacks, { centerzxy: [14,4893,6001] }, (err, res) => {
                 let checks = true;
-                checks = checks && res.length === 38;
+                checks = checks && res.length === 30;
                 checks = checks && res[0][0].x === 4893;
                 checks = checks && res[0][0].y === 6001;
                 checks = checks && res[0][0].tmpid === 446213;

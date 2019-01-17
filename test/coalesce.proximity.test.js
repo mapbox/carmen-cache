@@ -129,3 +129,148 @@ const test = require('tape');
         });
     });
 })();
+
+(function() {
+    const cache = new MemoryCache('a', 0);
+    const cov = {
+        id: 1,
+        x: 0,
+        y: 0,
+        relev: 1,
+        score: 1
+    };
+    cache._set('1', [Grid.encode(cov)]);
+
+    test('Calculates non-cachec proximity', (t) => {
+        coalesce([{
+            cache: cache,
+            mask: 1 << 0,
+            idx: 0,
+            zoom: 15,
+            weight: 1,
+            phrase: '1',
+            prefix: scan.disabled
+        }], {
+            radius: 200,
+            centerzxy: [15, 160, 0]
+        }, (err, res) => {
+            t.ifError(err, 'no errors');
+            t.equal(res[0][0].scoredist, 1.5223087695899975, 'Calculate z15 scoredist');
+            t.end();
+        });
+    });
+})();
+
+(function() {
+    const cachea = new MemoryCache('a', 0);
+    const cacheb = new MemoryCache('b', 0);
+    const cov = {
+        id: 1,
+        x: 0,
+        y: 0,
+        relev: 1,
+        score: 1
+    };
+    cachea._set('1', [Grid.encode(cov)], [0]);
+    cacheb._set('2', [Grid.encode(cov)], [0]);
+
+    test('Coalesce single should not penalize nearby language mismatches', (t) => {
+        coalesce([{
+            cache: cachea,
+            mask: 1 << 0,
+            idx: 0,
+            zoom: 14,
+            weight: 1,
+            phrase: '1',
+            prefix: scan.disabled,
+            languages:[1]
+        }], {
+            radius: 200,
+            centerzxy: [14, 0, 0]
+        }, (err, res) => {
+            t.ifError(err, 'no errors');
+            t.equal(res[0][0].relev, 1, 'relev is not penalized');
+            t.end();
+        });
+    });
+
+    test('Coalesce single should penalize distant language mismatches', (t) => {
+        coalesce([{
+            cache: cachea,
+            mask: 1 << 0,
+            idx: 0,
+            zoom: 14,
+            weight: 1,
+            phrase: '1',
+            prefix: scan.disabled,
+            languages:[1]
+        }], {
+            radius: 200,
+            centerzxy: [14, 200, 0]
+        }, (err, res) => {
+            t.ifError(err, 'no errors');
+            t.equal(res[0][0].relev, 0.96, 'relev is not penalized');
+            t.end();
+        });
+    });
+
+    test('Coalesce multi should not penalize nearby language mismatches', (t) => {
+        coalesce([{
+            cache: cachea,
+            mask: 1 << 0,
+            idx: 0,
+            zoom: 14,
+            weight: 1,
+            phrase: '1',
+            prefix: scan.disabled,
+            languages:[1]
+        }, {
+            cache: cacheb,
+            mask: 1 << 1,
+            idx: 1,
+            zoom: 12,
+            weight: 1,
+            phrase: '2',
+            prefix: scan.disabled,
+            languages:[1]
+        }], {
+            radius: 200,
+            centerzxy: [14, 0, 0]
+        }, (err, res) => {
+            t.ifError(err, 'no errors');
+            t.equal(res[0][0].relev, 1, 'relev is not penalized');
+            t.equal(res[0][1].relev, 1, 'relev is not penalized');
+            t.end();
+        });
+    });
+
+    test('Coalesce multi should not penalize nearby language mismatches', (t) => {
+        coalesce([{
+            cache: cachea,
+            mask: 1 << 0,
+            idx: 0,
+            zoom: 14,
+            weight: 1,
+            phrase: '1',
+            prefix: scan.disabled,
+            languages:[1]
+        }, {
+            cache: cacheb,
+            mask: 1 << 1,
+            idx: 1,
+            zoom: 12,
+            weight: 1,
+            phrase: '2',
+            prefix: scan.disabled,
+            languages:[1]
+        }], {
+            radius: 200,
+            centerzxy: [14, 200, 0]
+        }, (err, res) => {
+            t.ifError(err, 'no errors');
+            t.equal(res[0][0].relev, 0.96, 'relev is penalized');
+            t.equal(res[0][1].relev, 0.96, 'relev is penalized');
+            t.end();
+        });
+    });
+})();

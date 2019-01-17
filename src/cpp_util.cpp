@@ -101,24 +101,70 @@ ZXY bxy2zxy(unsigned z, unsigned x, unsigned y, unsigned target_z, bool max) {
     return zxy;
 }
 
+constexpr double zoomTileRadius(unsigned zoom) {
+    // Since distance is in tiles we calculate scoredist by converting the miles into
+    // a tile unit value at the appropriate zoom first.
+    //
+    // 32 tiles is about 40 miles at z14, use this as our mile <=> tile conversion.
+    return (32.0 / 40.0) / _pow(1.5, 14 - static_cast<int>(zoom));
+}
+
+// Calculate proximity radius in tiles.
+double proximityRadius(unsigned zoom, double radius) {
+    static constexpr double zoomRadius[9] = {
+        zoomTileRadius(14),
+        zoomTileRadius(13),
+        zoomTileRadius(12),
+        zoomTileRadius(11),
+        zoomTileRadius(10),
+        zoomTileRadius(9),
+        zoomTileRadius(8),
+        zoomTileRadius(7),
+        zoomTileRadius(6)};
+
+    if (zoom >= 6 && zoom <= 14) {
+        return radius * zoomRadius[14 - zoom];
+    }
+    return (radius * (32.0 / 40.0)) / std::pow(1.5, 14 - static_cast<int>(zoom));
+}
+
 // Equivalent of scoredist() function in carmen
 // Combines score and distance into a single score that can be used for sorting.
 // Unlike carmen the effect is not scaled by zoom level as regardless of index
 // the score value at this stage is a 0-7 scalar (by comparison, in carmen, scores
 // for indexes with features covering lower zooms often have exponentially higher
 // scores - example: country@z9 vs poi@z14).
-double scoredist(unsigned zoom, double distance, double score, double radius) {
+double scoredist(unsigned zoom, double distance, unsigned short score, double radius) {
     if (zoom < 6) zoom = 6;
-    if (distance == 0.0) distance = 0.01;
-    double scoredist = 0;
 
-    // Since distance is in tiles we calculate scoredist by converting the miles into
-    // a tile unit value at the appropriate zoom first.
-    //
-    // 32 tiles is about 40 miles at z14, use this as our mile <=> tile conversion.
-    scoredist = ((radius * (32.0 / 40.0)) / _pow(1.5, 14 - static_cast<int>(zoom))) / distance;
+    // Unsure if it's possible for score to have a unexpected value, validating
+    // here in an abundance of caution.
+    if (score > 7) score = 7;
 
-    return score > scoredist ? score : scoredist;
+    // We don't know the scale of the axis we're modeling, but it doesn't really
+    // matter as we just need internal consistency.
+    static const double E_POW[8] = {
+        1,
+        2.718281828459045,
+        7.38905609893065,
+        20.085536923187668,
+        54.598150033144236,
+        148.4131591025766,
+        403.4287934927351,
+        1096.6331584284585};
+
+    double distRatio = distance / proximityRadius(zoom, radius);
+
+    // Too close to 0 the values get intense. Cap it.
+    if (distRatio < 0.005) {
+        distRatio = 0.005;
+    }
+    // Beyond the proximity radius just let scoredist be driven by score.
+    else if (distRatio > 1.0) {
+        distRatio = 1.00;
+    }
+
+    return ((6 * E_POW[score] / E_POW[7]) + 1) / distRatio;
 }
 
 // Open database for read-write availability
