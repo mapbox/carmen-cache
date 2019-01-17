@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.25.0
+
+- Proximity ranking allows score to differentiate between nearby features.
+- When proximity is set don't apply a language relevance penalty to nearby features.
+
 ## 0.24.0
 
 - API CHANGE; cache._getMatching accepts an integer (0: disabled, 1: enabled, 2: word boundry only) for matches_prefixes to control prefix scan behavior.
