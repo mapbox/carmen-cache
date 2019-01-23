@@ -103,7 +103,7 @@ intarray RocksDBCache::__getmatching(const std::string& phrase_ref, PrefixMatch 
         uint64_t gridId = rh.top_key();
         rh.pop();
 
-        array.emplace_back(gridId);
+        if (array.size() == 0 || array.back() != gridId) array.emplace_back(gridId);
         sortableGrid* sg = &(grids[gridIdx]);
         sg->it++;
         if (sg->it != sg->end) {

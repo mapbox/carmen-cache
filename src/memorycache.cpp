@@ -81,6 +81,8 @@ bool MemoryCache::pack(const std::string& filename) {
 
             // delta-encode values, sorted in descending order.
             std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
+            // remove duplicates
+            varr.erase(std::unique(varr.begin(), varr.end()), varr.end());
 
             packVec(varr, db, item.first);
 
@@ -136,6 +138,8 @@ bool MemoryCache::pack(const std::string& filename) {
 
         // delta-encode values, sorted in descending order.
         std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
+        // remove duplicates
+        varr.erase(std::unique(varr.begin(), varr.end()), varr.end());
 
         if (varr.size() > PREFIX_MAX_GRID_LENGTH) {
             // for the prefix memos we're only going to ever use 500k max anyway
