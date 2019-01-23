@@ -141,11 +141,6 @@ bool MemoryCache::pack(const std::string& filename) {
         // remove duplicates
         varr.erase(std::unique(varr.begin(), varr.end()), varr.end());
 
-        if (varr.size() > PREFIX_MAX_GRID_LENGTH) {
-            // for the prefix memos we're only going to ever use 500k max anyway
-            varr.resize(PREFIX_MAX_GRID_LENGTH);
-        }
-
         packVec(varr, db, item.first);
     }
 
