@@ -32,13 +32,13 @@ struct sortableGrid {
     sortableGrid(sortableGrid&& c) = default;
 };
 
-inline void decodeMessage(std::string const& message, intarray& array) {
+inline void decodeMessage(std::string const& message, intarray& array, size_t limit) {
     protozero::pbf_reader item(message);
     item.next(CACHE_ITEM);
     auto vals = item.get_packed_uint64();
     uint64_t lastval = 0;
     // delta decode values.
-    for (auto it = vals.first; it != vals.second; ++it) {
+    for (auto it = vals.first; it != vals.second && array.size() < limit; ++it) {
         if (lastval == 0) {
             lastval = *it;
             array.emplace_back(lastval);
@@ -49,13 +49,13 @@ inline void decodeMessage(std::string const& message, intarray& array) {
     }
 }
 
-inline void decodeAndBoostMessage(std::string const& message, intarray& array) {
+inline void decodeAndBoostMessage(std::string const& message, intarray& array, size_t limit) {
     protozero::pbf_reader item(message);
     item.next(CACHE_ITEM);
     auto vals = item.get_packed_uint64();
     uint64_t lastval = 0;
     // delta decode values.
-    for (auto it = vals.first; it != vals.second; ++it) {
+    for (auto it = vals.first; it != vals.second && array.size() < limit; ++it) {
         if (lastval == 0) {
             lastval = *it;
             array.emplace_back(lastval | LANGUAGE_MATCH_BOOST);

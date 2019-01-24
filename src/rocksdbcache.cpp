@@ -12,7 +12,7 @@ intarray RocksDBCache::__get(const std::string& phrase, langfield_type langfield
     std::string message;
     rocksdb::Status s = db->Get(rocksdb::ReadOptions(), phrase_with_langfield, &message);
     if (s.ok()) {
-        decodeMessage(message, array);
+        decodeMessage(message, array, std::numeric_limits<size_t>::max());
     }
 
     return array;
@@ -73,9 +73,9 @@ intarray RocksDBCache::__getmatching(const std::string& phrase_ref, PrefixMatch 
     // as will be the norm for exact matches in translationless indexes
     if (messages.size() == 1) {
         if (std::get<1>(messages[0])) {
-            decodeAndBoostMessage(std::get<0>(messages[0]), array);
+            decodeAndBoostMessage(std::get<0>(messages[0]), array, PREFIX_MAX_GRID_LENGTH);
         } else {
-            decodeMessage(std::get<0>(messages[0]), array);
+            decodeMessage(std::get<0>(messages[0]), array, PREFIX_MAX_GRID_LENGTH);
         }
         return array;
     }

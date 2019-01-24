@@ -100,12 +100,27 @@ inline std::vector<Context> coalesceSingle(std::vector<PhrasematchSubq>& stack, 
     for (unsigned long j = 0; j < m; j++) {
         Cover cover = numToCover(grids[j]);
 
+        if (bbox) {
+            if (cover.x < minx || cover.y < miny || cover.x > maxx || cover.y > maxy) continue;
+        }
+
         cover.idx = subq.idx;
         cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
         cover.relev = cover.relev * subq.weight;
         if (proximity) {
-            cover.distance = tileDist(cx, cy, cover.x, cover.y);
-            cover.scoredist = scoredist(cz, cover.distance, cover.score, radius);
+            auto last = covers.empty() ? NULL : &covers.back();
+            if (
+                last != NULL &&
+                last->x == cover.x &&
+                last->y == cover.y &&
+                last->score == cover.score
+            ) {
+                cover.distance = last->distance;
+                cover.scoredist = last->scoredist;
+            } else {
+                cover.distance = tileDist(cx, cy, cover.x, cover.y);
+                cover.scoredist = scoredist(cz, cover.distance, cover.score, radius);
+            }
             if (!cover.matches_language && cover.distance > proximityRadius(cz, radius)) {
                 cover.relev *= .96;
             }
@@ -125,10 +140,6 @@ inline std::vector<Context> coalesceSingle(std::vector<PhrasematchSubq>& stack, 
         }
         if (relevMax - cover.relev >= 0.25) break;
         if (cover.relev > relevMax) relevMax = cover.relev;
-
-        if (bbox) {
-            if (cover.x < minx || cover.y < miny || cover.x > maxx || cover.y > maxy) continue;
-        }
 
         covers.emplace_back(cover);
         if (lastId != cover.id) length++;
