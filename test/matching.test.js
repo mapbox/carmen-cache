@@ -26,7 +26,7 @@ test('getMatching args', (t) => {
 
     t.throws(() => {
         c._getMatching();
-    }, /expected two or three info: id, match_prefixes, \[languages\]/, 'require args');
+    }, /expected two to four info/, 'require args');
 
     t.throws(() => {
         c._getMatching(false, false);
