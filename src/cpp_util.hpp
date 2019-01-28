@@ -80,7 +80,8 @@ struct PhrasematchSubq {
                     unsigned short i,
                     unsigned short z,
                     uint32_t m,
-                    langfield_type l) : cache(c),
+                    langfield_type l,
+                    bool xs) : cache(c),
                                         type(t),
                                         weight(w),
                                         phrase(p),
@@ -88,7 +89,8 @@ struct PhrasematchSubq {
                                         idx(i),
                                         zoom(z),
                                         mask(m),
-                                        langfield(l) {}
+                                        langfield(l),
+                                        extended_scan(xs) {}
     void* cache;
     char type;
     double weight;
@@ -98,6 +100,7 @@ struct PhrasematchSubq {
     unsigned short zoom;
     uint32_t mask;
     langfield_type langfield;
+    bool extended_scan;
     PhrasematchSubq& operator=(PhrasematchSubq&& c) = default;
     PhrasematchSubq(PhrasematchSubq&& c) = default;
 };

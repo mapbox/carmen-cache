@@ -286,7 +286,7 @@ NAN_METHOD(JSCache<T>::_get) {
  * @name get
  * @memberof JSCache
  * @param {String} id
- * @param {Number} matches_prefix - whether or do an exact match (0), prefix scan(1), or word boundary scan(2); used for autocomplete 
+ * @param {Number} matches_prefix - whether or do an exact match (0), prefix scan(1), or word boundary scan(2); used for autocomplete
  * @param {Array} optional; array of languages
  * @returns {Array} integers referring to grids
  * @example
@@ -301,7 +301,7 @@ NAN_METHOD(JSCache<T>::_get) {
 template <class T>
 NAN_METHOD(JSCache<T>::_getmatching) {
     if (info.Length() < 2) {
-        return Nan::ThrowTypeError("expected two or three info: id, match_prefixes, [languages]");
+        return Nan::ThrowTypeError("expected two to four info: id, match_prefixes, [languages], [extendedScan]");
     }
     if (!info[0]->IsString()) {
         return Nan::ThrowTypeError("first arg must be a String");
@@ -332,8 +332,19 @@ NAN_METHOD(JSCache<T>::_getmatching) {
             langfield = ALL_LANGUAGES;
         }
 
+        bool extended_scan;
+        if (info.Length() > 3 && !(info[3]->IsNull() || info[3]->IsUndefined())) {
+            if (!info[3]->IsBoolean()) {
+                return Nan::ThrowTypeError("fourth arg, if supplied, must be an Boolean");
+            }
+            extended_scan = info[2]->BooleanValue();
+        } else {
+            extended_scan = false;
+        }
+
         T* c = &(node::ObjectWrap::Unwrap<JSCache<T>>(info.This())->cache);
-        intarray vector = c->__getmatching(id, match_prefixes, langfield);
+        size_t max_results = extended_scan ? std::numeric_limits<size_t>::max() : PREFIX_MAX_GRID_LENGTH;
+        intarray vector = c->__getmatching(id, match_prefixes, langfield, max_results);
         if (!vector.empty()) {
             std::size_t size = vector.size();
             Local<Array> array = Nan::New<Array>(static_cast<int>(size));
@@ -522,6 +533,7 @@ NAN_METHOD(JSCoalesce) {
             unsigned short zoom;
             uint32_t mask;
             langfield_type langfield;
+            bool extended_scan;
 
             // TODO: this is verbose: we could write some generic functions to do this robust conversion per type
             if (!jsStack->Has(Nan::New("idx").ToLocalChecked())) {
@@ -619,6 +631,15 @@ NAN_METHOD(JSCoalesce) {
                 langfield = langarrayToLangfield(carray);
             }
 
+            extended_scan = false;
+            if (jsStack->Has(Nan::New("extendedScan").ToLocalChecked())) {
+                Local<Value> es_val = jsStack->Get(Nan::New("extendedScan").ToLocalChecked());
+                if (!es_val->IsBoolean()) {
+                    return Nan::ThrowTypeError("extendedScan, if supplied, must be a boolean");
+                }
+                extended_scan = es_val->BooleanValue();
+            }
+
             if (!jsStack->Has(Nan::New("cache").ToLocalChecked())) {
                 return Nan::ThrowTypeError("missing cache property");
             } else {
@@ -647,7 +668,8 @@ NAN_METHOD(JSCoalesce) {
                         idx,
                         zoom,
                         mask,
-                        langfield);
+                        langfield,
+                        extended_scan);
                     baton->refs.emplace_back(std::make_pair(TYPE_MEMORY, static_cast<void*>(unwrapped)));
                 } else {
                     auto unwrapped = node::ObjectWrap::Unwrap<JSRocksDBCache>(_cache);
@@ -661,7 +683,8 @@ NAN_METHOD(JSCoalesce) {
                         idx,
                         zoom,
                         mask,
-                        langfield);
+                        langfield,
+                        extended_scan);
                     baton->refs.emplace_back(std::make_pair(TYPE_ROCKSDB, static_cast<void*>(unwrapped)));
                 }
             }

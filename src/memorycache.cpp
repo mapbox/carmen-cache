@@ -18,7 +18,7 @@ intarray MemoryCache::__get(const std::string& phrase, langfield_type langfield)
     return array;
 }
 
-intarray MemoryCache::__getmatching(const std::string& phrase_ref, PrefixMatch match_prefixes, langfield_type langfield) {
+intarray MemoryCache::__getmatching(const std::string& phrase_ref, PrefixMatch match_prefixes, langfield_type langfield, size_t max_results) {
     intarray array;
     std::string phrase = phrase_ref;
 

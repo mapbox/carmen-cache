@@ -76,7 +76,7 @@ class RocksDBCache {
     std::vector<std::pair<std::string, langfield_type>> list();
 
     std::vector<uint64_t> __get(const std::string& phrase, langfield_type langfield);
-    std::vector<uint64_t> __getmatching(const std::string& phrase_ref, PrefixMatch match_prefixes, langfield_type langfield);
+    std::vector<uint64_t> __getmatching(const std::string& phrase_ref, PrefixMatch match_prefixes, langfield_type langfield, size_t max_results);
 
     std::shared_ptr<rocksdb::DB> db;
 };

@@ -18,7 +18,7 @@ intarray RocksDBCache::__get(const std::string& phrase, langfield_type langfield
     return array;
 }
 
-intarray RocksDBCache::__getmatching(const std::string& phrase_ref, PrefixMatch match_prefixes, langfield_type langfield) {
+intarray RocksDBCache::__getmatching(const std::string& phrase_ref, PrefixMatch match_prefixes, langfield_type langfield, size_t max_results) {
     intarray array;
     std::string phrase = phrase_ref;
 
@@ -73,9 +73,9 @@ intarray RocksDBCache::__getmatching(const std::string& phrase_ref, PrefixMatch 
     // as will be the norm for exact matches in translationless indexes
     if (messages.size() == 1) {
         if (std::get<1>(messages[0])) {
-            decodeAndBoostMessage(std::get<0>(messages[0]), array, PREFIX_MAX_GRID_LENGTH);
+            decodeAndBoostMessage(std::get<0>(messages[0]), array, max_results);
         } else {
-            decodeMessage(std::get<0>(messages[0]), array, PREFIX_MAX_GRID_LENGTH);
+            decodeMessage(std::get<0>(messages[0]), array, max_results);
         }
         return array;
     }
@@ -98,7 +98,7 @@ intarray RocksDBCache::__getmatching(const std::string& phrase_ref, PrefixMatch 
         }
     }
 
-    while (!rh.empty() && array.size() < PREFIX_MAX_GRID_LENGTH) {
+    while (!rh.empty() && array.size() < max_results) {
         size_t gridIdx = rh.top_value();
         uint64_t gridId = rh.top_key();
         rh.pop();
