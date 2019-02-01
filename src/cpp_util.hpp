@@ -71,6 +71,20 @@ constexpr uint64_t POW2_14 = static_cast<uint64_t>(_pow(2.0, 14));
 constexpr uint64_t POW2_3 = static_cast<uint64_t>(_pow(2.0, 3));
 constexpr uint64_t POW2_2 = static_cast<uint64_t>(_pow(2.0, 2));
 
+constexpr uint64_t POW2_51M1 = static_cast<uint64_t>(_pow(2.0, 51)) - 1;
+constexpr uint64_t POW2_48M1 = static_cast<uint64_t>(_pow(2.0, 48)) - 1;
+constexpr uint64_t POW2_34M1 = static_cast<uint64_t>(_pow(2.0, 34)) - 1;
+constexpr uint64_t POW2_28M1 = static_cast<uint64_t>(_pow(2.0, 28)) - 1;
+constexpr uint64_t POW2_25M1 = static_cast<uint64_t>(_pow(2.0, 25)) - 1;
+constexpr uint64_t POW2_20M1 = static_cast<uint64_t>(_pow(2.0, 20)) - 1;
+constexpr uint64_t POW2_14M1 = static_cast<uint64_t>(_pow(2.0, 14)) - 1;
+constexpr uint64_t POW2_3M1 = static_cast<uint64_t>(_pow(2.0, 3)) - 1;
+constexpr uint64_t POW2_2M1 = static_cast<uint64_t>(_pow(2.0, 2)) - 1;
+
+constexpr uint64_t X_MASK = POW2_14M1 << 20;
+constexpr uint64_t Y_MASK = POW2_14M1 << 34;
+constexpr uint64_t WHOLE_WORLD[4] = { 0, 0, X_MASK, Y_MASK };
+
 struct PhrasematchSubq {
     PhrasematchSubq(void* c,
                     char t,

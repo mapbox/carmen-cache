@@ -2,6 +2,7 @@
 #define __CARMEN_ROCKSDBCACHE_HPP__
 
 #include "cpp_util.hpp"
+#include <iostream>
 
 // this is an external library, so squash this warning
 #pragma clang diagnostic push
@@ -53,15 +54,39 @@ inline void decodeAndBoostMessage(std::string const& message, intarray& array, s
     protozero::pbf_reader item(message);
     item.next(CACHE_ITEM);
     auto vals = item.get_packed_uint64();
-    uint64_t lastval = 0;
     // delta decode values.
-    for (auto it = vals.first; it != vals.second && array.size() < limit; ++it) {
-        if (lastval == 0) {
-            lastval = *it;
-            array.emplace_back(lastval | LANGUAGE_MATCH_BOOST);
-        } else {
+    auto it = vals.first;
+    if (vals.first != vals.second) {
+        uint64_t lastval = *it;
+        array.emplace_back(lastval | LANGUAGE_MATCH_BOOST);
+        it++;
+        for (; it != vals.second && array.size() < limit; ++it) {
             lastval = lastval - *it;
             array.emplace_back(lastval | LANGUAGE_MATCH_BOOST);
+        }
+    }
+}
+
+inline bool inplaceBboxCheck(uint64_t val, const uint64_t box[4]) {
+    uint64_t inplaceX = val & X_MASK;
+    uint64_t inplaceY = val & Y_MASK;
+    // std::cout << inplaceX << " " << inplaceY << " " << box[0] << " " << box[1] << " " << box[2] << " " << box[3] << std::endl;
+    return (inplaceX >= box[0] && inplaceX <= box[2] && inplaceY >= box[1] && inplaceY <= box[3]);
+}
+
+inline void decodeAndBoostMessageBbox(std::string const& message, intarray& array, size_t limit, const uint64_t box[4]) {
+    protozero::pbf_reader item(message);
+    item.next(CACHE_ITEM);
+    auto vals = item.get_packed_uint64();
+    // delta decode values.
+    auto it = vals.first;
+    if (vals.first != vals.second) {
+        uint64_t lastval = *it;
+        if (inplaceBboxCheck(lastval, box)) array.emplace_back(lastval | LANGUAGE_MATCH_BOOST);
+        it++;
+        for (; it != vals.second && array.size() < limit; ++it) {
+            lastval = lastval - *it;
+            if (inplaceBboxCheck(lastval, box)) array.emplace_back(lastval | LANGUAGE_MATCH_BOOST);
         }
     }
 }
@@ -76,7 +101,7 @@ class RocksDBCache {
     std::vector<std::pair<std::string, langfield_type>> list();
 
     std::vector<uint64_t> __get(const std::string& phrase, langfield_type langfield);
-    std::vector<uint64_t> __getmatching(const std::string& phrase_ref, PrefixMatch match_prefixes, langfield_type langfield, size_t max_results);
+    std::vector<uint64_t> __getmatching(const std::string& phrase_ref, PrefixMatch match_prefixes, langfield_type langfield, size_t max_results, const uint64_t box[4]);
 
     std::shared_ptr<rocksdb::DB> db;
 };

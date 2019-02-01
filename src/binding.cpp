@@ -13,7 +13,7 @@ void JSCache<RocksDBCache>::Initialize(Handle<Object> target) {
     Nan::SetPrototypeMethod(t, "pack", JSRocksDBCache::pack);
     Nan::SetPrototypeMethod(t, "list", JSRocksDBCache::list);
     Nan::SetPrototypeMethod(t, "_get", _get);
-    Nan::SetPrototypeMethod(t, "_getMatching", _getmatching);
+//    Nan::SetPrototypeMethod(t, "_getMatching", _getmatching);
     target->Set(Nan::New("RocksDBCache").ToLocalChecked(), t->GetFunction());
     constructor.Reset(t);
 }
@@ -28,7 +28,7 @@ void JSCache<MemoryCache>::Initialize(Handle<Object> target) {
     Nan::SetPrototypeMethod(t, "list", JSMemoryCache::list);
     Nan::SetPrototypeMethod(t, "_set", _set);
     Nan::SetPrototypeMethod(t, "_get", _get);
-    Nan::SetPrototypeMethod(t, "_getMatching", _getmatching);
+//    Nan::SetPrototypeMethod(t, "_getMatching", _getmatching);
     target->Set(Nan::New("MemoryCache").ToLocalChecked(), t->GetFunction());
     constructor.Reset(t);
 }
@@ -298,78 +298,78 @@ NAN_METHOD(JSCache<T>::_get) {
  *
  */
 
-template <class T>
-NAN_METHOD(JSCache<T>::_getmatching) {
-    if (info.Length() < 2) {
-        return Nan::ThrowTypeError("expected two to four info: id, match_prefixes, [languages], [extendedScan]");
-    }
-    if (!info[0]->IsString()) {
-        return Nan::ThrowTypeError("first arg must be a String");
-    }
-    if (!info[1]->IsNumber()) {
-        return Nan::ThrowTypeError("second arg must be an integer between 0 - 2");
-    }
-    try {
-        Nan::Utf8String utf8_id(info[0]);
-        if (utf8_id.length() < 1) {
-            return Nan::ThrowTypeError("first arg must be a String");
-        }
-        std::string id(*utf8_id);
-
-        int32_t int32_prefix = info[1]->Int32Value();
-        if (int32_prefix < 0 || int32_prefix > 2) {
-            return Nan::ThrowTypeError("second arg must be an integer between 0 - 2");
-        }
-        PrefixMatch match_prefixes = static_cast<PrefixMatch>(int32_prefix);
-
-        langfield_type langfield;
-        if (info.Length() > 2 && !(info[2]->IsNull() || info[2]->IsUndefined())) {
-            if (!info[2]->IsArray()) {
-                return Nan::ThrowTypeError("third arg, if supplied, must be an Array");
-            }
-            langfield = langarrayToLangfield(Local<Array>::Cast(info[2]));
-        } else {
-            langfield = ALL_LANGUAGES;
-        }
-
-        bool extended_scan;
-        if (info.Length() > 3 && !(info[3]->IsNull() || info[3]->IsUndefined())) {
-            if (!info[3]->IsBoolean()) {
-                return Nan::ThrowTypeError("fourth arg, if supplied, must be an Boolean");
-            }
-            extended_scan = info[2]->BooleanValue();
-        } else {
-            extended_scan = false;
-        }
-
-        T* c = &(node::ObjectWrap::Unwrap<JSCache<T>>(info.This())->cache);
-        size_t max_results = extended_scan ? std::numeric_limits<size_t>::max() : PREFIX_MAX_GRID_LENGTH;
-        intarray vector = c->__getmatching(id, match_prefixes, langfield, max_results);
-        if (!vector.empty()) {
-            std::size_t size = vector.size();
-            Local<Array> array = Nan::New<Array>(static_cast<int>(size));
-            for (uint32_t i = 0; i < size; ++i) {
-                auto obj = coverToObject(numToCover(vector[i]));
-
-                // these values don't make any sense outside the context of coalesce, so delete them
-                // it's a little clunky to set and then delete them, but this function as exposed
-                // to node is only used in debugging/testing, so, meh
-                obj->Delete(Nan::New("idx").ToLocalChecked());
-                obj->Delete(Nan::New("tmpid").ToLocalChecked());
-                obj->Delete(Nan::New("distance").ToLocalChecked());
-                obj->Delete(Nan::New("scoredist").ToLocalChecked());
-                array->Set(i, obj);
-            }
-            info.GetReturnValue().Set(array);
-            return;
-        } else {
-            info.GetReturnValue().Set(Nan::Undefined());
-            return;
-        }
-    } catch (std::exception const& ex) {
-        return Nan::ThrowTypeError(ex.what());
-    }
-}
+// template <class T>
+// NAN_METHOD(JSCache<T>::_getmatching) {
+//     if (info.Length() < 2) {
+//         return Nan::ThrowTypeError("expected two to four info: id, match_prefixes, [languages], [extendedScan]");
+//     }
+//     if (!info[0]->IsString()) {
+//         return Nan::ThrowTypeError("first arg must be a String");
+//     }
+//     if (!info[1]->IsNumber()) {
+//         return Nan::ThrowTypeError("second arg must be an integer between 0 - 2");
+//     }
+//     try {
+//         Nan::Utf8String utf8_id(info[0]);
+//         if (utf8_id.length() < 1) {
+//             return Nan::ThrowTypeError("first arg must be a String");
+//         }
+//         std::string id(*utf8_id);
+//
+//         int32_t int32_prefix = info[1]->Int32Value();
+//         if (int32_prefix < 0 || int32_prefix > 2) {
+//             return Nan::ThrowTypeError("second arg must be an integer between 0 - 2");
+//         }
+//         PrefixMatch match_prefixes = static_cast<PrefixMatch>(int32_prefix);
+//
+//         langfield_type langfield;
+//         if (info.Length() > 2 && !(info[2]->IsNull() || info[2]->IsUndefined())) {
+//             if (!info[2]->IsArray()) {
+//                 return Nan::ThrowTypeError("third arg, if supplied, must be an Array");
+//             }
+//             langfield = langarrayToLangfield(Local<Array>::Cast(info[2]));
+//         } else {
+//             langfield = ALL_LANGUAGES;
+//         }
+//
+//         bool extended_scan;
+//         if (info.Length() > 3 && !(info[3]->IsNull() || info[3]->IsUndefined())) {
+//             if (!info[3]->IsBoolean()) {
+//                 return Nan::ThrowTypeError("fourth arg, if supplied, must be an Boolean");
+//             }
+//             extended_scan = info[2]->BooleanValue();
+//         } else {
+//             extended_scan = false;
+//         }
+//
+//         T* c = &(node::ObjectWrap::Unwrap<JSCache<T>>(info.This())->cache);
+//         size_t max_results = extended_scan ? std::numeric_limits<size_t>::max() : PREFIX_MAX_GRID_LENGTH;
+//         intarray vector = c->__getmatching(id, match_prefixes, langfield, max_results, WHOLE_WORLD);
+//         if (!vector.empty()) {
+//             std::size_t size = vector.size();
+//             Local<Array> array = Nan::New<Array>(static_cast<int>(size));
+//             for (uint32_t i = 0; i < size; ++i) {
+//                 auto obj = coverToObject(numToCover(vector[i]));
+//
+//                 // these values don't make any sense outside the context of coalesce, so delete them
+//                 // it's a little clunky to set and then delete them, but this function as exposed
+//                 // to node is only used in debugging/testing, so, meh
+//                 obj->Delete(Nan::New("idx").ToLocalChecked());
+//                 obj->Delete(Nan::New("tmpid").ToLocalChecked());
+//                 obj->Delete(Nan::New("distance").ToLocalChecked());
+//                 obj->Delete(Nan::New("scoredist").ToLocalChecked());
+//                 array->Set(i, obj);
+//             }
+//             info.GetReturnValue().Set(array);
+//             return;
+//         } else {
+//             info.GetReturnValue().Set(Nan::Undefined());
+//             return;
+//         }
+//     } catch (std::exception const& ex) {
+//         return Nan::ThrowTypeError(ex.what());
+//     }
+// }
 
 template <>
 NAN_METHOD(JSCache<MemoryCache>::_set) {

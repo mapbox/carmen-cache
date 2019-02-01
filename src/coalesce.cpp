@@ -67,26 +67,32 @@ inline std::vector<Context> coalesceSingle(std::vector<PhrasematchSubq>& stack, 
 
     // bbox (optional)
     bool bbox = !bboxzxy.empty();
-    unsigned minx;
-    unsigned miny;
-    unsigned maxx;
-    unsigned maxy;
+    unsigned short minx;
+    unsigned short miny;
+    unsigned short maxx;
+    unsigned short maxy;
     if (bbox) {
-        minx = static_cast<unsigned>(bboxzxy[1]);
-        miny = static_cast<unsigned>(bboxzxy[2]);
-        maxx = static_cast<unsigned>(bboxzxy[3]);
-        maxy = static_cast<unsigned>(bboxzxy[4]);
+        minx = static_cast<unsigned short>(bboxzxy[1]);
+        miny = static_cast<unsigned short>(bboxzxy[2]);
+        maxx = static_cast<unsigned short>(bboxzxy[3]);
+        maxy = static_cast<unsigned short>(bboxzxy[4]);
     } else {
         minx = 0;
         miny = 0;
-        maxx = 0;
-        maxy = 0;
+        maxx = std::numeric_limits<unsigned short>::max();
+        maxy = std::numeric_limits<unsigned short>::max();
     }
+    uint64_t inplace_bbox[4] = {
+        static_cast<uint64_t>((minx & POW2_14M1) << 20),
+        static_cast<uint64_t>((miny & POW2_14M1) << 34),
+        static_cast<uint64_t>((maxx & POW2_14M1) << 20),
+        static_cast<uint64_t>((maxy & POW2_14M1) << 34)
+    };
 
     // Load and concatenate grids for all ids in `phrases`
     intarray grids;
     size_t max_results = subq.extended_scan ? std::numeric_limits<size_t>::max() : PREFIX_MAX_GRID_LENGTH;
-    grids = subq.type == TYPE_MEMORY ? reinterpret_cast<MemoryCache*>(subq.cache)->__getmatching(subq.phrase, subq.prefix, subq.langfield, max_results) : reinterpret_cast<RocksDBCache*>(subq.cache)->__getmatching(subq.phrase, subq.prefix, subq.langfield, max_results);
+    grids = subq.type == TYPE_MEMORY ? reinterpret_cast<MemoryCache*>(subq.cache)->__getmatching(subq.phrase, subq.prefix, subq.langfield, max_results) : reinterpret_cast<RocksDBCache*>(subq.cache)->__getmatching(subq.phrase, subq.prefix, subq.langfield, max_results, inplace_bbox);
 
     unsigned long m = grids.size();
     double relevMax = 0;
@@ -251,7 +257,7 @@ inline std::vector<Context> coalesceMulti(std::vector<PhrasematchSubq>& stack, c
     for (auto const& subq : stack) {
         // Load and concatenate grids for all ids in `phrases`
         intarray grids;
-        grids = subq.type == TYPE_MEMORY ? reinterpret_cast<MemoryCache*>(subq.cache)->__getmatching(subq.phrase, subq.prefix, subq.langfield, PREFIX_MAX_GRID_LENGTH) : reinterpret_cast<RocksDBCache*>(subq.cache)->__getmatching(subq.phrase, subq.prefix, subq.langfield, PREFIX_MAX_GRID_LENGTH);
+        grids = subq.type == TYPE_MEMORY ? reinterpret_cast<MemoryCache*>(subq.cache)->__getmatching(subq.phrase, subq.prefix, subq.langfield, PREFIX_MAX_GRID_LENGTH) : reinterpret_cast<RocksDBCache*>(subq.cache)->__getmatching(subq.phrase, subq.prefix, subq.langfield, PREFIX_MAX_GRID_LENGTH, WHOLE_WORLD);
 
         bool first = i == 0;
         bool last = i == (stack.size() - 1);

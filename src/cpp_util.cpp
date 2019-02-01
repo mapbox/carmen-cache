@@ -6,20 +6,20 @@ namespace carmen {
 // Converts from the packed integer into (relev, score, x, y, feature_id)
 Cover numToCover(uint64_t num) {
     Cover cover{};
-    assert(((num >> 34) % POW2_14) <= static_cast<double>(std::numeric_limits<unsigned short>::max()));
-    assert(((num >> 34) % POW2_14) >= static_cast<double>(std::numeric_limits<unsigned short>::min()));
-    auto y = static_cast<unsigned short>((num >> 34) % POW2_14);
-    assert(((num >> 20) % POW2_14) <= static_cast<double>(std::numeric_limits<unsigned short>::max()));
-    assert(((num >> 20) % POW2_14) >= static_cast<double>(std::numeric_limits<unsigned short>::min()));
-    auto x = static_cast<unsigned short>((num >> 20) % POW2_14);
-    assert(((num >> 48) % POW2_3) <= static_cast<double>(std::numeric_limits<unsigned short>::max()));
-    assert(((num >> 48) % POW2_3) >= static_cast<double>(std::numeric_limits<unsigned short>::min()));
-    auto score = static_cast<unsigned short>((num >> 48) % POW2_3);
-    auto id = static_cast<uint32_t>(num % POW2_20);
+    assert(((num >> 34) & POW2_14M1) <= static_cast<double>(std::numeric_limits<unsigned short>::max()));
+    assert(((num >> 34) & POW2_14M1) >= static_cast<double>(std::numeric_limits<unsigned short>::min()));
+    auto y = static_cast<unsigned short>((num >> 34) & POW2_14M1);
+    assert(((num >> 20) & POW2_14M1) <= static_cast<double>(std::numeric_limits<unsigned short>::max()));
+    assert(((num >> 20) & POW2_14M1) >= static_cast<double>(std::numeric_limits<unsigned short>::min()));
+    auto x = static_cast<unsigned short>((num >> 20) & POW2_14M1);
+    assert(((num >> 48) & POW2_3M1) <= static_cast<double>(std::numeric_limits<unsigned short>::max()));
+    assert(((num >> 48) & POW2_3M1) >= static_cast<double>(std::numeric_limits<unsigned short>::min()));
+    auto score = static_cast<unsigned short>((num >> 48) & POW2_3M1);
+    auto id = static_cast<uint32_t>(num & POW2_20M1);
     auto matches_language = static_cast<bool>(num & LANGUAGE_MATCH_BOOST);
     cover.x = x;
     cover.y = y;
-    double relev = 0.4 + (0.2 * static_cast<double>((num >> 51) % POW2_2));
+    double relev = 0.4 + (0.2 * static_cast<double>((num >> 51) & POW2_2M1));
     cover.relev = relev;
     cover.score = score;
     cover.id = id;

@@ -36,7 +36,7 @@ class JSCache : public node::ObjectWrap {
     static NAN_METHOD(pack);
     static NAN_METHOD(list);
     static NAN_METHOD(_get);
-    static NAN_METHOD(_getmatching);
+//    static NAN_METHOD(_getmatching);
     static NAN_METHOD(_set);
     explicit JSCache();
     void _ref() { Ref(); }

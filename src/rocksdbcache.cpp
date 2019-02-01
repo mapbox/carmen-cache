@@ -21,7 +21,7 @@ intarray RocksDBCache::__get(const std::string& phrase, langfield_type langfield
     return array;
 }
 
-intarray RocksDBCache::__getmatching(const std::string& phrase_ref, PrefixMatch match_prefixes, langfield_type langfield, size_t max_results) {
+intarray RocksDBCache::__getmatching(const std::string& phrase_ref, PrefixMatch match_prefixes, langfield_type langfield, size_t max_results, const uint64_t box[4]) {
     intarray array;
     std::string phrase = phrase_ref;
 
@@ -89,15 +89,16 @@ intarray RocksDBCache::__getmatching(const std::string& phrase_ref, PrefixMatch 
 
     for (std::tuple<std::string, bool>& message : messages) {
         if (std::get<1>(message)) {
-            decodeAndBoostMessage(std::get<0>(message), array, max_results);
+            decodeAndBoostMessageBbox(std::get<0>(message), array, max_results, box);
         } else {
             decodeMessage(std::get<0>(message), array, max_results);
         }
-        currentQ.push(std::make_pair(start, array.size()));
-        start = array.size();
+        // currentQ.push(std::make_pair(start, array.size()));
+        // start = array.size();
     }
-    // std::sort(array.begin(), array.end(), std::greater<uint64_t>());
-    // return array;
+    std::sort(array.begin(), array.end(), std::greater<uint64_t>());
+    array.erase( std::unique( array.begin(), array.end() ), array.end() );
+    return array;
 
     std::vector<uint64_t> nextArray(array.size(), 0);
     // std::cout << "item size: " << array.size() << std::endl;
