@@ -1,6 +1,9 @@
 
 #include "rocksdbcache.hpp"
 #include "cpp_util.hpp"
+#include <iostream>
+#include <algorithm>
+#include <queue>
 
 namespace carmen {
 
@@ -79,6 +82,76 @@ intarray RocksDBCache::__getmatching(const std::string& phrase_ref, PrefixMatch 
         }
         return array;
     }
+    // std::cout << "size: " << messages.size() << std::endl;
+
+    std::queue<std::pair<size_t, size_t>> currentQ, nextQ;
+    size_t start = 0;
+
+    for (std::tuple<std::string, bool>& message : messages) {
+        if (std::get<1>(message)) {
+            decodeAndBoostMessage(std::get<0>(message), array, max_results);
+        } else {
+            decodeMessage(std::get<0>(message), array, max_results);
+        }
+        currentQ.push(std::make_pair(start, array.size()));
+        start = array.size();
+    }
+    // std::sort(array.begin(), array.end(), std::greater<uint64_t>());
+    // return array;
+
+    std::vector<uint64_t> nextArray(array.size(), 0);
+    // std::cout << "item size: " << array.size() << std::endl;
+
+    while (currentQ.size() > 1) {
+        while (currentQ.size() > 1) {
+            std::pair<size_t, size_t> pair1 = currentQ.front();
+            currentQ.pop();
+            std::pair<size_t, size_t> pair2 = currentQ.front();
+            currentQ.pop();
+            std::merge(
+                array.begin() + std::get<0>(pair1),
+                array.begin() + std::get<1>(pair1),
+                array.begin() + std::get<0>(pair2),
+                array.begin() + std::get<1>(pair2),
+                nextArray.begin() + std::get<0>(pair1),
+                std::greater<uint64_t>()
+            );
+            // std::cout << "curr sorted? " <<
+            //     std::is_sorted(
+            //         array.begin() + std::get<0>(pair1),
+            //         array.begin() + std::get<1>(pair1),
+            //         std::greater<uint64_t>()
+            //     ) <<
+            //     std::is_sorted(
+            //         array.begin() + std::get<0>(pair2),
+            //         array.begin() + std::get<1>(pair2),
+            //         std::greater<uint64_t>()
+            //     ) <<
+            //     std::endl;
+            // std::cout << "next sorted? " << std::is_sorted(nextArray.begin() + std::get<0>(pair1), nextArray.begin() + std::get<1>(pair2), std::greater<uint64_t>()) << std::endl;
+            nextQ.push(std::make_pair(std::get<0>(pair1), std::get<1>(pair2)));
+        }
+        if (currentQ.size() == 1) {
+            std::pair<size_t, size_t> pair = currentQ.front();
+            currentQ.pop();
+            std::copy(
+                array.begin() + std::get<0>(pair),
+                array.begin() + std::get<1>(pair),
+                nextArray.begin() + std::get<0>(pair)
+            );
+            nextQ.push(pair);
+        };
+        std::swap(array, nextArray);
+        std::swap(currentQ, nextQ);
+    }
+
+    // std::cout << "item size: " << array.size() << std::endl;
+    // std::cout << "qsize " << currentQ.size() << std::endl;
+    // std::cout << "q " << std::get<0>(currentQ.front()) << " " << std::get<1>(currentQ.front()) << std::endl;
+    // std::cout << "sorted? " << std::is_sorted(array.begin(), array.end(), std::greater<uint64_t>()) << std::endl;
+    array.erase( std::unique( array.begin(), array.end() ), array.end() );
+    std::cout << "ns " << array.size() << std::endl;
+    return array;
 
     for (std::tuple<std::string, bool>& message : messages) {
         protozero::pbf_reader item(std::get<0>(message));
