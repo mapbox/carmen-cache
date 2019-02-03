@@ -117,6 +117,61 @@ intarray RocksDBCache::__getmatching(const std::string& phrase_ref, PrefixMatch 
     return array;
 }
 
+// this is an alternative version of getmatching specifically intended for the
+// address/partial-number case that parses grid data eagerly rather than lazily
+// and does bbox filtering before sorting
+intarray RocksDBCache::__getmatchingBboxFiltered(const std::string& phrase_ref, PrefixMatch match_prefixes, langfield_type langfield, size_t max_results, const uint64_t box[4]) {
+    intarray array;
+    std::string phrase = phrase_ref;
+
+    if (match_prefixes == PrefixMatch::disabled) {
+        phrase.push_back(LANGFIELD_SEPARATOR);
+    }
+
+    size_t phrase_length = phrase.length();
+    if (match_prefixes == PrefixMatch::word_boundary) {
+        // If we're looking for a word boundary we need have one more character
+        // available than the phrase is long. Incrementing this lengh ensures we
+        // don't use a prefix cache that could cut off the word break.
+        phrase_length++;
+    }
+
+    if (match_prefixes != PrefixMatch::disabled) {
+        // if this is an autocomplete scan, use the prefix cache
+        if (phrase_length <= MEMO_PREFIX_LENGTH_T1) {
+            phrase = "=1" + phrase.substr(0, MEMO_PREFIX_LENGTH_T1);
+        } else if (phrase_length <= MEMO_PREFIX_LENGTH_T2) {
+            phrase = "=2" + phrase.substr(0, MEMO_PREFIX_LENGTH_T2);
+        }
+    }
+
+    std::unique_ptr<rocksdb::Iterator> rit(db->NewIterator(rocksdb::ReadOptions()));
+    for (rit->Seek(phrase); rit->Valid() && rit->key().ToString().compare(0, phrase.size(), phrase) == 0; rit->Next()) {
+        std::string key = rit->key().ToString();
+
+        if (match_prefixes == PrefixMatch::word_boundary) {
+            // Read one character beyond the input prefix length, should always
+            // be safe because of the LANGFIELD_SEPARATOR
+            char endChar = key.at(phrase.length());
+            if (endChar != LANGFIELD_SEPARATOR && endChar != ' ') {
+                continue;
+            }
+        }
+
+        // grab the langfield from the end of the key
+        langfield_type message_langfield = extract_langfield(key);
+        auto matches_language = static_cast<bool>(message_langfield & langfield);
+
+        uint64_t boost = matches_language ? LANGUAGE_MATCH_BOOST : 0;
+        decodeAndBboxFilter(rit->value().ToString(), array, boost, box);
+    }
+
+    std::sort(array.begin(), array.end(), std::greater<uint64_t>());
+    array.erase(std::unique(array.begin(), array.end()), array.end());
+    if (array.size() > max_results) array.resize(max_results);
+    return array;
+}
+
 RocksDBCache::RocksDBCache() = default;
 
 RocksDBCache::~RocksDBCache() = default;

@@ -66,6 +66,29 @@ inline void decodeAndBoostMessage(std::string const& message, intarray& array, s
     }
 }
 
+inline bool inplaceBboxCheck(uint64_t val, const uint64_t box[4]) {
+    uint64_t inplaceX = val & X_MASK;
+    uint64_t inplaceY = val & Y_MASK;
+    return (inplaceX >= box[0] && inplaceX <= box[2] && inplaceY >= box[1] && inplaceY <= box[3]);
+}
+
+inline void decodeAndBboxFilter(std::string const& message, intarray& array, uint64_t boost, const uint64_t box[4]) {
+    protozero::pbf_reader item(message);
+    item.next(CACHE_ITEM);
+    auto vals = item.get_packed_uint64();
+    // delta decode values.
+    auto it = vals.first;
+    if (vals.first != vals.second) {
+        uint64_t lastval = *it;
+        if (inplaceBboxCheck(lastval, box)) array.emplace_back(lastval | boost);
+        it++;
+        for (; it != vals.second; ++it) {
+            lastval = lastval - *it;
+            if (inplaceBboxCheck(lastval, box)) array.emplace_back(lastval | boost);
+        }
+    }
+}
+
 class RocksDBCache {
   public:
     RocksDBCache(const std::string& filename);
@@ -77,6 +100,7 @@ class RocksDBCache {
 
     std::vector<uint64_t> __get(const std::string& phrase, langfield_type langfield);
     std::vector<uint64_t> __getmatching(const std::string& phrase_ref, PrefixMatch match_prefixes, langfield_type langfield, size_t max_results);
+    std::vector<uint64_t> __getmatchingBboxFiltered(const std::string& phrase_ref, PrefixMatch match_prefixes, langfield_type langfield, size_t max_results, const uint64_t box[4]);
 
     std::shared_ptr<rocksdb::DB> db;
 };
