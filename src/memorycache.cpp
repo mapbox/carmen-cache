@@ -53,6 +53,7 @@ intarray MemoryCache::__getmatching(const std::string& phrase_ref, PrefixMatch m
         }
     }
     std::sort(array.begin(), array.end(), std::greater<uint64_t>());
+    if (array.size() > max_results) array.resize(max_results);
     return array;
 }
 

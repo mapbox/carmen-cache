@@ -122,9 +122,9 @@ inline std::vector<Context> coalesceSingle(std::vector<PhrasematchSubq>& stack, 
         cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
         cover.relev = cover.relev * subq.weight;
         if (proximity) {
-            auto last = covers.empty() ? NULL : &covers.back();
+            auto last = covers.empty() ? nullptr : &covers.back();
             if (
-                last != NULL &&
+                last != nullptr &&
                 last->x == cover.x &&
                 last->y == cover.y &&
                 last->score == cover.score) {
