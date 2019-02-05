@@ -94,8 +94,7 @@ inline std::vector<Context> coalesceSingle(std::vector<PhrasematchSubq>& stack, 
                 static_cast<uint64_t>((minx & POW2_14M1) << 20),
                 static_cast<uint64_t>((miny & POW2_14M1) << 34),
                 static_cast<uint64_t>((maxx & POW2_14M1) << 20),
-                static_cast<uint64_t>((maxy & POW2_14M1) << 34)
-            };
+                static_cast<uint64_t>((maxy & POW2_14M1) << 34)};
             grids = reinterpret_cast<RocksDBCache*>(subq.cache)->__getmatchingBboxFiltered(subq.phrase, subq.prefix, subq.langfield, max_results, inplace_bbox);
         } else {
             grids = reinterpret_cast<RocksDBCache*>(subq.cache)->__getmatching(subq.phrase, subq.prefix, subq.langfield, max_results);
@@ -128,8 +127,7 @@ inline std::vector<Context> coalesceSingle(std::vector<PhrasematchSubq>& stack, 
                 last != NULL &&
                 last->x == cover.x &&
                 last->y == cover.y &&
-                last->score == cover.score
-            ) {
+                last->score == cover.score) {
                 cover.distance = last->distance;
                 cover.scoredist = last->scoredist;
             } else {

@@ -86,15 +86,15 @@ struct PhrasematchSubq {
                     uint32_t m,
                     langfield_type l,
                     bool xs) : cache(c),
-                                        type(t),
-                                        weight(w),
-                                        phrase(p),
-                                        prefix(pf),
-                                        idx(i),
-                                        zoom(z),
-                                        mask(m),
-                                        langfield(l),
-                                        extended_scan(xs) {}
+                               type(t),
+                               weight(w),
+                               phrase(p),
+                               prefix(pf),
+                               idx(i),
+                               zoom(z),
+                               mask(m),
+                               langfield(l),
+                               extended_scan(xs) {}
     void* cache;
     char type;
     double weight;
