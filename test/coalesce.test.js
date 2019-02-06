@@ -379,6 +379,27 @@ test('coalesce args', (t) => {
                 t.end();
             });
         });
+        test('coalesceSingle bbox + prox + extendedScan + word_boundary: ' + cache.id, (t) => {
+            coalesce([{
+                cache: cache,
+                mask: 1 << 0,
+                idx: 0,
+                zoom: 2,
+                weight: 1,
+                phrase: '1',
+                prefix: scan.word_boundary,
+                extendedScan: true
+            }], {
+                bboxzxy: [2, 1, 1, 1, 1],
+                centerzxy: [2,1,1]
+            }, (err, res) => {
+                t.ifError(err, 'no errors');
+                t.deepEqual(res[0].relev, 1, '1.relev');
+                t.deepEqual(res.length, 1, 'got back 1 result');
+                t.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 1, idx: 0, relev: 1.0, score: 7, scoredist: 1400, tmpid: 1, x: 1, y: 1 }, '1.0');
+                t.end();
+            });
+        });
     });
 })();
 
