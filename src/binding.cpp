@@ -335,9 +335,9 @@ NAN_METHOD(JSCache<T>::_getmatching) {
         bool extended_scan;
         if (info.Length() > 3 && !(info[3]->IsNull() || info[3]->IsUndefined())) {
             if (!info[3]->IsBoolean()) {
-                return Nan::ThrowTypeError("fourth arg, if supplied, must be an Boolean");
+                return Nan::ThrowTypeError("fourth arg, if supplied, must be a boolean");
             }
-            extended_scan = info[2]->BooleanValue();
+            extended_scan = info[3]->BooleanValue();
         } else {
             extended_scan = false;
         }
