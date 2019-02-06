@@ -285,8 +285,8 @@ test('getMatching', (t) => {
 
         const test_extended_scan_false = c._getMatching('huge', scan.enabled, [0], false);
         const test_extended_scan_true = c._getMatching('huge', scan.enabled, [0], true);
-        t.equal(test_extended_scan_false.length, 500000, "list is truncated when extended_scan is false");
-        t.equal(test_extended_scan_true.length, 500001, "list is not truncated when extended_scan is true");
+        t.equal(test_extended_scan_false.length, 500000, 'list is truncated when extended_scan is false');
+        t.equal(test_extended_scan_true.length, 500001, 'list is not truncated when extended_scan is true');
     });
 
     // t.deepEqual(loader.list('grid'), [ 'else.', 'something', 'test', 'test.' ], 'keys in shard');
