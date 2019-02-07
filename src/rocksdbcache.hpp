@@ -32,6 +32,7 @@ struct sortableGrid {
     sortableGrid(sortableGrid&& c) = default;
 };
 
+// this is a basic decoding operation that unpacks a whole protobuff message
 inline void decodeMessage(std::string const& message, intarray& array, size_t limit) {
     protozero::pbf_reader item(message);
     item.next(CACHE_ITEM);
@@ -49,6 +50,8 @@ inline void decodeMessage(std::string const& message, intarray& array, size_t li
     }
 }
 
+// this function is as above, but also modifies the output of the protobuf message
+// to set the language-match bit to true, effectively boosting its sort order
 inline void decodeAndBoostMessage(std::string const& message, intarray& array, size_t limit) {
     protozero::pbf_reader item(message);
     item.next(CACHE_ITEM);
@@ -72,6 +75,20 @@ inline bool inplaceBboxCheck(uint64_t val, const uint64_t box[4]) {
     return (inplaceX >= box[0] && inplaceX <= box[2] && inplaceY >= box[1] && inplaceY <= box[3]);
 }
 
+// This is a modified decode operation used in RocksDBCache::__getmatchingBboxFiltered.
+// it takes the boost-y-ness as an argument (which we could likely do above as well
+// if we wanted, but would need to evaluate performance) and also takes a bounding box
+// parameter to allow for pre-filtering results by bounding box before they're later
+// sorted inside getmatching; this makes sense to do in this order in circumstances
+// where we expect the bounding box filter to filter out lots of things, as it does
+// more work at O(n) for a potential big savings on an O(n log n) operation if the
+// second n can be significantly reduced by the linear filter.
+//
+// The format of the box is in [minX, minY, maxX, maxY] tile coordinate order,
+// except that the X's and Y's need to have already been shifted into same positions
+// as they occupy in encoded grids (20 bits left and 34 bits left, respectively)
+// so that we can efficiently compare them to the X and Y coordinates within each
+// grid without shifting, to keep this whole operation as fast as possible.
 inline void decodeAndBboxFilter(std::string const& message, intarray& array, uint64_t boost, const uint64_t box[4]) {
     protozero::pbf_reader item(message);
     item.next(CACHE_ITEM);

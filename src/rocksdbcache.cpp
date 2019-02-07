@@ -117,9 +117,12 @@ intarray RocksDBCache::__getmatching(const std::string& phrase_ref, PrefixMatch 
     return array;
 }
 
-// this is an alternative version of getmatching specifically intended for the
+// This is an alternative version of getmatching specifically intended for the
 // address/partial-number case that parses grid data eagerly rather than lazily
-// and does bbox filtering before sorting
+// and does bbox filtering before sorting. At present we only use it from
+// coalesceSingle, and it's only defined for the RocksDBCache; this filtering is
+// not necessary for correctness, just for performance, so the MemoryCache
+// doesn't need it in order to produce the correct results (and it's slow anyway)
 intarray RocksDBCache::__getmatchingBboxFiltered(const std::string& phrase_ref, PrefixMatch match_prefixes, langfield_type langfield, size_t max_results, const uint64_t box[4]) {
     intarray array;
     std::string phrase = phrase_ref;
