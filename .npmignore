@@ -1,8 +1,12 @@
+/bench
 /build
-/test
+/cloudformation
 /lib/carmen.node
+/local.env
 /mason
 /mason_packages
+/test
+/.codecov.yml
 /.mason
 /.toolchain
-/local.env
+/.travis.yml
