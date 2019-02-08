@@ -18,7 +18,7 @@ intarray MemoryCache::__get(const std::string& phrase, langfield_type langfield)
     return array;
 }
 
-intarray MemoryCache::__getmatching(const std::string& phrase_ref, PrefixMatch match_prefixes, langfield_type langfield) {
+intarray MemoryCache::__getmatching(const std::string& phrase_ref, PrefixMatch match_prefixes, langfield_type langfield, size_t max_results) {
     intarray array;
     std::string phrase = phrase_ref;
 
@@ -53,6 +53,7 @@ intarray MemoryCache::__getmatching(const std::string& phrase_ref, PrefixMatch m
         }
     }
     std::sort(array.begin(), array.end(), std::greater<uint64_t>());
+    if (array.size() > max_results) array.resize(max_results);
     return array;
 }
 
@@ -81,6 +82,8 @@ bool MemoryCache::pack(const std::string& filename) {
 
             // delta-encode values, sorted in descending order.
             std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
+            // remove duplicates
+            varr.erase(std::unique(varr.begin(), varr.end()), varr.end());
 
             packVec(varr, db, item.first);
 
@@ -136,11 +139,8 @@ bool MemoryCache::pack(const std::string& filename) {
 
         // delta-encode values, sorted in descending order.
         std::sort(varr.begin(), varr.end(), std::greater<uint64_t>());
-
-        if (varr.size() > PREFIX_MAX_GRID_LENGTH) {
-            // for the prefix memos we're only going to ever use 500k max anyway
-            varr.resize(PREFIX_MAX_GRID_LENGTH);
-        }
+        // remove duplicates
+        varr.erase(std::unique(varr.begin(), varr.end()), varr.end());
 
         packVec(varr, db, item.first);
     }

@@ -26,7 +26,7 @@ test('getMatching args', (t) => {
 
     t.throws(() => {
         c._getMatching();
-    }, /expected two or three info: id, match_prefixes, \[languages\]/, 'require args');
+    }, /expected two to four info/, 'require args');
 
     t.throws(() => {
         c._getMatching(false, false);
@@ -44,6 +44,10 @@ test('getMatching args', (t) => {
     t.throws(() => {
         c._getMatching('1', 0, false);
     }, /third arg, if supplied, must be an Array/, 'require array as third arg');
+
+    t.throws(() => {
+        c._getMatching('1', 0, [], 1);
+    }, /fourth arg, if supplied, must be a boolean/, 'require boolean as fourth arg');
 
     t.end();
 });
@@ -99,6 +103,12 @@ test('getMatching', (t) => {
         Grid.encode({ id: 82, x: 1, y: 1, relev: 1, score: 1 }),
         Grid.encode({ id: 83, x: 1, y: 1, relev: 1, score: 1 })
     ], [0]);
+
+    const lotsOfThings = [];
+    for (let i = 100; i < 500101; i++) {
+        lotsOfThings.push(Grid.encode({ id: i, x: 1, y: 1, relev: 1, score: 1 }));
+    }
+    cache._set('huge', lotsOfThings, [0]);
 
     // cache A serializes data, cache B loads serialized data.
     const pack = tmpfile();
@@ -272,6 +282,11 @@ test('getMatching', (t) => {
             [81, 82, 83],
             "getMatching for 'word boundary' with word boundary prefix match and no language includes all IDs for 'word boundary'"
         );
+
+        const test_extended_scan_false = c._getMatching('huge', scan.enabled, [0], false);
+        const test_extended_scan_true = c._getMatching('huge', scan.enabled, [0], true);
+        t.equal(test_extended_scan_false.length, 500000, 'list is truncated when extended_scan is false');
+        t.equal(test_extended_scan_true.length, 500001, 'list is not truncated when extended_scan is true');
     });
 
     // t.deepEqual(loader.list('grid'), [ 'else.', 'something', 'test', 'test.' ], 'keys in shard');

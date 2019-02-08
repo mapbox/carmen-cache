@@ -71,6 +71,10 @@ constexpr uint64_t POW2_14 = static_cast<uint64_t>(_pow(2.0, 14));
 constexpr uint64_t POW2_3 = static_cast<uint64_t>(_pow(2.0, 3));
 constexpr uint64_t POW2_2 = static_cast<uint64_t>(_pow(2.0, 2));
 
+constexpr uint64_t POW2_14M1 = static_cast<uint64_t>(_pow(2.0, 14)) - 1;
+constexpr uint64_t X_MASK = POW2_14M1 << 20;
+constexpr uint64_t Y_MASK = POW2_14M1 << 34;
+
 struct PhrasematchSubq {
     PhrasematchSubq(void* c,
                     char t,
@@ -80,15 +84,17 @@ struct PhrasematchSubq {
                     unsigned short i,
                     unsigned short z,
                     uint32_t m,
-                    langfield_type l) : cache(c),
-                                        type(t),
-                                        weight(w),
-                                        phrase(p),
-                                        prefix(pf),
-                                        idx(i),
-                                        zoom(z),
-                                        mask(m),
-                                        langfield(l) {}
+                    langfield_type l,
+                    bool xs) : cache(c),
+                               type(t),
+                               weight(w),
+                               phrase(p),
+                               prefix(pf),
+                               idx(i),
+                               zoom(z),
+                               mask(m),
+                               langfield(l),
+                               extended_scan(xs) {}
     void* cache;
     char type;
     double weight;
@@ -98,6 +104,7 @@ struct PhrasematchSubq {
     unsigned short zoom;
     uint32_t mask;
     langfield_type langfield;
+    bool extended_scan;
     PhrasematchSubq& operator=(PhrasematchSubq&& c) = default;
     PhrasematchSubq(PhrasematchSubq&& c) = default;
 };

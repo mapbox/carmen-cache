@@ -67,25 +67,39 @@ inline std::vector<Context> coalesceSingle(std::vector<PhrasematchSubq>& stack, 
 
     // bbox (optional)
     bool bbox = !bboxzxy.empty();
-    unsigned minx;
-    unsigned miny;
-    unsigned maxx;
-    unsigned maxy;
+    unsigned short minx;
+    unsigned short miny;
+    unsigned short maxx;
+    unsigned short maxy;
     if (bbox) {
-        minx = static_cast<unsigned>(bboxzxy[1]);
-        miny = static_cast<unsigned>(bboxzxy[2]);
-        maxx = static_cast<unsigned>(bboxzxy[3]);
-        maxy = static_cast<unsigned>(bboxzxy[4]);
+        minx = static_cast<unsigned short>(bboxzxy[1]);
+        miny = static_cast<unsigned short>(bboxzxy[2]);
+        maxx = static_cast<unsigned short>(bboxzxy[3]);
+        maxy = static_cast<unsigned short>(bboxzxy[4]);
     } else {
         minx = 0;
         miny = 0;
-        maxx = 0;
-        maxy = 0;
+        maxx = std::numeric_limits<unsigned short>::max();
+        maxy = std::numeric_limits<unsigned short>::max();
     }
 
     // Load and concatenate grids for all ids in `phrases`
     intarray grids;
-    grids = subq.type == TYPE_MEMORY ? reinterpret_cast<MemoryCache*>(subq.cache)->__getmatching(subq.phrase, subq.prefix, subq.langfield) : reinterpret_cast<RocksDBCache*>(subq.cache)->__getmatching(subq.phrase, subq.prefix, subq.langfield);
+    size_t max_results = subq.extended_scan ? std::numeric_limits<size_t>::max() : PREFIX_MAX_GRID_LENGTH;
+    if (subq.type == TYPE_MEMORY) {
+        grids = reinterpret_cast<MemoryCache*>(subq.cache)->__getmatching(subq.phrase, subq.prefix, subq.langfield, max_results);
+    } else {
+        if (subq.extended_scan && bbox) {
+            uint64_t inplace_bbox[4] = {
+                static_cast<uint64_t>((minx & POW2_14M1) << 20),
+                static_cast<uint64_t>((miny & POW2_14M1) << 34),
+                static_cast<uint64_t>((maxx & POW2_14M1) << 20),
+                static_cast<uint64_t>((maxy & POW2_14M1) << 34)};
+            grids = reinterpret_cast<RocksDBCache*>(subq.cache)->__getmatchingBboxFiltered(subq.phrase, subq.prefix, subq.langfield, max_results, inplace_bbox);
+        } else {
+            grids = reinterpret_cast<RocksDBCache*>(subq.cache)->__getmatching(subq.phrase, subq.prefix, subq.langfield, max_results);
+        }
+    }
 
     unsigned long m = grids.size();
     double relevMax = 0;
@@ -100,12 +114,26 @@ inline std::vector<Context> coalesceSingle(std::vector<PhrasematchSubq>& stack, 
     for (unsigned long j = 0; j < m; j++) {
         Cover cover = numToCover(grids[j]);
 
+        if (bbox) {
+            if (cover.x < minx || cover.y < miny || cover.x > maxx || cover.y > maxy) continue;
+        }
+
         cover.idx = subq.idx;
         cover.tmpid = static_cast<uint32_t>(cover.idx * POW2_25 + cover.id);
         cover.relev = cover.relev * subq.weight;
         if (proximity) {
-            cover.distance = tileDist(cx, cy, cover.x, cover.y);
-            cover.scoredist = scoredist(cz, cover.distance, cover.score, radius);
+            auto last = covers.empty() ? nullptr : &covers.back();
+            if (
+                last != nullptr &&
+                last->x == cover.x &&
+                last->y == cover.y &&
+                last->score == cover.score) {
+                cover.distance = last->distance;
+                cover.scoredist = last->scoredist;
+            } else {
+                cover.distance = tileDist(cx, cy, cover.x, cover.y);
+                cover.scoredist = scoredist(cz, cover.distance, cover.score, radius);
+            }
             if (!cover.matches_language && cover.distance > proximityRadius(cz, radius)) {
                 cover.relev *= .96;
             }
@@ -125,10 +153,6 @@ inline std::vector<Context> coalesceSingle(std::vector<PhrasematchSubq>& stack, 
         }
         if (relevMax - cover.relev >= 0.25) break;
         if (cover.relev > relevMax) relevMax = cover.relev;
-
-        if (bbox) {
-            if (cover.x < minx || cover.y < miny || cover.x > maxx || cover.y > maxy) continue;
-        }
 
         covers.emplace_back(cover);
         if (lastId != cover.id) length++;
@@ -239,7 +263,7 @@ inline std::vector<Context> coalesceMulti(std::vector<PhrasematchSubq>& stack, c
     for (auto const& subq : stack) {
         // Load and concatenate grids for all ids in `phrases`
         intarray grids;
-        grids = subq.type == TYPE_MEMORY ? reinterpret_cast<MemoryCache*>(subq.cache)->__getmatching(subq.phrase, subq.prefix, subq.langfield) : reinterpret_cast<RocksDBCache*>(subq.cache)->__getmatching(subq.phrase, subq.prefix, subq.langfield);
+        grids = subq.type == TYPE_MEMORY ? reinterpret_cast<MemoryCache*>(subq.cache)->__getmatching(subq.phrase, subq.prefix, subq.langfield, PREFIX_MAX_GRID_LENGTH) : reinterpret_cast<RocksDBCache*>(subq.cache)->__getmatching(subq.phrase, subq.prefix, subq.langfield, PREFIX_MAX_GRID_LENGTH);
 
         bool first = i == 0;
         bool last = i == (stack.size() - 1);
