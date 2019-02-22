@@ -8,3 +8,6 @@ mason
 .toolchain/
 local.env
 mason_packages
+
+*.user
+
