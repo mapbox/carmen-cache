@@ -43,7 +43,8 @@
                 "./src/memorycache.cpp",
                 "./src/rocksdbcache.cpp",
                 "./src/coalesce.cpp",
-                "./src/binding.cpp"
+                "./src/binding.cpp",
+                "./src/log.cpp"
             ],
             "include_dirs" : [
                 'src/',
@@ -52,7 +53,8 @@
             ],
             "libraries": [
                 '<(module_root_dir)/mason_packages/.link/lib/librocksdb.a',
-                '<(module_root_dir)/mason_packages/.link/lib/libbz2.a'
+                '<(module_root_dir)/mason_packages/.link/lib/libbz2.a',
+                '<(module_root_dir)/mason_packages/.link/lib/libtbb.a'
             ],
             'cflags_cc!': ['-fno-rtti', '-fno-exceptions'],
             'cflags_cc' : [

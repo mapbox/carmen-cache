@@ -2,6 +2,7 @@
 #define __CARMEN_ROCKSDBCACHE_HPP__
 
 #include "cpp_util.hpp"
+#include "concurrent-lru-cache.hpp"
 
 // this is an external library, so squash this warning
 #pragma clang diagnostic push
@@ -120,6 +121,14 @@ class RocksDBCache {
     std::vector<uint64_t> __getmatchingBboxFiltered(const std::string& phrase_ref, PrefixMatch match_prefixes, langfield_type langfield, size_t max_results, const uint64_t box[4]);
 
     std::shared_ptr<rocksdb::DB> db;
+
+private:
+    using MessagesT = std::vector<std::tuple<std::string, langfield_type>>;
+    using CacheT = HPHP::ConcurrentLRUCache<std::string, MessagesT>;
+    std::shared_ptr<CacheT> m_cache;
+
+private:
+    MessagesT const & fetch_messages(const std::string& phrase_ref, PrefixMatch match_prefixes, CacheT::ConstAccessor & ca);
 };
 
 } // namespace carmen
