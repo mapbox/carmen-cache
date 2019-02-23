@@ -120,6 +120,11 @@ class RocksDBCache {
     std::vector<uint64_t> __getmatchingBboxFiltered(const std::string& phrase_ref, PrefixMatch match_prefixes, langfield_type langfield, size_t max_results, const uint64_t box[4]);
 
     std::shared_ptr<rocksdb::DB> db;
+
+private:
+    template <class FnT>
+    void fetch_messages(const std::string& phrase_ref, PrefixMatch match_prefixes,
+                        langfield_type langfield, FnT && fn);
 };
 
 } // namespace carmen
