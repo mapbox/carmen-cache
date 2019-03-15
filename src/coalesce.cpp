@@ -2,6 +2,7 @@
 #include "coalesce.hpp"
 #include "memorycache.hpp"
 #include "rocksdbcache.hpp"
+#include "#include <iostream>"
 
 namespace carmen {
 
@@ -132,7 +133,13 @@ inline std::vector<Context> coalesceSingle(std::vector<PhrasematchSubq>& stack, 
                 cover.scoredist = last->scoredist;
             } else {
                 cover.distance = tileDist(cx, cy, cover.x, cover.y);
+                if (cover.idx == 79) {
+                    std::cout << "cover.distance for " << cover.id << ": " << cover.distance << "\n";
+                }
                 cover.scoredist = scoredist(cz, cover.distance, cover.score, radius);
+                if (cover.idx == 79) {
+                    std::cout << "cover.scoredist in coalesce " << cover.scoredist << "\n";
+                }
             }
             if (!cover.matches_language && cover.distance > proximityRadius(cz, radius)) {
                 cover.relev *= .96;

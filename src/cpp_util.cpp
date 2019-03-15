@@ -1,5 +1,6 @@
 
 #include "cpp_util.hpp"
+#include <iostream>
 
 namespace carmen {
 
@@ -157,6 +158,7 @@ double scoredist(unsigned zoom, double distance, unsigned short score, double ra
 
     // Too close to 0 the values get intense. Cap it.
     if (distRatio < 0.005) {
+        std::cout << "distRatio: " << distRatio << "\n";
         distRatio = 0.005;
     }
     // Beyond the proximity radius just let scoredist be driven by score.
