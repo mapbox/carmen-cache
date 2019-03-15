@@ -2,7 +2,7 @@
 #include "coalesce.hpp"
 #include "memorycache.hpp"
 #include "rocksdbcache.hpp"
-#include "#include <iostream>"
+#include <iostream>
 
 namespace carmen {
 
