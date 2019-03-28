@@ -1,6 +1,7 @@
 
 #include "memorycache.hpp"
 #include "cpp_util.hpp"
+#include <iostream>
 
 namespace carmen {
 
@@ -21,6 +22,7 @@ intarray MemoryCache::__get(const std::string& phrase, langfield_type langfield)
 intarray MemoryCache::__getmatching(const std::string& phrase_ref, PrefixMatch match_prefixes, langfield_type langfield, size_t max_results) {
     intarray array;
     std::string phrase = phrase_ref;
+    std::cout << "Inside _getMatching Memorycache\n";
 
     if (match_prefixes == PrefixMatch::disabled) phrase.push_back(LANGFIELD_SEPARATOR);
     size_t phrase_length = phrase.length();
