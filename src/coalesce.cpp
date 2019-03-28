@@ -21,10 +21,10 @@ std::vector<Context> coalesce(std::vector<PhrasematchSubq>& stack, const std::ve
         std::size_t total = 0;
         std::map<uint64_t, bool> sets;
         std::map<uint64_t, bool>::iterator sit;
-        std::size_t max_contexts = 40;
+        std::size_t max_contexts = 100;
         out.reserve(max_contexts);
         for (auto&& context : contexts) {
-            // Maximum allowance of coalesced features: 40.
+            // Maximum allowance of coalesced features: 100.
             if (total >= max_contexts) break;
 
             // Since `coalesced` is sorted by relev desc at first
@@ -83,7 +83,7 @@ inline std::vector<Context> coalesceSingle(std::vector<PhrasematchSubq>& stack, 
         maxx = std::numeric_limits<unsigned short>::max();
         maxy = std::numeric_limits<unsigned short>::max();
     }
-
+    std::cout << "Using coalesce single\n";
     // Load and concatenate grids for all ids in `phrases`
     intarray grids;
     size_t max_results = subq.extended_scan ? std::numeric_limits<size_t>::max() : PREFIX_MAX_GRID_LENGTH;
@@ -133,11 +133,15 @@ inline std::vector<Context> coalesceSingle(std::vector<PhrasematchSubq>& stack, 
                 cover.scoredist = last->scoredist;
             } else {
                 cover.distance = tileDist(cx, cy, cover.x, cover.y);
-                if (cover.idx == 79) {
+                if (cover.idx == 80) {
+		    if (cover.id == 650136) {
+			std::cout << "---------- FEATURE 650136 -----------\n";	
+		    }
+		    std::cout << "cx: " << cx << " cy: " << cy << " cover.x: " << cover.x << " cover.y: " << cover.y << "\n";
                     std::cout << "cover.distance for " << cover.id << ": " << cover.distance << "\n";
                 }
                 cover.scoredist = scoredist(cz, cover.distance, cover.score, radius);
-                if (cover.idx == 79) {
+                if (cover.idx == 80) {
                     std::cout << "cover.scoredist in coalesce " << cover.scoredist << "\n";
                 }
             }
@@ -154,7 +158,7 @@ inline std::vector<Context> coalesceSingle(std::vector<PhrasematchSubq>& stack, 
         if (lastId == cover.id && cover.scoredist <= lastScoredist) continue;
 
         // short circuit based on relevMax thres
-        if (length > 40) {
+        if (length > 100) {
             if (cover.scoredist < minScoredist) continue;
             if (cover.relev < lastRelev) break;
         }
@@ -163,7 +167,7 @@ inline std::vector<Context> coalesceSingle(std::vector<PhrasematchSubq>& stack, 
 
         covers.emplace_back(cover);
         if (lastId != cover.id) length++;
-        if (!proximity && length > 40) break;
+        if (!proximity && length > 100) break;
         if (cover.scoredist < minScoredist) minScoredist = cover.scoredist;
         lastId = cover.id;
         lastRelev = cover.relev;
@@ -177,9 +181,9 @@ inline std::vector<Context> coalesceSingle(std::vector<PhrasematchSubq>& stack, 
     uint32_t lastid = 0;
     std::size_t added = 0;
     std::vector<Context> contexts;
-    std::size_t max_contexts = 40;
+    std::size_t max_contexts = 100;
     for (auto&& cover : covers) {
-        // Stop at 40 contexts
+        // Stop at 100 contexts
         if (added == max_contexts) break;
 
         // Attempt not to add the same feature but by diff cover twice
@@ -202,7 +206,7 @@ inline std::vector<Context> coalesceSingle(std::vector<PhrasematchSubq>& stack, 
 inline std::vector<Context> coalesceMulti(std::vector<PhrasematchSubq>& stack, const std::vector<uint64_t>& centerzxy, const std::vector<uint64_t>& bboxzxy, double radius) {
     std::sort(stack.begin(), stack.end(), subqSortByZoom);
     std::size_t stackSize = stack.size();
-
+    std::cout << "Using coalesce multi \n";
     // Cache zoom levels to iterate over as coalesce occurs.
     std::vector<intarray> zoomCache;
     zoomCache.reserve(stackSize);
