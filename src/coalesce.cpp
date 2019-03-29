@@ -134,10 +134,10 @@ inline std::vector<Context> coalesceSingle(std::vector<PhrasematchSubq>& stack, 
             } else {
                 cover.distance = tileDist(cx, cy, cover.x, cover.y);
                 if (cover.idx == 80) {
-		    if (cover.id == 650136) {
-			std::cout << "---------- FEATURE 650136 -----------\n";	
-		    }
-		    std::cout << "cx: " << cx << " cy: " << cy << " cover.x: " << cover.x << " cover.y: " << cover.y << "\n";
+                    if (cover.id == 650136) {
+                        std::cout << "---------- FEATURE 650136 -----------\n";
+                    }
+                    std::cout << "cx: " << cx << " cy: " << cy << " cover.x: " << cover.x << " cover.y: " << cover.y << "\n";
                     std::cout << "cover.distance for " << cover.id << ": " << cover.distance << "\n";
                 }
                 cover.scoredist = scoredist(cz, cover.distance, cover.score, radius);

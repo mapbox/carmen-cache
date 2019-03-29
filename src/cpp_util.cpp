@@ -126,6 +126,7 @@ double proximityRadius(unsigned zoom, double radius) {
     if (zoom >= 6 && zoom <= 14) {
         return radius * zoomRadius[14 - zoom];
     }
+
     return (radius * (32.0 / 40.0)) / std::pow(1.5, 14 - static_cast<int>(zoom));
 }
 
@@ -154,15 +155,19 @@ double scoredist(unsigned zoom, double distance, unsigned short score, double ra
         403.4287934927351,
         1096.6331584284585};
 
+    if (distance < 1) {
+        distance = 1;
+    }
+
     double distRatio = distance / proximityRadius(zoom, radius);
 
-    // Too close to 0 the values get intense. Cap it.
-    if (distRatio < 0.005) {
-        std::cout << "distRatio: " << distRatio << "\n";
-        distRatio = 0.005;
-    }
+    // // Too close to 0 the values get intense. Cap it.
+    // if (distRatio < 0.005) {
+    //     std::cout << "distRatio: " << distRatio << "\n";
+    //     distRatio = 0.005;
+    // }
     // Beyond the proximity radius just let scoredist be driven by score.
-    else if (distRatio > 1.0) {
+    if (distRatio > 1.0) {
         distRatio = 1.00;
     }
 
