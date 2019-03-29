@@ -156,7 +156,7 @@ double scoredist(unsigned zoom, double distance, unsigned short score, double ra
         1096.6331584284585};
 
     if (distance < 1) {
-        distance = 1;
+        distance = 0.9;
     }
 
     double distRatio = distance / proximityRadius(zoom, radius);
