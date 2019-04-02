@@ -156,7 +156,7 @@ double scoredist(unsigned zoom, double distance, unsigned short score, double ra
     // Too close to 0 the scoredist values get intense. Give distance a floor.
     if (distance < 1) {
         // Something greater than 0 but less than 1, to avoid dividing by 0
-        distance = 0.5;
+        distance = 0.8;
     }
 
     double distRatio = distance / proximityRadius(zoom, radius);

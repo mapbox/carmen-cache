@@ -157,7 +157,7 @@ const test = require('tape');
         }, (err, res) => {
             t.ifError(err, 'no errors');
             t.equal(res[0][0].distance, 0, 'Distance for a feature on the same cover as the proximity point should be 0');
-            t.equal(res[0][0].scoredist, 643.5016267477292, 'Scoredist shoud be 643.5016267477292');
+            t.equal(res[0][0].scoredist, 402.1885167173308, 'Scoredist shoud be 402.1885167173308');
             t.end();
         });
     });
