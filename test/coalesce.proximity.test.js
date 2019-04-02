@@ -134,6 +134,60 @@ const test = require('tape');
     const cache = new MemoryCache('a', 0);
     const cov = {
         id: 1,
+        x: 1,
+        y: 1,
+        relev: 1,
+        score: 0
+    };
+    cache._set('1', [Grid.encode(cov)]);
+
+
+    test('Calculates distance correctly for features on same tile as proximity', (t) => {
+        coalesce([{
+            cache: cache,
+            mask: 1 << 0,
+            idx: 0,
+            zoom: 14,
+            weight: 1,
+            phrase: '1',
+            prefix: scan.disabled
+        }], {
+            radius: 400,
+            centerzxy: [14, 1, 1]
+        }, (err, res) => {
+            t.ifError(err, 'no errors');
+            t.equal(res[0][0].distance, 0, 'Distance for a feature on the same cover as the proximity point should be 0');
+            t.equal(res[0][0].scoredist, 643.5016267477292, 'Scoredist shoud be 643.5016267477292');
+            t.end();
+        });
+    });
+
+    test('Calculates distance correctly for features 1 tile away from proximity', (t) => {
+        coalesce([{
+            cache: cache,
+            mask: 1 << 0,
+            idx: 0,
+            zoom: 14,
+            weight: 1,
+            phrase: '1',
+            prefix: scan.disabled
+        }], {
+            radius: 400,
+            centerzxy: [14, 1, 2]
+        }, (err, res) => {
+            t.ifError(err, 'no errors');
+            t.equal(res[0][0].distance, 1, 'Distance for a feature 1 tile away from proximity point should be 1');
+            t.equal(res[0][0].scoredist, 321.7508133738646, 'Scoredist shoud be 321.7508133738646');
+            t.end();
+        });
+    });
+})();
+
+
+(function() {
+    const cache = new MemoryCache('a', 0);
+    const cov = {
+        id: 1,
         x: 0,
         y: 0,
         relev: 1,
