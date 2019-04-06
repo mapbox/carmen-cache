@@ -291,7 +291,7 @@ test('coalesce args', (t) => {
             x: 1,
             y: 1,
             relev: 1,
-            score: 7
+            score: 3
         })
     ]);
     const rockscache = toRocksCache(memcache);
@@ -302,14 +302,14 @@ test('coalesce args', (t) => {
                 cache: cache,
                 mask: 1 << 0,
                 idx: 0,
-                zoom: 2,
+                zoom: 14,
                 weight: 1,
                 phrase: '1',
                 prefix: scan.disabled
             }], {}, (err, res) => {
                 t.ifError(err, 'no errors');
                 t.deepEqual(res[0].relev, 1, '0.relev');
-                t.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 1, idx: 0, relev: 1.0, score: 7, scoredist: 7, tmpid: 1, x: 1, y: 1 }, '0.0');
+                t.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 1, idx: 0, relev: 1.0, score: 3, scoredist: 3, tmpid: 1, x: 1, y: 1 }, '0.0');
                 t.deepEqual(res[1].relev, 1, '1.relev');
                 t.deepEqual(res[1][0], { matches_language: true, distance: 0, id: 3, idx: 0, relev: 1.0, score: 1, scoredist: 1, tmpid: 3, x: 3, y: 3 }, '1.0');
                 t.deepEqual(res[2].relev, 0.8, '2.relev');
@@ -322,7 +322,7 @@ test('coalesce args', (t) => {
                 cache: cache,
                 mask: 1 << 0,
                 idx: 0,
-                zoom: 2,
+                zoom: 6,
                 weight: 1,
                 phrase: '1',
                 prefix: scan.disabled
@@ -330,11 +330,14 @@ test('coalesce args', (t) => {
                 centerzxy: [3,3,3]
             }, (err, res) => {
                 t.ifError(err, 'no errors');
+                t.equal(res[0][0].id, 3, 'First result is the closest, even if its a slightly lower score');
+                t.equal(res[1][0].id, 1, 'Second result is the closest');
+                t.equal(res[2][0].id, 2, 'Third result is the least relevant, even if its closer than the 1st result');
                 t.deepEqual(res[0].relev, 1, '0.relev');
-                t.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 3, idx: 0, relev: 1.0, score: 1, scoredist: 202.97450261199964, tmpid: 3, x: 3, y: 3 }, '0.0');
                 t.deepEqual(res[1].relev, 1, '1.relev');
-                t.deepEqual(res[1][0], { matches_language: true, distance: 2.8284271247461903, id: 1, idx: 0, relev: 1.0, score: 7, scoredist: 7, tmpid: 1, x: 1, y: 1 }, '1.0');
                 t.deepEqual(res[2].relev, 0.8, '2.relev');
+                t.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 3, idx: 0, relev: 1.0, score: 1, scoredist: 1.5839497841387566, tmpid: 3, x: 3, y: 3 }, '0.0');
+                t.deepEqual(res[1][0], { matches_language: true, distance: 2.8284271247461903, id: 1, idx: 0, relev: 1.0, score: 3, scoredist: 1.109893833332405, tmpid: 1, x: 1, y: 1 }, '1.0');
                 t.deepEqual(res[2][0], { matches_language: true, distance: 1.4142135623730951, id: 2, idx: 0, relev: 0.8, score: 3, scoredist: 1.109893833332405, tmpid: 2, x: 2, y: 2 }, '2.0');
                 t.end();
             });
@@ -344,7 +347,7 @@ test('coalesce args', (t) => {
                 cache: cache,
                 mask: 1 << 0,
                 idx: 0,
-                zoom: 2,
+                zoom: 6,
                 weight: 1,
                 phrase: '1',
                 prefix: scan.disabled
@@ -354,7 +357,7 @@ test('coalesce args', (t) => {
                 t.ifError(err, 'no errors');
                 t.deepEqual(res[0].relev, 1, '1.relev');
                 t.deepEqual(res.length, 1, 'got back 1 result');
-                t.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 1, idx: 0, relev: 1.0, score: 7, scoredist: 7, tmpid: 1, x: 1, y: 1 }, '1.0');
+                t.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 1, idx: 0, relev: 1.0, score: 3, scoredist: 3, tmpid: 1, x: 1, y: 1 }, '1.0');
                 t.end();
             });
         });
@@ -363,7 +366,7 @@ test('coalesce args', (t) => {
                 cache: cache,
                 mask: 1 << 0,
                 idx: 0,
-                zoom: 2,
+                zoom: 6,
                 weight: 1,
                 phrase: '1',
                 prefix: scan.disabled,
@@ -375,7 +378,7 @@ test('coalesce args', (t) => {
                 t.ifError(err, 'no errors');
                 t.deepEqual(res[0].relev, 1, '1.relev');
                 t.deepEqual(res.length, 1, 'got back 1 result');
-                t.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 1, idx: 0, relev: 1.0, score: 7, scoredist: 1400, tmpid: 1, x: 1, y: 1 }, '1.0');
+                t.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 1, idx: 0, relev: 1.0, score: 3, scoredist: 1.7322531402718835, tmpid: 1, x: 1, y: 1 }, '1.0');
                 t.end();
             });
         });
@@ -384,7 +387,7 @@ test('coalesce args', (t) => {
                 cache: cache,
                 mask: 1 << 0,
                 idx: 0,
-                zoom: 2,
+                zoom: 6,
                 weight: 1,
                 phrase: '1',
                 prefix: scan.word_boundary,
@@ -396,12 +399,63 @@ test('coalesce args', (t) => {
                 t.ifError(err, 'no errors');
                 t.deepEqual(res[0].relev, 1, '1.relev');
                 t.deepEqual(res.length, 1, 'got back 1 result');
-                t.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 1, idx: 0, relev: 1.0, score: 7, scoredist: 1400, tmpid: 1, x: 1, y: 1 }, '1.0');
+                t.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 1, idx: 0, relev: 1.0, score: 3, scoredist: 1.7322531402718835, tmpid: 1, x: 1, y: 1 }, '1.0');
                 t.end();
             });
         });
     });
 })();
+
+(function() {
+    const memcache = new MemoryCache('a', 0);
+    memcache._set('1', [
+        Grid.encode({
+            id: 2,
+            x: 2,
+            y: 2,
+            relev: 0.8,
+            score: 3
+        }),
+        Grid.encode({
+            id: 3,
+            x: 3,
+            y: 3,
+            relev: 1,
+            score: 1
+        }),
+        Grid.encode({
+            id: 1,
+            x: 1,
+            y: 1,
+            relev: 1,
+            score: 7
+        })
+    ]);
+    const rockscache = toRocksCache(memcache);
+
+    [memcache, rockscache].forEach((cache) => {
+        test('coalesceSingle proximity with a feature with max score at zoom 6: ' + cache.id, (t) => {
+            coalesce([{
+                cache: cache,
+                mask: 1 << 0,
+                idx: 0,
+                zoom: 6,
+                weight: 1,
+                phrase: '1',
+                prefix: scan.disabled
+            }], {
+                centerzxy: [3,3,3]
+            }, (err, res) => {
+                t.ifError(err, 'no errors');
+                t.equal(res[0][0].id, 1, 'First result is the one with the highest score possible, even if its not the closest');
+                t.equal(res[1][0].id, 3, 'Second result is the closest, since it has a much lower score');
+                t.equal(res[2][0].id, 2, 'Third result is the least relevant, even if its closer than the 1st result');
+                t.end();
+            });
+        });
+    });
+})();
+
 
 // exercise the sort function -- the coverage tool required testing all lines
 // of the sort comparator function, so this test just ensures that the sort operator
@@ -622,7 +676,7 @@ test('coalesce args', (t) => {
             x: 2,
             y: 2,
             relev: 1,
-            score: 7
+            score: 3
         }),
         Grid.encode({
             id: 3,
@@ -667,7 +721,7 @@ test('coalesce args', (t) => {
                 t.ifError(err, 'no errors');
                 // sorts by relev, score
                 t.deepEqual(res[0].relev, 1, '0.relev');
-                t.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 2, idx: 1, relev: 0.5, score: 7, scoredist: 7, tmpid: 33554434, x: 2, y: 2 }, '0.0');
+                t.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 2, idx: 1, relev: 0.5, score: 3, scoredist: 3, tmpid: 33554434, x: 2, y: 2 }, '0.0');
                 t.deepEqual(res[0][1], { matches_language: true, distance: 0, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1, tmpid: 1, x: 1, y: 1 }, '0.1');
                 t.deepEqual(res[1].relev, 1, '1.relev');
                 t.deepEqual(res[1][0], { matches_language: true, distance: 0, id: 3, idx: 1, relev: 0.5, score: 1, scoredist: 1, tmpid: 33554435, x: 3, y: 3 }, '1.0');
@@ -698,9 +752,9 @@ test('coalesce args', (t) => {
                 t.ifError(err, 'no errors');
                 // sorts by relev, score
                 t.deepEqual(res[0].relev, 1, '0.relev');
-                t.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 3, idx: 1, relev: 0.5, score: 1, scoredist: 202.97450261199964, tmpid: 33554435, x: 3, y: 3 }, '1.0');
+                t.deepEqual(res[0][0], { matches_language: true, distance: 0, id: 3, idx: 1, relev: 0.5, score: 1, scoredist: 1.5839497841387566, tmpid: 33554435, x: 3, y: 3 }, '1.0');
                 t.deepEqual(res[0][1], { matches_language: true, distance: 2.8284271247461903, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1.0148725130599983, tmpid: 1, x: 1, y: 1 }, '0.1');
-                t.deepEqual(res[1][0], { matches_language: true, distance: 1.4142135623730951, id: 2, idx: 1, relev: 0.5, score: 7, scoredist: 7, tmpid: 33554434, x: 2, y: 2 }, '0.0');
+                t.deepEqual(res[1][0], { matches_language: true, distance: 1.4142135623730951, id: 2, idx: 1, relev: 0.5, score: 3, scoredist: 1.109893833332405, tmpid: 33554434, x: 2, y: 2 }, '0.0');
                 t.deepEqual(res[1][1], { matches_language: true, distance: 2.8284271247461903, id: 1, idx: 0, relev: 0.5, score: 1, scoredist: 1.0148725130599983, tmpid: 1, x: 1, y: 1 }, '1.1');
                 t.deepEqual(res[1].relev, 1, '1.relev');
                 t.end();
