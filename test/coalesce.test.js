@@ -302,7 +302,7 @@ test('coalesce args', (t) => {
                 cache: cache,
                 mask: 1 << 0,
                 idx: 0,
-                zoom: 14,
+                zoom: 6,
                 weight: 1,
                 phrase: '1',
                 prefix: scan.disabled
@@ -413,7 +413,7 @@ test('coalesce args', (t) => {
             id: 2,
             x: 2,
             y: 2,
-            relev: 0.8,
+            relev: 1,
             score: 3
         }),
         Grid.encode({
@@ -449,7 +449,7 @@ test('coalesce args', (t) => {
                 t.ifError(err, 'no errors');
                 t.equal(res[0][0].id, 1, 'First result is the one with the highest score possible, even if its not the closest');
                 t.equal(res[1][0].id, 3, 'Second result is the closest, since it has a much lower score');
-                t.equal(res[2][0].id, 2, 'Third result is the least relevant, even if its closer than the 1st result');
+                t.equal(res[2][0].id, 2, 'Third result has a higher score than the second but is farther away than the second result');
                 t.end();
             });
         });
