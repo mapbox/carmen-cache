@@ -153,14 +153,16 @@ double scoredist(unsigned zoom, double distance, unsigned short score, double ra
         403.4287934927351,
         1096.6331584284585};
 
+    // Too close to 0 the scoredist values get intense. Give distance a floor.
+    if (distance < 1) {
+        // Something greater than 0 but less than 1, to avoid dividing by 0
+        distance = 0.8;
+    }
+
     double distRatio = distance / proximityRadius(zoom, radius);
 
-    // Too close to 0 the values get intense. Cap it.
-    if (distRatio < 0.005) {
-        distRatio = 0.005;
-    }
     // Beyond the proximity radius just let scoredist be driven by score.
-    else if (distRatio > 1.0) {
+    if (distRatio > 1.0) {
         distRatio = 1.00;
     }
 
