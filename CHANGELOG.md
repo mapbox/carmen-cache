@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.27.0
+- Sets a minimum distance when calculating scoredist, instead of the previous approach of capping the distratio. The previous cap masked meaningful differentiation in distratios as the proximity radius increased.
+
 ## 0.25.0
 
 - Proximity ranking allows score to differentiate between nearby features.
