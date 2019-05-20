@@ -167,8 +167,8 @@ std::vector<std::pair<std::string, langfield_type>> MemoryCache::list() {
  * @name set
  * @memberof MemoryCache
  * @param {String} id
- * @param {Array}, data; an array of numbers where each number represents a grid
- * @param {Array} an array of relevant languages
+ * @param {Array} data an array of numbers where each number represents a grid
+ * @param {Array} langfield_type an array of relevant languages
  * @param {Boolean} T: append to data, F: replace data
  * @returns undefined
  * @example
