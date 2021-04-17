@@ -43,7 +43,8 @@
                 "./src/memorycache.cpp",
                 "./src/rocksdbcache.cpp",
                 "./src/coalesce.cpp",
-                "./src/binding.cpp"
+                "./src/binding.cpp",
+                "./src/log.cpp"
             ],
             "include_dirs" : [
                 'src/',

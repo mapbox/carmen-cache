@@ -263,7 +263,9 @@ inline std::vector<Context> coalesceMulti(std::vector<PhrasematchSubq>& stack, c
     for (auto const& subq : stack) {
         // Load and concatenate grids for all ids in `phrases`
         intarray grids;
-        grids = subq.type == TYPE_MEMORY ? reinterpret_cast<MemoryCache*>(subq.cache)->__getmatching(subq.phrase, subq.prefix, subq.langfield, PREFIX_MAX_GRID_LENGTH) : reinterpret_cast<RocksDBCache*>(subq.cache)->__getmatching(subq.phrase, subq.prefix, subq.langfield, PREFIX_MAX_GRID_LENGTH);
+        grids = subq.type == TYPE_MEMORY ?
+              reinterpret_cast<MemoryCache*>(subq.cache)->__getmatching(subq.phrase, subq.prefix, subq.langfield, PREFIX_MAX_GRID_LENGTH)
+            : reinterpret_cast<RocksDBCache*>(subq.cache)->__getmatching(subq.phrase, subq.prefix, subq.langfield, PREFIX_MAX_GRID_LENGTH);
 
         bool first = i == 0;
         bool last = i == (stack.size() - 1);
